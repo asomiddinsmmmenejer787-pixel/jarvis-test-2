@@ -1,0 +1,62 @@
+[
+  {
+    "role": "user",
+    "text": "/script samokat uchun reels ssenariysi",
+    "timestamp": "2026-09-27T09:43:15.879334"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.879451"
+  },
+  {
+    "role": "user",
+    "text": "/caption Bolalar Dunyosi uchun Instagram caption",
+    "timestamp": "2026-09-27T09:43:15.879571"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.879738"
+  },
+  {
+    "role": "user",
+    "text": "/telegram yangi mahsulot posti",
+    "timestamp": "2026-09-27T09:43:15.880096"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.880172"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: samokat narxi qancha?",
+    "timestamp": "2026-09-27T09:43:15.880576"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: samokat narxi qancha?\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.880683"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: yetkazib berish bormi?",
+    "timestamp": "2026-09-27T09:43:15.881044"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: yetkazib berish bormi?\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.881124"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: menga operator kerak",
+    "timestamp": "2026-09-27T09:43:15.881466"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: menga operator kerak\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-09-27T09:43:15.881559"
+  }
+]
