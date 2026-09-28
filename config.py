@@ -18,6 +18,9 @@ load_dotenv()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
+# Telegram sozlamalari
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
 # Qaysi AI provider ishlatilishi: "gemini" yoki "mock"
 # Mock rejim — internet yoki API key bo'lmasa ham dasturni sinash uchun
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "mock").lower()
