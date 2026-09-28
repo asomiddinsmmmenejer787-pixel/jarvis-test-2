@@ -10,6 +10,7 @@ Jarvis.handle() ga uzatib, javobni qaytaradi.
 """
 
 import logging
+import os
 import config
 from core.jarvis import Jarvis
 from ai.gemini import GeminiProvider
@@ -73,14 +74,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
 
 
+def find_token() -> str:
+    """
+    Telegram tokenini qidiradi. Nomida ko'rinmas bo'sh joy yoki katta-kichik
+    harf farqi bo'lsa ham topadi. Topilmasa, bo'sh matn qaytaradi.
+    """
+    if config.TELEGRAM_BOT_TOKEN.strip():
+        return config.TELEGRAM_BOT_TOKEN.strip()
+    for name, value in os.environ.items():
+        if name.strip().upper() == "TELEGRAM_BOT_TOKEN" and value.strip():
+            return value.strip()
+    return ""
+
+
 def main():
-    if not config.TELEGRAM_BOT_TOKEN:
+    token = find_token()
+    if not token:
+        # Diagnostika: faqat NOMLARNI chiqaramiz, qiymatlarni hech qachon.
+        names = [
+            repr(n) for n in os.environ
+            if any(k in n.upper() for k in ("TELEGRAM", "GEMINI", "AI_PROVIDER"))
+        ]
+        logger.error(f"Serverga berilgan tegishli o'zgaruvchi nomlari: {names}")
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN topilmadi. Railway'ning Variables bo'limida "
-            "TELEGRAM_BOT_TOKEN qiymatini kiriting."
+            "TELEGRAM_BOT_TOKEN topilmadi yoki qiymati bo'sh. "
+            "Railway'ning Variables bo'limini tekshiring."
         )
 
-    app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
