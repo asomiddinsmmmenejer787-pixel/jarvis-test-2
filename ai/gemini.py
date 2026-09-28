@@ -7,12 +7,13 @@ Xavfsizlik:
 - API key URL ichiga emas, so'rov sarlavhasiga (x-goog-api-key) qo'yiladi.
 - Xato matnlariga URL yoki kalit hech qachon chiqarilmaydi.
 
-Moslashuvchanlik:
-- Agar GEMINI_MODEL topilmasa (404), provider mavjud modellar ro'yxatidan
-  mos "flash" modelni o'zi tanlaydi va logga qaysi modeldan foydalanganini yozadi.
+Barqarorlik:
+- Gemini vaqtincha band bo'lsa (503, 429 va h.k.), so'rov avtomatik qayta yuboriladi.
+- Agar GEMINI_MODEL topilmasa (404), provider mavjud "flash" modelni o'zi tanlaydi.
 """
 
 import logging
+import time
 import requests
 from ai.base import AIProvider
 
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 30
 PREFERRED_ALIAS = "gemini-flash-latest"
+# Vaqtinchalik xatolar: shu kodlar chiqsa, qayta urinib ko'riladi
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
+# Har bir qayta urinishdan oldin kutish (soniya). 3 ta qayta urinish.
+RETRY_DELAYS_SECONDS = (2, 5, 10)
 # Matn generatsiyasi uchun mos kelmaydigan model turlari
 EXCLUDED_MODEL_KEYWORDS = (
     "image", "tts", "live", "audio", "embedding", "vision",
@@ -42,10 +47,25 @@ class GeminiProvider(AIProvider):
         return {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
 
     def _post_generate(self, model: str, payload: dict) -> requests.Response:
+        """So'rov yuboradi. Vaqtinchalik xato bo'lsa, bir necha marta qayta uriniladi."""
         url = f"{API_BASE_URL}/models/{model}:generateContent"
-        return requests.post(
-            url, json=payload, headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS
-        )
+
+        def send() -> requests.Response:
+            return requests.post(
+                url, json=payload, headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS
+            )
+
+        response = send()
+        for delay in RETRY_DELAYS_SECONDS:
+            if response.status_code not in RETRY_STATUS_CODES:
+                break
+            logger.warning(
+                f"Gemini vaqtincha band (kod {response.status_code}), "
+                f"{delay} soniyadan keyin qayta uriniladi."
+            )
+            time.sleep(delay)
+            response = send()
+        return response
 
     def _pick_available_model(self) -> str:
         """Kalit uchun mavjud modellardan mos bittasini tanlaydi."""
@@ -103,7 +123,9 @@ class GeminiProvider(AIProvider):
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else "noma'lum"
             logger.error(f"Gemini HTTP xatosi, kod: {status}")
-            return f"[Gemini xatosi] So'rov bajarilmadi (kod: {status}). Birozdan so'ng qayta urinib ko'ring."
+            if status in RETRY_STATUS_CODES:
+                return "[Gemini xatosi] Gemini serveri hozir band. Bir daqiqadan so'ng qayta yozing."
+            return f"[Gemini xatosi] So'rov bajarilmadi (kod: {status})."
         except requests.exceptions.RequestException as e:
             logger.error(f"Gemini ulanish xatosi: {type(e).__name__}")
             return "[Gemini xatosi] Gemini bilan bog'lanib bo'lmadi. Birozdan so'ng qayta urinib ko'ring."
