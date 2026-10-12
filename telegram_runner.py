@@ -1,6 +1,5 @@
 Jarvis Telegram runner.
 Telegram bot va Instagram OAuth callback web-serverini ishga tushiradi.
-"""
 
 import asyncio
 import logging
