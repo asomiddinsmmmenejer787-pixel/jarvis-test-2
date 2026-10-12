@@ -1,8 +1,8 @@
-"""
 Jarvis Telegram runner.
 Telegram bot va Instagram OAuth callback web-serverini ishga tushiradi.
 """
 
+import asyncio
 import logging
 import os
 import threading
@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Instagram OAuth uchun web-server
+# Instagram OAuth callback web-server
 web = FastAPI(
     docs_url=None,
     redoc_url=None,
@@ -66,8 +66,18 @@ async def root(request: Request):
 
 def start_web_server():
     def run():
-        port = int(os.environ.get("PORT", "8000"))
-        uvicorn.run(web, host="0.0.0.0", port=port)
+        try:
+            port = int(os.environ.get("PORT", "8000"))
+            logger.info("OAuth web-server ishga tushmoqda.")
+            uvicorn.run(
+                web,
+                host="0.0.0.0",
+                port=port,
+                log_level="info",
+                access_log=False,
+            )
+        except Exception:
+            logger.exception("OAuth web-server ishga tushmadi.")
 
     thread = threading.Thread(
         target=run,
@@ -79,11 +89,28 @@ def start_web_server():
 
 # AI provider
 def build_ai_provider():
-    if config.AI_PROVIDER == "gemini":
+    provider_name = getattr(config, "AI_PROVIDER", "mock")
+
+    if provider_name == "gemini":
+        api_key = getattr(config, "GEMINI_API_KEY", "")
+        model = getattr(config, "GEMINI_MODEL", "")
+
+        if not api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY topilmadi. Railway Variables'ni tekshiring."
+            )
+
+        if not model:
+            raise RuntimeError(
+                "GEMINI_MODEL topilmadi. Config sozlamalarini tekshiring."
+            )
+
         return GeminiProvider(
-            api_key=config.GEMINI_API_KEY,
-            model=config.GEMINI_MODEL,
+            api_key=api_key,
+            model=model,
         )
+
+    logger.info("MockProvider tanlandi.")
     return MockProvider()
 
 
@@ -94,13 +121,18 @@ jarvis = Jarvis(
 )
 
 
-# Telegram /start
+# /start command
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
     if update.message is None:
         return
+
+    logger.info(
+        "START command qabul qilindi | chat_id=%s",
+        update.effective_chat.id if update.effective_chat else "unknown",
+    )
 
     await update.message.reply_text(
         "Assalomu alaykum! Men Jarvis — sizning SMM yordamchingizman.\n\n"
@@ -115,51 +147,109 @@ async def start(
     )
 
 
-# Oddiy xabarlarni qayta ishlash
+# Oddiy matnli xabarlar
 async def handle_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
     if update.message is None or update.effective_chat is None:
+        logger.warning("Xabarda message yoki chat ma'lumoti yo'q.")
         return
 
     user_text = update.message.text
-    if not user_text:
+
+    if not user_text or not user_text.strip():
+        logger.info("Bo'sh matn olindi.")
         return
 
     chat_id = update.effective_chat.id
-    logger.info("[%s] Yangi xabar qabul qilindi.", chat_id)
 
-    await context.bot.send_chat_action(
-        chat_id=chat_id,
-        action="typing",
+    logger.info(
+        "HANDLE_MESSAGE ISHLADI | chat_id=%s | text_length=%s",
+        chat_id,
+        len(user_text),
     )
 
     try:
-        reply = jarvis.handle(user_text)
-        if not isinstance(reply, str):
-            reply = str(reply)
-    except Exception:
-        logger.exception("Jarvis xabarni qayta ishlashda xatolik berdi.")
-        reply = (
-            "Kechirasiz, xatolik yuz berdi. "
-            "Birozdan so'ng qayta urinib ko'ring."
+        await context.bot.send_chat_action(
+            chat_id=chat_id,
+            action="typing",
         )
 
-    # Telegram xabar uzunligi chegarasidan oshmaslik.
-    max_length = 4000
-    for index in range(0, len(reply), max_length):
-        await update.message.reply_text(reply[index:index + max_length])
+        logger.info("Jarvis.handle() ishga tushmoqda.")
+
+        # Sinxron Jarvis/AI ishlashi Telegram event loop'ini
+        # bloklamasligi uchun alohida threadda bajariladi.
+        reply = await asyncio.to_thread(jarvis.handle, user_text)
+
+        if not isinstance(reply, str):
+            reply = str(reply)
+
+        if not reply.strip():
+            reply = (
+                "Jarvis bo'sh javob qaytardi. "
+                "Iltimos, boshqa savol bilan urinib ko'ring."
+            )
+
+        logger.info(
+            "Jarvis javob tayyorladi | chat_id=%s | length=%s",
+            chat_id,
+            len(reply),
+        )
+
+        # Telegram xabar uzunligi chegarasidan oshmaslik.
+        max_length = 4000
+
+        for index in range(0, len(reply), max_length):
+            await update.message.reply_text(
+                reply[index:index + max_length]
+            )
+
+        logger.info(
+            "Telegram javobi yuborildi | chat_id=%s",
+            chat_id,
+        )
+
+    except Exception:
+        logger.exception(
+            "HANDLE_MESSAGE ichida xatolik | chat_id=%s",
+            chat_id,
+        )
+
+        try:
+            await update.message.reply_text(
+                "Kechirasiz, Jarvisda xatolik yuz berdi. "
+                "Birozdan so'ng qayta urinib ko'ring."
+            )
+        except Exception:
+            logger.exception(
+                "Xatolik haqida Telegram xabarini yuborib bo'lmadi."
+            )
+
+
+# Telegramdagi kutilmagan xatolar
+async def telegram_error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    logger.error(
+        "Telegram update qayta ishlanishida kutilmagan xatolik.",
+        exc_info=context.error,
+    )
 
 
 # Telegram tokenini topish
 def find_token() -> str:
     token = getattr(config, "TELEGRAM_BOT_TOKEN", "") or ""
+
     if token.strip():
         return token.strip()
 
     for name, value in os.environ.items():
-        if name.strip().upper() == "TELEGRAM_BOT_TOKEN" and value.strip():
+        if (
+            name.strip().upper() == "TELEGRAM_BOT_TOKEN"
+            and value.strip()
+        ):
             return value.strip()
 
     return ""
@@ -170,30 +260,20 @@ def main():
     token = find_token()
 
     if not token:
-        names = [
-            repr(name)
-            for name in os.environ
-            if any(
-                key in name.upper()
-                for key in ("TELEGRAM", "GEMINI", "AI_PROVIDER")
-            )
-        ]
         logger.error(
-            "Tegishli environment variable nomlari: %s",
-            names,
-        )
-        raise RuntimeError(
             "TELEGRAM_BOT_TOKEN topilmadi. "
             "Railway Variables bo'limini tekshiring."
         )
+        raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi.")
 
-    # Web-serverni ishga tushirish
+    # OAuth callback web-serveri
     start_web_server()
 
     # Telegram bot
     app = ApplicationBuilder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
+
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -201,7 +281,10 @@ def main():
         )
     )
 
+    app.add_error_handler(telegram_error_handler)
+
     logger.info("Jarvis Telegram bot ishga tushmoqda...")
+
     app.run_polling()
 
 
