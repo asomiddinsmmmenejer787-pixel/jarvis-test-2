@@ -12,6 +12,7 @@ Barqarorlik:
 - Agar GEMINI_MODEL topilmasa (404), provider mavjud "flash" modelni o'zi tanlaydi.
 """
 
+import json
 import logging
 import time
 import requests
@@ -31,6 +32,14 @@ EXCLUDED_MODEL_KEYWORDS = (
     "image", "tts", "live", "audio", "embedding", "vision",
     "robotics", "computer", "native",
 )
+
+
+class GeminiError(RuntimeError):
+    """generate_json() xatosi. fatal=True bo'lsa (kalit noto'g'ri va h.k.), qayta urinish foydasiz."""
+
+    def __init__(self, message: str, fatal: bool = False):
+        super().__init__(message)
+        self.fatal = fatal
 
 
 class GeminiProvider(AIProvider):
@@ -134,3 +143,44 @@ class GeminiProvider(AIProvider):
             return "[Gemini xatosi] Mos model topilmadi."
         except (KeyError, IndexError):
             return "[Gemini xatosi] Javobni o'qib bo'lmadi (masalan, xavfsizlik filtri bloklagan bo'lishi mumkin)."
+
+    def generate_json(self, system_instruction: str, user_message: str, temperature: float = 0.9):
+        """
+        Javobni JSON ko'rinishida oladi (komentlarga javob tizimi uchun).
+        Qaytaradi: dict/list yoki None (javob bloklangan yoki o'qib bo'lmagan).
+        Xato bo'lsa GeminiError ko'taradi.
+        """
+        payload = {
+            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+            },
+        }
+        try:
+            model = self._resolved_model or self.model
+            response = self._post_generate(model, payload)
+            if response.status_code == 404 and not self._resolved_model:
+                model = self._pick_available_model()
+                self._resolved_model = model
+                logger.warning(f"'{self.model}' topilmadi. '{model}' ishlatilmoqda.")
+                response = self._post_generate(model, payload)
+        except requests.exceptions.RequestException as e:
+            raise GeminiError(f"Gemini bilan bog'lanib bo'lmadi ({type(e).__name__})")
+        except RuntimeError as e:
+            raise GeminiError(str(e))
+
+        if response.status_code != 200:
+            raise GeminiError(
+                f"Gemini HTTP {response.status_code}",
+                fatal=response.status_code in (400, 401, 403),
+            )
+        try:
+            candidates = response.json().get("candidates") or []
+            if not candidates:
+                return None
+            text = candidates[0]["content"]["parts"][0]["text"]
+            return json.loads(text)
+        except (ValueError, KeyError, IndexError, TypeError):
+            return None

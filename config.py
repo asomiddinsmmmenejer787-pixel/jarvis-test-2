@@ -25,8 +25,16 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 # Mock rejim — internet yoki API key bo'lmasa ham dasturni sinash uchun
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "mock").lower()
 
+# Doimiy ma'lumotlar papkasi (xotira, Instagram holati, token).
+# Railway'da Volume ulab, DATA_DIR=/data qilsangiz, deploy'dan keyin ham o'chmaydi.
+DATA_DIR = os.environ.get("DATA_DIR", "").strip() or os.path.join(os.path.dirname(__file__), "data")
+
 # Xotira fayli qayerda saqlanadi
-MEMORY_DIR = os.path.join(os.path.dirname(__file__), "data", "memory")
+MEMORY_DIR = os.path.join(DATA_DIR, "memory")
+
+# Bot egasi (faqat shu odam botdan foydalana oladi). Telegram'da /myid buyrug'i ko'rsatadi.
+_owner = os.environ.get("OWNER_CHAT_ID", "").strip()
+OWNER_CHAT_ID = int(_owner) if _owner.lstrip("-").isdigit() else None
 
 # Mahsulotlar bazasi qayerda
 PRODUCTS_FILE = os.path.join(os.path.dirname(__file__), "data", "products.json")

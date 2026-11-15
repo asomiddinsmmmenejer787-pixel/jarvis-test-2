@@ -106,14 +106,65 @@ jarvis/
     └── test_stage1.py            # Asosiy testlar
 ```
 
-## 9. Future integrations (kelajakdagi rejalar)
+## 9. Telegram bot + Instagram (Railway)
+
+Bot `python telegram_runner.py` bilan ishga tushadi (Procfile'da yozilgan).
+
+### Railway Variables
+
+| O'zgaruvchi | Majburiy | Nima uchun |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | ha | Telegram bot tokeni |
+| `AI_PROVIDER` | ha | `gemini` |
+| `GEMINI_API_KEY` | ha | Google AI Studio kaliti |
+| `GEMINI_MODEL` | yo'q | masalan `gemini-2.5-flash` |
+| `INSTAGRAM_ACCESS_TOKEN` | Instagram uchun | Meta'dan olingan token (Instagram Login) |
+| `OWNER_CHAT_ID` | tavsiya | Botdan faqat shu odam foydalanadi. ID'ni `/myid` ko'rsatadi |
+| `DATA_DIR` | tavsiya | Railway Volume ulangan papka, masalan `/data` |
+| `AUTO_REPLY_MODE` | yo'q | Boshlang'ich rejim: `test` (standart), `on`, `off` |
+| `MAX_PER_DAY` / `MAX_PER_RUN` | yo'q | Kuniga / bir tekshiruvda avtomatik javoblar (40 / 8) |
+| `MAX_AGE_HOURS` | yo'q | Necha soatlik komentlarga javob beriladi (24) |
+| `RECENT_POSTS` | yo'q | Komentlari tekshiriladigan oxirgi postlar soni (10) |
+| `CHECK_EVERY_SEC` | yo'q | Komentlarni tekshirish oralig'i, soniya (600) |
+| `WEEKLY_REPORT` / `WEEKLY_REPORT_HOUR` | yo'q | Dushanba kungi hisobot: `1`/`0`, soat (10) |
+| `BRAND_NAME` | yo'q | Komentlarga javobda brend nomi |
+
+**Volume:** Railway → servis → Settings → Volumes → `/data` papkasini ulang va `DATA_DIR=/data` qo'ying.
+Shunda suhbat tarixi, komentlar holati va yangilangan Instagram tokeni deploy'dan keyin o'chmaydi.
+
+### Buyruqlar
+
+- `/insta [son]` — oxirgi kontentlar statistikasi + Jarvis tahlili
+- `/post 1` yoki `/post <havola>` — bitta postni chuqur tahlil
+- `/stories` — faol storylar statistikasi
+- `/autoreply on|test|off` — komentlarga javob rejimi
+- `/pending` — ruxsat kutayotgan komentlar
+- `/myid` — Telegram ID
+
+### Komentlarga javob qanday ishlaydi
+
+- Har 10 daqiqada oxirgi postlardagi yangi komentlar tekshiriladi.
+- Narx, savol, maqtov, shikoyat — `on` rejimida Jarvis o'zi javob yozadi.
+- Raqobatchi, so'kingan, haqoratli yoki Jarvis ishonchi past komentlar egasiga
+  Telegram'da tugmalar bilan keladi: Yuborish / Yashirish / Javobsiz qoldirish.
+  O'z javobingizni yozish uchun shu xabarga Reply qiling.
+- Javobda narx, link, @, hashtag bo'lsa — yuborilmaydi.
+- Instagram tokeni har ~20 kunda avtomatik yangilanadi.
+
+### Testlar
+
+```
+python -m tests.test_instagram
+```
+
+## 10. Future integrations (kelajakdagi rejalar)
 
 - **Stage 2:** Mijoz xabarlarini avtomatik kategoriyalash (narx, yetkazib berish va h.k.), mahsulotlar bazasi
 - **Stage 3:** Real Telegram integratsiyasi
 - **Stage 4:** Real Instagram integratsiyasi (Meta Graph API)
 - **Stage 5:** Analitika, lead ajratish, to'liq database
 
-## 10. Security
+## 11. Security
 
 - `.env` fayli hech qachon GitHub'ga yuklanmaydi (`.gitignore`da bloklangan)
 - API key, token yoki parol hech qachon kod ichiga yozilmaydi

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+# Ish vaqtida yaratiladigan fayllar (token va holat) GitHub'ga tushmasin
+data/instagram_token.json
+data/auto_reply_state.json
+data/owner.json
+data/scheduler.json
+data/ig_history.json
+data/*.tmp
