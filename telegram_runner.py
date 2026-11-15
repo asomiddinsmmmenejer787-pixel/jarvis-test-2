@@ -234,7 +234,7 @@ def ig_error_text(e):
             return instagram_setup_text()
         return (
             "Instagram token yaroqsiz yoki muddati o'tgan.\n"
-            "Yangi token olib, Railway Variables'dagi INSTAGRAM_ACCESS_TOKEN'ni almashtiring."
+            "Meta'dan yangi token olib, shu yerga yuboring: /igtoken IGAA..."
         )
     if getattr(e, "rate_limited", False):
         return "Instagram so'rovlar limiti to'ldi. 30-60 daqiqadan keyin qayta urinib ko'ring."
@@ -244,9 +244,8 @@ def ig_error_text(e):
 def instagram_setup_text():
     return (
         "Instagram hali ulanmagan.\n\n"
-        "Railway → Jarvis servisi → Variables bo'limiga qo'shing:\n"
-        "INSTAGRAM_ACCESS_TOKEN = Meta'dan olingan token\n\n"
-        "Saqlangandan keyin Railway botni o'zi qayta ishga tushiradi."
+        "Meta'dan olingan tokenni shu yerga yuboring:\n/igtoken IGAA...\n\n"
+        "Yoki Railway → Variables'ga INSTAGRAM_ACCESS_TOKEN qilib qo'shing."
     )
 
 
@@ -274,7 +273,8 @@ HELP_TEXT = (
     "/post 1 — bitta postni chuqur tahlil (1 = eng oxirgisi, yoki post havolasi)\n"
     "/stories — faol storylar statistikasi\n"
     "/autoreply — komentlarga javob tizimi holati va rejimi\n"
-    "/pending — ruxsat kutayotgan komentlar\n\n"
+    "/pending — ruxsat kutayotgan komentlar\n"
+    "/igtoken <token> — yangi Instagram tokenni ulash\n\n"
     "Yoki oddiy tilda savolingizni yozing."
 )
 
@@ -457,6 +457,37 @@ async def stories_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(ig_error_text(e))
         return
     await send_long(context.bot, update.effective_chat.id, analytics.stories_text(stories))
+
+
+@owner_only
+async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Yangi Instagram tokenni Telegram orqali qabul qiladi (Railway'ga kirmasdan)."""
+    msg = update.message
+    if not context.args:
+        await msg.reply_text(
+            "Yangi Instagram tokenni shunday yuboring:\n/igtoken IGAA...\n\n"
+            "Xabaringiz xavfsizlik uchun darhol o'chiriladi."
+        )
+        return
+    token = context.args[0]
+    # Token chatda qolmasin
+    try:
+        await msg.delete()
+    except Exception:
+        logger.warning("Token yozilgan xabarni o'chirib bo'lmadi.")
+    chat_id = update.effective_chat.id
+    try:
+        username = await asyncio.to_thread(ig.set_token, token)
+    except InstagramError as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ {e}\nMeta'dan yangi token olib, qayta yuboring.")
+        return
+    sched = _load_scheduler()
+    sched.get("alerts", {}).pop("ig_fatal", None)
+    _save_scheduler(sched)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Instagram ulandi: @{username}\nToken saqlandi va o'zi yangilanib turadi. Endi /insta yozib ko'ring.",
+    )
 
 
 # ---------- komentlarga javob ----------
@@ -768,6 +799,7 @@ def build_app(token):
     app.add_handler(CommandHandler("stories", stories_cmd))
     app.add_handler(CommandHandler("autoreply", autoreply_cmd))
     app.add_handler(CommandHandler("pending", pending_cmd))
+    app.add_handler(CommandHandler("igtoken", igtoken_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

@@ -277,6 +277,21 @@ def run():
     except ig.InstagramError as e:
         check(e.fatal and e.code == "no_token", "Token yo'q xatosi")
     os.environ["INSTAGRAM_ACCESS_TOKEN"] = "ENV_TOKEN_1"
+
+    def fake_me(url, params=None, timeout=None):
+        if params.get("access_token") == "IGAA_GOOD_TOKEN_1234567890":
+            return FakeResponse({"user_id": "1", "username": "bolalar_dunyosi.uzb"})
+        return FakeResponse({"error": {"code": 190, "message": "Invalid OAuth access token"}}, 400)
+
+    ig.requests.get = fake_me
+    try:
+        ig.set_token("IGAA_BAD_TOKEN_1234567890")
+        check(False, "Yaroqsiz token qabul qilinmasligi kerak edi")
+    except ig.InstagramError:
+        check(ig.get_token() == "ENV_TOKEN_1", "Yaroqsiz token saqlanmadi")
+    check(ig.set_token(" IGAA_GOOD_TOKEN_1234567890 ") == "bolalar_dunyosi.uzb", "Telegram orqali token ulandi")
+    check(ig.get_token() == "IGAA_GOOD_TOKEN_1234567890", "Yangi token ishlatilmoqda (Variables'dagi eski o'rniga)")
+    check(ig.refresh_token_if_needed() is False, "Yangi token darhol yangilanmaydi")
     print("  (ma'lumot fayllari:", ", ".join(sorted(ig_files)) + ")")
 
     print("\n7) Telegram bot")
@@ -288,7 +303,7 @@ def run():
     for handlers in app.handlers.values():
         for h in handlers:
             names.update(getattr(h, "commands", set()))
-    check({"insta", "post", "stories", "autoreply", "pending", "script", "hook", "myid"} <= names,
+    check({"insta", "post", "stories", "autoreply", "pending", "script", "hook", "myid", "igtoken"} <= names,
           "Barcha buyruqlar ro'yxatdan o'tgan")
     parts = tr.split_text("a" * 5000 + "\n" + "b" * 10)
     check(all(len(p) <= tr.TELEGRAM_LIMIT for p in parts) and "".join(parts).replace("\n", "") == "a" * 5000 + "b" * 10,

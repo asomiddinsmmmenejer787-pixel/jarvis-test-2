@@ -171,6 +171,36 @@ def refresh_token_if_needed(every_days=20):
         return True
 
 
+def set_token(new_token):
+    """
+    Egasi Telegram orqali yuborgan yangi tokenni tekshiradi va saqlaydi.
+    Qaytaradi: akkaunt username'i. Token yaroqsiz bo'lsa InstagramError.
+    """
+    new_token = (new_token or "").strip()
+    if len(new_token) < 20 or " " in new_token:
+        raise InstagramError("Bu token emasga o'xshaydi")
+    try:
+        r = requests.get(
+            f"{BASE}/me",
+            params={"fields": "user_id,username", "access_token": new_token},
+            timeout=TIMEOUT,
+        )
+        data = r.json()
+    except (requests.RequestException, ValueError) as e:
+        raise InstagramError(f"Instagram bilan bog'lanib bo'lmadi ({type(e).__name__})")
+    if not isinstance(data, dict) or data.get("error") or not data.get("username"):
+        msg = ((data or {}).get("error") or {}).get("message", "noma'lum xato") if isinstance(data, dict) else "noma'lum xato"
+        raise InstagramError(f"Token ishlamadi: {msg}", fatal=True, code=190)
+    with _token_lock:
+        _save_store({
+            "env_fp": _fingerprint(_env_token()),
+            "token": new_token,
+            "refreshed_at": time.time(),
+        })
+    log.info("Instagram token Telegram orqali yangilandi.")
+    return data["username"]
+
+
 # ---------- so'rov yuborish ----------
 
 def _request(method, path, params=None, data=None):
