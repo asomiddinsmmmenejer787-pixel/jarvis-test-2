@@ -132,8 +132,12 @@ class GeminiProvider(AIProvider):
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else "noma'lum"
             logger.error(f"Gemini HTTP xatosi, kod: {status}")
+            if status == 429:
+                return ("[Gemini xatosi] Gemini so'rovlar limiti tugadi (kod 429). "
+                        "Bir necha daqiqadan keyin qayta yozing. Takrorlansa, Google AI Studio'da "
+                        "kalit limitini tekshirish kerak.")
             if status in RETRY_STATUS_CODES:
-                return "[Gemini xatosi] Gemini serveri hozir band. Bir daqiqadan so'ng qayta yozing."
+                return f"[Gemini xatosi] Gemini serveri hozir band (kod {status}). Bir daqiqadan so'ng qayta yozing."
             return f"[Gemini xatosi] So'rov bajarilmadi (kod: {status})."
         except requests.exceptions.RequestException as e:
             logger.error(f"Gemini ulanish xatosi: {type(e).__name__}")

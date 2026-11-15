@@ -354,6 +354,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_text or not user_text.strip():
         return
 
+    # Instagram tokeni /igtoken'siz yuborilgan bo'lsa ham taniymiz (AI'ga ketmasin)
+    if re.fullmatch(r"IG[A-Za-z0-9_\-]{40,}", user_text.strip()):
+        context.args = [user_text.strip()]
+        await igtoken_cmd.__wrapped__(update, context)
+        return
+
     # Ruxsat so'ralgan komentga egasi Reply qilib o'z javobini yozdi
     replied = update.message.reply_to_message
     if responder and replied is not None:
