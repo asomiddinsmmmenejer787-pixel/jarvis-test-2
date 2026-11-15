@@ -21,7 +21,10 @@ from ai.base import AIProvider
 logger = logging.getLogger(__name__)
 
 API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-REQUEST_TIMEOUT_SECONDS = 30
+import os
+
+# Yangi Gemini modellari uzoq "o'ylashi" mumkin, katta tahlil uchun 30 soniya kam
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT", "150") or 150)
 PREFERRED_ALIAS = "gemini-flash-latest"
 # Vaqtinchalik xatolar: shu kodlar chiqsa, qayta urinib ko'riladi
 RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
@@ -60,9 +63,17 @@ class GeminiProvider(AIProvider):
         url = f"{API_BASE_URL}/models/{model}:generateContent"
 
         def send() -> requests.Response:
-            return requests.post(
-                url, json=payload, headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS
-            )
+            # Ulanish uzilsa yoki javob kechiksa, yana 2 marta urinib ko'ramiz
+            for attempt in range(3):
+                try:
+                    return requests.post(
+                        url, json=payload, headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS
+                    )
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                    logger.warning(f"Gemini ulanish xatosi ({type(e).__name__}), urinish {attempt + 1}/3")
+                    if attempt == 2:
+                        raise
+                    time.sleep(3 * (attempt + 1))
 
         response = send()
         for delay in RETRY_DELAYS_SECONDS:
@@ -141,7 +152,8 @@ class GeminiProvider(AIProvider):
             return f"[Gemini xatosi] So'rov bajarilmadi (kod: {status})."
         except requests.exceptions.RequestException as e:
             logger.error(f"Gemini ulanish xatosi: {type(e).__name__}")
-            return "[Gemini xatosi] Gemini bilan bog'lanib bo'lmadi. Birozdan so'ng qayta urinib ko'ring."
+            return (f"[Gemini xatosi] Gemini bilan bog'lanib bo'lmadi ({type(e).__name__}). "
+                    "Birozdan so'ng qayta urinib ko'ring.")
         except RuntimeError as e:
             logger.error(f"Gemini model tanlash xatosi: {e}")
             return "[Gemini xatosi] Mos model topilmadi."
