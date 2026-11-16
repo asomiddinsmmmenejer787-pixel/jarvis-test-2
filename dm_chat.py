@@ -119,6 +119,7 @@ class DirectChat:
         self.path = state_path or os.path.join(config.DATA_DIR, "dm_chat_state.json")
         self.lock = threading.RLock()
         self.last_run = None
+        self._me = None
         self.s = {"mode": None, "since": 0, "seen": {}, "pending": {}, "counts": {}}
         try:
             with open(self.path, encoding="utf-8") as f:
@@ -194,7 +195,9 @@ class DirectChat:
         """Voqealar: chat_approval (tasdiq kerak), chat_sent, chat_error."""
         if self.mode == "off":
             return []
-        me = ig.get_profile()
+        if not self._me:
+            self._me = ig.get_profile()
+        me = self._me
         my_id, my_name = str(me.get("user_id") or ""), (me.get("username") or "").lower()
         now = time.time()
         events, handled = [], 0
@@ -262,8 +265,9 @@ class DirectChat:
                 self._save()
             stats["approval"] += 1
             events.append({"type": "chat_approval", **info})
-        log.info("Direkt tekshirildi: %s yozishma, yangi %s, yuborildi %s, tasdiqqa %s",
-                 stats["convs"], stats["new"], stats["sent"], stats["approval"])
+        if stats["new"]:
+            log.info("Direkt tekshirildi: %s yozishma, yangi %s, yuborildi %s, tasdiqqa %s",
+                     stats["convs"], stats["new"], stats["sent"], stats["approval"])
         return events
 
     def _send(self, igsid, text):

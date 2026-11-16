@@ -56,7 +56,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 4000
-CHECK_EVERY_SEC = max(60, int(os.environ.get("CHECK_EVERY_SEC", "600") or 600))
+CHECK_EVERY_SEC = max(30, int(os.environ.get("CHECK_EVERY_SEC", "60") or 60))
 IG_TOKEN_RE = re.compile(r"IG[A-Za-z0-9_\-]{40,}")
 JARVIS_COMMANDS = ["script", "hook", "caption", "telegram", "ad", "ideas", "ai_video"]
 
@@ -617,7 +617,7 @@ async def autoreply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Komentlarga javob: {MODE_TEXT[st['mode']]}",
         f"Bugun avtomatik yuborildi: {st['sent_today']} / {st['limit_day']}",
         f"Ruxsat kutayotgan komentlar: {st['pending']}",
-        f"Tekshirish oralig'i: har {CHECK_EVERY_SEC // 60} daqiqada",
+        f"Tekshirish oralig'i: har {CHECK_EVERY_SEC} soniyada",
     ]
     lines += last_run_lines(st.get("last_run"))
     if not ig.is_configured():

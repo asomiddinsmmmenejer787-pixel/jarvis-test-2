@@ -116,6 +116,8 @@ class FakeInstagram:
                                  "followers_count": 5000, "follows_count": 10, "media_count": 3,
                                  "biography": "Bolalar o'yinchoqlari"})
         if path == "me/media":
+            for p in self.posts:  # haqiqiy Instagram kabi: komentlar soni o'zgarib turadi
+                p["comments_count"] = len(self.comments.get(p["id"], [])) + (len(self.replies) if self.comments.get(p["id"]) else 0)
             if q.get("after") == "P2":
                 return FakeResponse({"data": self.posts[2:]})
             return FakeResponse({"data": self.posts[:2], "paging": {

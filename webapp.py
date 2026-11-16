@@ -581,6 +581,32 @@ def api_post_info(media_id: str, body: dict, x_init_data: str = Header(default="
     return {"info": catalog.set_post_info(media_id, body)}
 
 
+@router.get("/api/tasks")
+def api_tasks(x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    data = catalog.load()
+    out = {"global": data.get("task", ""), "posts": []}
+    if ig.is_configured():
+        try:
+            for p in _cached("hud_posts", 120, lambda: ig.get_recent_posts(30))[:15]:
+                out["posts"].append({
+                    "id": p.get("id"), "kind": analytics.kind_name(p), "time": catalog._post_time(p),
+                    "caption": (p.get("caption") or "")[:90], "comments": p.get("comments_count"),
+                    "task": catalog.get_post_info(p.get("id"))["task"],
+                })
+        except InstagramError as e:
+            out["posts_error"] = _ig_error(e)
+    return out
+
+
+@router.post("/api/tasks")
+def api_tasks_set(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    media_id = body.get("media_id") or None
+    catalog.set_task(str(media_id) if media_id else None, body.get("task", ""))
+    return {"ok": True}
+
+
 @router.post("/api/shop")
 def api_shop(body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)

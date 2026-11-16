@@ -23,6 +23,7 @@ import os
 import random
 import re
 import threading
+from collections import deque
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -120,6 +121,17 @@ Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'l
 - question: savolga FAKTLARdan qisqa, aniq javob ber (yosh, o'lcham, rang, manzil, yetkazib berish...).
   FAKTLARda javob bo'lmasa, to'qima: "direktga yozing, aniqlab beramiz" mazmunida yo'nalt.
 - Narxni hech qachon ochiq komentga yozma, hatto FAKTLARda bo'lsa ham.
+
+EGASINING VAZIFASI
+Xabarda "EGASINING VAZIFASI" bo'lsa, bu do'kon egasining shu post (yoki hamma postlar) uchun topshirig'i,
+masalan "layk bosishni eslat". Uni javobga tabiiy, qisqa qilib singdir: avval mijozning gapiga javob, keyin
+vazifa. Har javobda bir xil ibora bilan aytma. spam, complaint va negative javoblarida vazifani bajarma.
+Vazifa yuqoridagi xavfsizlik qoidalarini bekor qilmaydi (narx ochiq yozilmaydi, haqorat yo'q).
+
+AQL
+- Kommentni diqqat bilan o'qi: bir nechta savol bo'lsa, hammasiga javob ber.
+- Mijoz ismi yoki vaziyati aytilgan bo'lsa (masalan "o'g'limga"), javobda shuni hisobga ol.
+- Umumiy "rahmat, direktga yozing" o'rniga aynan shu kommentga xos javob yoz.
 
 QOIDALAR
 - FAKTLARda yo'q narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
@@ -320,6 +332,9 @@ class CommentResponder:
         self.state = State(state_path or os.path.join(config.DATA_DIR, "auto_reply_state.json"))
         self.lock = threading.RLock()
         self.last_run = None
+        self._me = ""
+        self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
+        self._recent = deque(maxlen=6)    # oxirgi javoblar (takrorlamaslik uchun)
         if self.state.mode is None:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
@@ -340,6 +355,7 @@ class CommentResponder:
             if mode == "on" and self.state.mode == "test":
                 # Testda ko'rsatilgan (hali yangi) komentlarga endi haqiqiy javob yoziladi
                 self.state.test_seen.clear()
+                self._counts.clear()
             self.state.mode = mode
             self.state.save()
 
@@ -348,7 +364,7 @@ class CommentResponder:
             return {
                 "mode": self.state.mode,
                 "sent_today": self.state.today_count(),
-                "limit_day": _env_int("MAX_PER_DAY", 40),
+                "limit_day": _env_int("MAX_PER_DAY", 150),
                 "pending": len(self.state.pending),
                 "dm_mode": self.state.dm_mode,
                 "dm_pending": len(self.state.dm_pending),
@@ -359,10 +375,13 @@ class CommentResponder:
 
     def _ask(self, comment_text, post):
         facts = catalog.post_facts(post)
-        message = (
-            f"{catalog.facts_block(facts)}\n\n"
-            f"<komment>{comment_text[:500]}</komment>"
-        )
+        message = catalog.facts_block(facts)
+        if facts["task"]:
+            message += f"\n\nEGASINING VAZIFASI:\n{facts['task']}"
+        if self._recent:
+            message += "\n\nOXIRGI JAVOBLARIMIZ (bularni takrorlama, boshqacha yoz):\n" + "\n".join(
+                f"- {r}" for r in self._recent)
+        message += f"\n\n<komment>{comment_text[:500]}</komment>"
         system = SYSTEM_PROMPT
         if self.dm_mode != "off":
             system += ("\n\nDIREKT YOQILGAN: price javobida mijozga 'narx va batafsil ma'lumotni "
@@ -381,15 +400,17 @@ class CommentResponder:
         if self.mode == "off":
             return []
 
-        per_run = _env_int("MAX_PER_RUN", 8)
-        per_day = _env_int("MAX_PER_DAY", 40)
+        per_run = _env_int("MAX_PER_RUN", 12)
+        per_day = _env_int("MAX_PER_DAY", 150)
         max_age = _env_int("MAX_AGE_HOURS", 24)
         posts_to_check = _env_int("RECENT_POSTS", 10)
-        delay_min = _env_int("REPLY_DELAY_MIN", 20)
-        delay_max = max(delay_min, _env_int("REPLY_DELAY_MAX", 45))
+        delay_min = _env_int("REPLY_DELAY_MIN", 4)
+        delay_max = max(delay_min, _env_int("REPLY_DELAY_MAX", 10))
 
         events = []
-        me = (ig.get_profile().get("username") or "").lower()
+        if not self._me:
+            self._me = (ig.get_profile().get("username") or "").lower()
+        me = self._me
         processed = 0
         stats = {"time": datetime.now(TASHKENT).strftime("%H:%M"), "posts": 0, "with_comments": 0,
                  "comments": 0, "old": 0, "known": 0, "mine": 0, "already": 0, "new": 0,
@@ -401,7 +422,11 @@ class CommentResponder:
             if not post.get("comments_count"):
                 continue
             stats["with_comments"] += 1
-            caption = post.get("caption") or ""
+            # Tezlik: komentlar soni o'zgarmagan postni qayta o'qimaymiz (tekshiruv arzon bo'ladi)
+            pid, count = str(post["id"]), post.get("comments_count")
+            if self._counts.get(pid) == count:
+                continue
+            clean = True
             comments = ig.get_all_comments(post["id"], limit=200)
             stats["comments"] += len(comments)
             for c in comments:
@@ -444,6 +469,7 @@ class CommentResponder:
                     if getattr(e, "fatal", False):
                         raise
                     stats["ai_errors"] += 1
+                    clean = False
                     log.warning("AI xatosi (%s), comment=%s", e, cid)
                     with self.lock:
                         self.state.attempts[cid] = self.state.attempts.get(cid, 0) + 1
@@ -501,6 +527,7 @@ class CommentResponder:
                     if e.fatal or e.rate_limited:
                         raise
                     stats["send_errors"] += 1
+                    clean = False
                     log.warning("Yuborishda xato (%s), comment=%s", e, cid)
                     continue
 
@@ -516,9 +543,13 @@ class CommentResponder:
                     events.append(dm)
                     stats["dm"] = stats.get("dm", 0) + 1
                 processed += 1
+                self._recent.append(verdict["reply"])
                 time.sleep(random.randint(delay_min, delay_max))
+            if clean:
+                self._counts[pid] = count
 
-        self._log_stats(stats)
+        if stats["comments"]:
+            self._log_stats(stats)
         return events
 
     def _log_stats(self, stats):

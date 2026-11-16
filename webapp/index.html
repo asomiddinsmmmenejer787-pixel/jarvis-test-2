@@ -274,6 +274,14 @@ a{color:var(--cyan)}
       <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
     </div>
     <div class="panel">
+      <div class="ptitle">Jarvisga vazifalar</div>
+      <div class="muted">Komentlarga javobda nimaga e'tibor berishini yozing. Masalan: "Layk bosishni eslat", "Do'stini belgilashga unda", "Aksiya 20-noyabrgacha ekanini ayt".</div>
+      <label class="f">Hamma postlar uchun</label>
+      <div class="row"><input id="task-all" placeholder="Masalan: obuna bo'lishni eslat"><button class="btn sm green" onclick="saveTask(null)">Saqlash</button></div>
+      <label class="f" style="margin-top:14px">Har bir post uchun alohida</label>
+      <div id="taskList" class="muted">Yuklanmoqda...</div>
+    </div>
+    <div class="panel">
       <div class="ptitle">Komentdan keyingi direkt</div>
       <div class="seg" id="dmSeg"><button data-m="approve">TASDIQ</button><button data-m="auto">AVTO</button><button data-m="off">O'CHIQ</button></div>
       <div class="muted" id="dmText" style="margin-top:8px"></div>
@@ -561,6 +569,22 @@ async function dmAct(cid, action){
   catch(e){ haptic('err'); alert(e.message) }
 }
 
+// ---------- VAZIFALAR ----------
+async function loadTasks(){
+  try{ const r=await api('/api/tasks'); if(document.activeElement!==$('#task-all')) $('#task-all').value=r.global||'';
+    $('#taskList').classList.remove('muted');
+    $('#taskList').innerHTML = r.posts_error ? `<div class="err">${esc(r.posts_error)}</div>` : (r.posts||[]).map(p=>`<div class="lp">
+      <div class="mono" style="font-size:11px;color:var(--cyan2)">${esc(p.time)} · ${p.kind} · 💬 ${p.comments??0} ${p.task?'<span style="color:var(--green)">· VAZIFA BOR</span>':''}</div>
+      <div class="c">${esc(p.caption||'(opisaniya yo\'q)')}</div>
+      <div class="row"><input id="task-${p.id}" value="${esc(p.task||'')}" placeholder="Shu post uchun vazifa"><button class="btn sm green" onclick="saveTask('${p.id}')">OK</button></div></div>`).join('') || '<div class="muted">Postlar topilmadi.</div>';
+  }catch(e){ $('#taskList').innerHTML=`<div class="err">${esc(e.message)}</div>` }
+}
+async function saveTask(id){
+  const el=$(id?'#task-'+id:'#task-all');
+  try{ await api('/api/tasks',{method:'POST',body:{media_id:id,task:el.value}}); haptic('ok'); el.style.borderColor='var(--green)'; setTimeout(()=>{el.style.borderColor='';loadTasks()},900) }
+  catch(e){ haptic('err'); alert(e.message) }
+}
+
 // ---------- DIREKT YOZISHMALAR ----------
 const CHAT_TEXT={approve:'Direktga yozgan mijozga Jarvis javob tayyorlaydi, siz tasdiqlagach yuboriladi.',auto:'Javob ma\'lumotlarda aniq bo\'lsa darhol yuboriladi; shubhalisi tasdiqqa keladi.',off:'Direktga yozganlarga javob berilmaydi.'};
 document.querySelectorAll('#chatSeg button').forEach(b=>b.onclick=async()=>{
@@ -628,7 +652,7 @@ async function saveShop(){
 
 // ---------- navigatsiya ----------
 function go(v){ if(!state.busy) $('#proc').classList.remove('show'); document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
-  if (v==='comments') loadComments(); if (v==='catalog') loadCatalog(); window.scrollTo({top:0,behavior:'smooth'}) }
+  if (v==='comments'){ loadComments(); loadTasks() } if (v==='catalog') loadCatalog(); window.scrollTo({top:0,behavior:'smooth'}) }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
 
 // ---------- demo rejim (faqat dizaynni ko'rish uchun) ----------
@@ -649,6 +673,7 @@ function demoApi(path, opts){
     {id:'m1',kind:'Reels',time:'16.11.2026 19:30',comments:48,caption:'Bolangiz bu samokatni ko\'rsa uyda qolmaydi 🛴\n3-8 yosh uchun, 3 tezlik\nNarxi: 1 250 000 so\'m\nBuyurtma: direktga',has_price:true,info:{title:'',price:'',info:'',use_caption:true},thumb:''},
     {id:'m2',kind:'Reels',time:'15.11.2026 20:10',comments:12,caption:'Narx qiziqmi?',has_price:false,info:{title:'Rolikli krossovka',price:'389 000 so\'m',info:'31-38 o\'lcham',use_caption:true},thumb:''},
     {id:'m3',kind:'Karusel',time:'14.11.2026 12:00',comments:3,caption:'Yangi kolleksiya keldi',has_price:false,info:{title:'',price:'',info:'',use_caption:true},thumb:''}]});
+  if (path==='/api/tasks') return Promise.resolve(opts.method==='POST'?{ok:true}:{global:'',posts:[{id:'m1',kind:'Reels',time:'16.11.2026 19:30',comments:48,caption:'Bolangiz bu samokatni ko\'rsa uyda qolmaydi',task:'Layk bosishni eslat'},{id:'m2',kind:'Reels',time:'15.11.2026 20:10',comments:12,caption:'Narx qiziqmi?',task:''}]});
   if (path==='/api/stories') return Promise.resolve({stories:[{time:'10:12',views:612,reach:540},{time:'14:40',views:488,reach:430},{time:'19:05',views:701,reach:650}]});
   if (path.startsWith('/api/comments/') || path.startsWith('/api/posts/') || path.startsWith('/api/inbox/') || path==='/api/shop') return Promise.resolve({message:'✅ Bajarildi (demo)',status:{mode:opts.body.mode||'test',sent_today:3,limit_day:40,pending:1}});
   const kinds={'/api/insta':[['received','So\'rov qabul qilindi'],['connect','Instagram\'ga ulanish'],['collect','Postlar, statistika va komentlar yig\'ilmoqda'],['metrics','Ko\'rsatkichlar hisoblanmoqda'],['analyze','Jarvis ma\'lumotlarni tahlil qilmoqda'],['prepare','Hisobot tayyorlanmoqda']],

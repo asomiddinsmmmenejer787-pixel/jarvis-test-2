@@ -73,7 +73,8 @@ def set_shop(fields):
 def get_post_info(media_id):
     info = load()["posts"].get(str(media_id)) or {}
     return {"title": info.get("title", ""), "price": info.get("price", ""),
-            "info": info.get("info", ""), "use_caption": info.get("use_caption", True)}
+            "info": info.get("info", ""), "use_caption": info.get("use_caption", True),
+            "task": info.get("task", "")}
 
 
 def set_post_info(media_id, fields):
@@ -81,12 +82,43 @@ def set_post_info(media_id, fields):
         data = load()
         item = {k: _clean(fields.get(k), 1500 if k == "info" else 150) for k in POST_FIELDS}
         item["use_caption"] = bool(fields.get("use_caption", True))
-        if any(item[k] for k in POST_FIELDS) or not item["use_caption"]:
+        old = data["posts"].get(str(media_id)) or {}
+        item["task"] = _clean(fields["task"], 500) if "task" in fields else old.get("task", "")
+        if any(item[k] for k in POST_FIELDS) or item["task"] or not item["use_caption"]:
             data["posts"][str(media_id)] = item
         else:
             data["posts"].pop(str(media_id), None)
         save(data)
         return get_post_info(media_id)
+
+
+def set_task(media_id, task):
+    """Jarvisga vazifa: media_id berilsa shu post uchun, None bo'lsa hamma postlar uchun."""
+    with _lock:
+        data = load()
+        task = _clean(task, 500)
+        if media_id is None:
+            data["task"] = task
+        else:
+            item = data["posts"].get(str(media_id)) or {"title": "", "price": "", "info": "", "use_caption": True}
+            item["task"] = task
+            if any(item.get(k) for k in POST_FIELDS) or task or not item.get("use_caption", True):
+                data["posts"][str(media_id)] = item
+            else:
+                data["posts"].pop(str(media_id), None)
+        save(data)
+
+
+def get_tasks(media_id):
+    """Shu postga tegishli vazifalar matni (umumiy + postniki)."""
+    data = load()
+    parts = []
+    if data.get("task"):
+        parts.append(f"Hamma postlar uchun: {data['task']}")
+    post_task = (data["posts"].get(str(media_id)) or {}).get("task")
+    if post_task:
+        parts.append(f"Shu post uchun: {post_task}")
+    return "\n".join(parts)
 
 
 # ---------- faktlar ----------
@@ -132,7 +164,8 @@ def post_facts(post):
             sources.append(shop[k])
     has_price = bool(info["price"]) or bool(info["use_caption"] and PRICE_HINT_RE.search(caption))
     return {"lines": lines, "has_price": has_price, "source_text": "\n".join(sources),
-            "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"])}
+            "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"]),
+            "task": get_tasks(post.get("id"))}
 
 
 def facts_block(facts):

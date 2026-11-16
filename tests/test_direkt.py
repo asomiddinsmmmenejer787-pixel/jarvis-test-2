@@ -129,7 +129,28 @@ def run():
     events = r.run_once()
     check(not any(e["type"].startswith("dm") for e in events), "O'chiq rejimda direkt yozilmadi")
 
-    print("\n5) HUD API")
+    print("\n5) Vazifalar va tezlik")
+    r.set_dm_mode("off")
+    catalog.set_task("m1", "Layk bosishni eslat")
+    catalog.set_task(None, "Obuna bo'lishni eslat")
+    fake.comments["m1"].append({"id": "c30", "text": "Zo'r", "username": "u30", "timestamp": ts(1)})
+    r.run_once()
+    check("EGASINING VAZIFASI" in ai.last_reply_msg and "Shu post uchun: Layk bosishni eslat" in ai.last_reply_msg
+          and "Hamma postlar uchun: Obuna" in ai.last_reply_msg, "Post va umumiy vazifa AI'ga uzatildi")
+    check("OXIRGI JAVOBLARIMIZ" in ai.last_reply_msg, "Takrorlamaslik uchun oxirgi javoblar uzatildi")
+    catalog.set_post_info("m1", {"title": "Samokat", "price": "1 250 000 so'm"})
+    check(catalog.get_post_info("m1")["task"] == "Layk bosishni eslat", "Narx tahrirlanganda vazifa saqlanib qoldi")
+    r.run_once()
+    before = len(fake.calls)
+    r.run_once()
+    extra = [c[1] for c in fake.calls[before:]]
+    check(all(p == "me/media" for p in extra), f"Komentlar o'zgarmasa faqat postlar ro'yxati so'raladi ({len(extra)} so'rov)")
+    fake.comments["m1"].append({"id": "c31", "text": "Rahmat", "username": "u31", "timestamp": ts(1)})
+    check(any(e["cid"] == "c31" for e in r.run_once()), "Yangi komment darhol ilg'andi")
+    catalog.set_task("m1", "")
+    catalog.set_task(None, "")
+
+    print("\n6) HUD API")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     import webapp
@@ -150,6 +171,11 @@ def run():
           "Do'kon ma'lumotlari HUD orqali saqlandi")
     check(c.post("/api/dm/mode", json={"mode": "approve"}, headers=H).json()["status"]["dm_mode"] == "approve",
           "Direkt rejimi HUD orqali o'zgardi")
+    c.post("/api/tasks", json={"media_id": "m2", "task": "Do'stini belgilashga unda"}, headers=H)
+    c.post("/api/tasks", json={"media_id": None, "task": "Layk"}, headers=H)
+    t = c.get("/api/tasks", headers=H).json()
+    check(t["global"] == "Layk" and next(p for p in t["posts"] if p["id"] == "m2")["task"].startswith("Do'stini"),
+          "Vazifalar HUD orqali saqlandi")
     check(c.get("/api/posts").status_code == 401, "Postlar API imzosiz yopiq")
 
     print("\n✅ Direkt testlari o'tdi")
