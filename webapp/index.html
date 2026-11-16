@@ -467,7 +467,8 @@ async function loadComments(){
     const r=await api('/api/comments');
     if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
     const st=r.status; document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
-    $('#modeText').textContent=MODE_TEXT[st.mode]; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
+    const lr=st.last_run; $('#modeText').textContent=MODE_TEXT[st.mode] + (lr ? `\nOxirgi tekshiruv ${lr.time}: ${lr.posts} post, ${lr.comments} komment, yangi ${lr.new}, yuborildi ${lr.sent}, ruxsatga ${lr.approval}.` : '');
+    $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
     $('#pendCount').textContent=r.pending.length;
     $('#pending').classList.toggle('muted', !r.pending.length);
     $('#pending').innerHTML = r.pending.length ? r.pending.map(p=>`<div class="cm" id="cm-${p.cid}">

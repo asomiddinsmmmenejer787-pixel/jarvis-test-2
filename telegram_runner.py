@@ -303,6 +303,7 @@ HELP_TEXT = (
     "/stories — faol storylar statistikasi\n"
     "/autoreply — komentlarga javob tizimi holati va rejimi\n"
     "/pending — ruxsat kutayotgan komentlar\n"
+    "/checknow — komentlarni hoziroq tekshirish\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
     "/diag — Gemini va Instagram holatini tekshirish\n\n"
     "Yoki oddiy tilda savolingizni yozing."
@@ -594,10 +595,53 @@ async def autoreply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Ruxsat kutayotgan komentlar: {st['pending']}",
         f"Tekshirish oralig'i: har {CHECK_EVERY_SEC // 60} daqiqada",
     ]
+    lines += last_run_lines(st.get("last_run"))
     if not ig.is_configured():
         lines.append("\n⚠️ Instagram hali ulanmagan (INSTAGRAM_ACCESS_TOKEN yo'q).")
     lines.append("\nRejimni o'zgartirish: /autoreply on | /autoreply test | /autoreply off")
     await update.message.reply_text("\n".join(lines))
+
+
+def last_run_lines(r):
+    if not r:
+        return ["\nOxirgi tekshiruv: hali bo'lmagan (/checknow bilan hozir tekshiring)"]
+    return [
+        f"\nOxirgi tekshiruv ({r['time']}): {r['posts']} post, {r['with_comments']} tasida komment, "
+        f"jami {r['comments']} komment",
+        f"• yangi: {r['new']} | 24 soatdan eski: {r['old']} | avval ko'rilgan: {r['known']} | "
+        f"siz javob bergan: {r['already'] + r['mine']}",
+        f"• yuborildi: {r['sent']} | ruxsatga: {r['approval']} | test: {r['test']} | spam: {r['skipped']} | "
+        f"xato: {r['ai_errors'] + r['send_errors']}",
+    ]
+
+
+@owner_only
+async def checknow_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Komentlarni hoziroq tekshiradi va natijani ko'rsatadi."""
+    if responder is None:
+        await update.message.reply_text("Komentlarga javob tizimi o'chiq (Gemini kerak).")
+        return
+    if responder.mode == "off":
+        await update.message.reply_text("Avtojavob O'CHIQ. Avval /autoreply on yoki /autoreply test qiling.")
+        return
+    await update.message.reply_text("⏳ Komentlar tekshirilmoqda...")
+    chat_id = update.effective_chat.id
+    try:
+        events = await asyncio.to_thread(responder.run_once)
+    except InstagramError as e:
+        await update.message.reply_text(ig_error_text(e))
+        return
+    except GeminiError as e:
+        await update.message.reply_text(f"Gemini xatosi: {e}")
+        return
+    finally:
+        await send_unsent_approvals(context.bot, chat_id)
+    for ev in events:
+        try:
+            await notify_event(context.bot, chat_id, ev)
+        except Exception:
+            logger.exception("Voqeani yuborib bo'lmadi.")
+    await update.message.reply_text("\n".join(["✅ Tekshirildi"] + last_run_lines(responder.last_run)))
 
 
 def approval_text(item):
@@ -884,6 +928,7 @@ def build_app(token):
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
     app.add_handler(CommandHandler("diag", diag_cmd))
     app.add_handler(CommandHandler("app", app_cmd))
+    app.add_handler(CommandHandler("checknow", checknow_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

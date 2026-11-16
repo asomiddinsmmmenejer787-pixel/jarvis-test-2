@@ -303,6 +303,7 @@ class CommentResponder:
         self.ai = ai
         self.state = State(state_path or os.path.join(config.DATA_DIR, "auto_reply_state.json"))
         self.lock = threading.RLock()
+        self.last_run = None
         if self.state.mode is None:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
@@ -330,6 +331,7 @@ class CommentResponder:
                 "sent_today": self.state.today_count(),
                 "limit_day": _env_int("MAX_PER_DAY", 40),
                 "pending": len(self.state.pending),
+                "last_run": self.last_run,
             }
 
     # ----- AI -----
@@ -363,12 +365,19 @@ class CommentResponder:
         events = []
         me = (ig.get_profile().get("username") or "").lower()
         processed = 0
+        stats = {"time": datetime.now(TASHKENT).strftime("%H:%M"), "posts": 0, "with_comments": 0,
+                 "comments": 0, "old": 0, "known": 0, "mine": 0, "already": 0, "new": 0,
+                 "sent": 0, "approval": 0, "test": 0, "skipped": 0, "ai_errors": 0, "send_errors": 0}
+        self.last_run = stats
 
         for post in ig.get_recent_posts(posts_to_check):
+            stats["posts"] += 1
             if not post.get("comments_count"):
                 continue
+            stats["with_comments"] += 1
             caption = post.get("caption") or ""
             comments = ig.get_all_comments(post["id"], limit=200)
+            stats["comments"] += len(comments)
             for c in comments:
                 cid = c.get("id")
                 text = (c.get("text") or "").strip()
@@ -376,19 +385,25 @@ class CommentResponder:
                     known = (cid in self.state.done or cid in self.state.pending
                              or cid in self.state.test_seen)
                 if not cid or not text or known:
+                    stats["known"] += 1
                     continue
                 if not is_fresh(c.get("timestamp", ""), max_age):
+                    stats["old"] += 1
                     continue
                 if (c.get("username") or "").lower() == me:
+                    stats["mine"] += 1
                     continue
                 if any((r.get("username") or "").lower() == me
                        for r in (c.get("replies") or {}).get("data", [])):
+                    stats["already"] += 1
                     with self.lock:
                         self.state.mark(cid, "already")
                         self.state.save()
                     continue
 
+                stats["new"] += 1
                 if processed >= per_run:
+                    self._log_stats(stats)
                     return events
 
                 with self.lock:
@@ -402,6 +417,7 @@ class CommentResponder:
                 except Exception as e:  # GeminiError va boshqalar
                     if getattr(e, "fatal", False):
                         raise
+                    stats["ai_errors"] += 1
                     log.warning("AI xatosi (%s), comment=%s", e, cid)
                     with self.lock:
                         self.state.attempts[cid] = self.state.attempts.get(cid, 0) + 1
@@ -420,6 +436,7 @@ class CommentResponder:
                 }
 
                 if verdict["action"] == "skip":
+                    stats["skipped"] += 1
                     with self.lock:
                         self.state.mark(cid, "skipped")
                         self.state.save()
@@ -429,6 +446,7 @@ class CommentResponder:
                     with self.lock:
                         self.state.pending[cid] = {**info, "created": int(time.time()), "msg_id": None}
                         self.state.save()
+                    stats["approval"] += 1
                     events.append({"type": "approval", **info})
                     processed += 1
                     continue
@@ -438,6 +456,7 @@ class CommentResponder:
                     with self.lock:
                         self.state.test_seen[cid] = int(time.time())
                         self.state.save()
+                    stats["test"] += 1
                     events.append({"type": "test", **info})
                     processed += 1
                     continue
@@ -454,6 +473,7 @@ class CommentResponder:
                 except InstagramError as e:
                     if e.fatal or e.rate_limited:
                         raise
+                    stats["send_errors"] += 1
                     log.warning("Yuborishda xato (%s), comment=%s", e, cid)
                     continue
 
@@ -461,12 +481,23 @@ class CommentResponder:
                     self.state.mark(cid, "sent")
                     self.state.add_sent()
                     self.state.save()
+                stats["sent"] += 1
                 log.info("[SENT] %s | comment=%s", verdict["category"], cid)
                 events.append({"type": "sent", **info})
                 processed += 1
                 time.sleep(random.randint(delay_min, delay_max))
 
+        self._log_stats(stats)
         return events
+
+    def _log_stats(self, stats):
+        log.info(
+            "Komentlar tekshirildi: %s post (%s tasida komment), %s komment | yangi %s, eski %s, "
+            "ko'rilgan %s, javob berilgan %s | yuborildi %s, ruxsatga %s, test %s, spam %s, xato %s",
+            stats["posts"], stats["with_comments"], stats["comments"], stats["new"], stats["old"],
+            stats["known"], stats["already"] + stats["mine"], stats["sent"], stats["approval"],
+            stats["test"], stats["skipped"], stats["ai_errors"] + stats["send_errors"],
+        )
 
     # ----- egasining qarorlari -----
 
