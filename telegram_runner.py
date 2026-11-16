@@ -690,15 +690,22 @@ async def send_approval(bot, owner, item):
 
 
 def dm_approval_text(item):
-    lines = [
-        "📩 Direkt xabar tayyor, tasdiqlaysizmi?",
-        f"Mijoz: @{item.get('username', '?')}",
-        f"Komment: «{item.get('comment', '')}»",
-        f"Mahsulot: {item.get('product') or 'aniqlanmadi'} ({item.get('source', '')})",
-    ]
+    lines = ["📩 Direkt xabar tayyor, tasdiqlaysizmi?"]
+    if item.get("reason"):
+        lines.append(f"⚠️ {item['reason']}")
+    lines.append(f"Mijoz: @{item.get('username', '?')}")
+    lines.append(f"Komment: «{item.get('comment', '')}»")
+    if item.get("topic"):
+        lines.append(f"So'radi: {item['topic']}")
+    post = f"Post: {item.get('post_time', '')}"
+    if item.get("title"):
+        post += f" · {item['title']}"
+    elif item.get("caption"):
+        post += f" · {item['caption'][:60]}"
+    lines.append(post)
     if item.get("permalink"):
-        lines.append(f"Post: {item['permalink']}")
-    lines.append(f"\n{item.get('text', '')}")
+        lines.append(item["permalink"])
+    lines.append("\n" + (item.get("text") or "(tayyor matn yo'q — Reply qilib o'zingiz yozing)"))
     lines.append("\nBoshqa matn yubormoqchi bo'lsangiz, shu xabarga Reply qilib yozing.")
     return "\n".join(lines)
 
@@ -780,13 +787,13 @@ async def direkt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         responder.set_dm_mode(mode)
     texts = {
         "approve": "TASDIQ — narx so'ragan mijozga direkt xabar tayyorlanadi, siz tasdiqlagach yuboriladi",
-        "auto": "AVTO — direkt xabar darhol yuboriladi (narx faqat katalogdan)",
+        "auto": "AVTO — javob postdagi ma'lumotdan aniq topilsa darhol yuboriladi, aks holda sizga tasdiqqa",
         "off": "O'CHIQ — direktga yozilmaydi",
     }
-    n = len(catalog.active_products())
+    n = len(catalog.load()["posts"])
     await update.message.reply_text(
-        f"Direkt rejimi: {texts[responder.dm_mode]}\nKatalogda {n} ta mahsulot."
-        + ("\n⚠️ Katalog bo'sh: Jarvis HUD → MAHSULOT bo'limida qo'shing." if n == 0 else "")
+        f"Direkt rejimi: {texts[responder.dm_mode]}\nMa'lumot kiritilgan postlar: {n} ta."
+        + "\nPostlarga narx va ma'lumotni Jarvis HUD → POSTLAR bo'limida kiritasiz."
         + "\n\nO'zgartirish: /direkt tasdiq | /direkt avto | /direkt off"
     )
 
@@ -874,7 +881,7 @@ async def notify_event(bot, owner, ev):
         return  # send_unsent_approvals() yuboradi
     elif ev["type"] == "dm_sent":
         text = (f"📩 Direktga yuborildi: @{ev.get('username')}\n"
-                f"Mahsulot: {ev.get('product') or 'aniqlanmadi'}\n\n{ev['text']}")
+                f"Komment: «{ev.get('comment', '')}» · post {ev.get('post_time', '')}\n\n{ev['text']}")
     elif ev["type"] == "dm_error":
         text = f"⚠️ @{ev.get('username')} ga direkt yuborilmadi: {ev.get('error')}"
         await bot.send_message(chat_id=owner, text=text, disable_web_page_preview=True)
@@ -883,8 +890,8 @@ async def notify_event(bot, owner, ev):
         return
     if ev["type"] == "test" and ev.get("dm"):
         d = ev["dm"]
-        text += (f"\n\n📩 Direktga shunday yozardim (mahsulot: {d.get('product') or 'aniqlanmadi'}, "
-                 f"{d.get('source')}):\n{d['text']}")
+        text += (f"\n\n📩 Direktga shunday yozardim (post {d.get('post_time', '')}"
+                 + (f", ⚠️ {d['reason']}" if d.get("reason") else "") + f"):\n{d.get('text') or '—'}")
     await bot.send_message(chat_id=owner, text=text, disable_notification=True,
                            disable_web_page_preview=True)
 

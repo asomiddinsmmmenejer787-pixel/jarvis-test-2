@@ -114,8 +114,15 @@ KATEGORIYALAR
 6. competitor: boshqa do'kon reklamasi yoki raqobatchi komment. Qattiq, qisqa, xarizmali javob. Raqobatchi nomini yozma, maqtama, reklama qilma.
 7. spam: link, reklama, begona narsa, mazmunsiz. reply bo'sh satr.
 
+POST HAQIDA FAKTLAR
+Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'lumot) va do'kon haqida.
+- Avval mijoz aynan nimani so'raganini tushun va javobni shu postga moslab yoz.
+- question: savolga FAKTLARdan qisqa, aniq javob ber (yosh, o'lcham, rang, manzil, yetkazib berish...).
+  FAKTLARda javob bo'lmasa, to'qima: "direktga yozing, aniqlab beramiz" mazmunida yo'nalt.
+- Narxni hech qachon ochiq komentga yozma, hatto FAKTLARda bo'lsa ham.
+
 QOIDALAR
-- Narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
+- FAKTLARda yo'q narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
 - Tanqid haqiqiy shikoyatmi yoki trollmi aniq bo'lmasa, complaint deb ol.
 - Ikkilansang, sarkazm o'rniga iliq javob ber va confidence ni past qo'y.
 
@@ -350,15 +357,16 @@ class CommentResponder:
 
     # ----- AI -----
 
-    def _ask(self, comment_text, post_caption):
+    def _ask(self, comment_text, post):
+        facts = catalog.post_facts(post)
         message = (
-            f"<post>{(post_caption or '')[:300]}</post>\n"
+            f"{catalog.facts_block(facts)}\n\n"
             f"<komment>{comment_text[:500]}</komment>"
         )
         system = SYSTEM_PROMPT
         if self.dm_mode != "off":
-            system += ("\n\nDIREKT YOQILGAN: price va question javoblarida mijozga 'batafsil ma'lumot va narxni "
-                       "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt. 'Direktga yozing' dema.")
+            system += ("\n\nDIREKT YOQILGAN: price javobida mijozga 'narx va batafsil ma'lumotni "
+                       "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt, 'direktga yozing' dema.")
         return self.ai.generate_json(system, message, temperature=0.9)
 
     # ----- bitta tekshiruv sikli -----
@@ -431,7 +439,7 @@ class CommentResponder:
                         continue
 
                 try:
-                    result = self._ask(text, caption)
+                    result = self._ask(text, post)
                 except Exception as e:  # GeminiError va boshqalar
                     if getattr(e, "fatal", False):
                         raise
@@ -537,27 +545,29 @@ class CommentResponder:
 
     def _plan_dm(self, post, comment, verdict, preview=False):
         """
-        Komentga javobdan keyin direkt xabarni tayyorlaydi.
-        auto: darhol yuboradi; approve: egasining tasdig'iga qo'yadi; preview: faqat ko'rsatadi.
-        Qaytaradi: voqea (dict) yoki None.
+        Komentga javobdan keyin direkt xabarni tayyorlaydi (shu post faktlari asosida).
+        - price: har doim direkt tayyorlanadi;
+        - question: faqat postda javob bo'lsa.
+        auto rejim: xabar xavfsiz bo'lsa (raqamlar faktlardan, savolga javob bor) yuboriladi,
+        aks holda egasiga tasdiqqa tushadi. approve: har doim tasdiqqa. preview: faqat ko'rsatadi.
         """
         if self.dm_mode == "off" or verdict["category"] not in DM_CATEGORIES:
             return None
         text = (comment.get("text") or "").strip()
-        product, source = catalog.match_product(post, text, self.ai)
-        if verdict["category"] == "question" and product is None:
-            return None  # oddiy savol, mahsulot aniqlanmadi: direkt shart emas
-        dm_text, how = catalog.compose_dm(self.ai, product, text)
+        res = catalog.compose_dm(self.ai, post, text)
+        if verdict["category"] == "question" and not res["answered"]:
+            return None  # postda javob yo'q: ochiq javobda direktga yo'naltirilgan
         cid = comment.get("id")
         info = {
             "cid": cid, "username": comment.get("username") or "", "comment": text[:300],
-            "product": product["name"] if product else None, "source": source,
-            "text": dm_text, "how": how, "permalink": post.get("permalink") or "",
+            "post_time": catalog._post_time(post), "caption": (post.get("caption") or "")[:120],
+            "title": res["title"], "topic": res["topic"], "text": res["text"],
+            "safe": res["safe"], "reason": res["reason"], "permalink": post.get("permalink") or "",
         }
         if preview:
             return info
-        if self.dm_mode == "auto":
-            ok, err = self._send_dm(cid, dm_text)
+        if self.dm_mode == "auto" and res["safe"]:
+            ok, err = self._send_dm(cid, res["text"])
             return {"type": "dm_sent" if ok else "dm_error", **info, "error": err}
         with self.lock:
             self.state.dm_pending[cid] = {**info, "created": int(time.time()), "msg_id": None}
@@ -602,6 +612,8 @@ class CommentResponder:
         if item is None:
             return "Bu direkt allaqachon ko'rib chiqilgan."
         body = (text or "").strip()[:1000] or item.get("text", "")
+        if not body:
+            return "Tayyor matn yo'q. Shu xabarga Reply qilib o'zingiz yozing."
         ok, err = self._send_dm(cid, body)
         if not ok:
             return f"❌ Yuborilmadi: {err}"

@@ -37,7 +37,7 @@ TRANSIENT_CODES = {1, 2}
 PROFILE_FIELDS = "user_id,username,name,biography,followers_count,follows_count,media_count"
 MEDIA_FIELDS = (
     "id,caption,media_type,media_product_type,permalink,timestamp,"
-    "like_count,comments_count"
+    "like_count,comments_count,thumbnail_url,media_url"
 )
 COMMENT_FIELDS = "id,text,username,timestamp,like_count,replies{id,username,text,timestamp}"
 

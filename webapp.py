@@ -544,59 +544,42 @@ def api_dm_action(cid: str, body: dict, x_init_data: str = Header(default="")):
     return {"message": msg}
 
 
-# ---------- katalog ----------
+# ---------- postlar bo'yicha ma'lumot ----------
 
-@router.get("/api/catalog")
-def api_catalog(x_init_data: str = Header(default="")):
+@router.get("/api/posts")
+def api_posts(x_init_data: str = Header(default="")):
     require_owner(x_init_data)
     data = catalog.load()
-    posts = []
-    if ig.is_configured():
-        try:
-            recent = _cached("catalog_posts", 300, lambda: ig.get_recent_posts(20))
-            products = catalog.active_products(data)
-            for p in recent:
-                linked = data["post_links"].get(str(p.get("id")))
-                auto = None if linked else catalog._keyword_match(p.get("caption"), products)
-                dt = analytics._local_time(p.get("timestamp"))
-                posts.append({
-                    "id": p.get("id"), "kind": analytics.kind_name(p),
-                    "date": dt.strftime("%d.%m") if dt else "",
-                    "caption": (p.get("caption") or "")[:140], "permalink": p.get("permalink"),
-                    "linked": linked, "auto": auto["id"] if auto else None,
-                })
-        except InstagramError as e:
-            return {**data, "posts": [], "posts_error": _ig_error(e)}
-    return {**data, "posts": posts}
+    out = {"shop": data["shop"], "posts": []}
+    if not ig.is_configured():
+        out["posts_error"] = "Instagram ulanmagan"
+        return out
+    try:
+        recent = _cached("hud_posts", 120, lambda: ig.get_recent_posts(30))
+    except InstagramError as e:
+        out["posts_error"] = _ig_error(e)
+        return out
+    for p in recent:
+        facts = catalog.post_facts(p)
+        out["posts"].append({
+            "id": p.get("id"), "kind": analytics.kind_name(p),
+            "time": catalog._post_time(p),
+            "thumb": p.get("thumbnail_url") or p.get("media_url") or "",
+            "caption": p.get("caption") or "", "permalink": p.get("permalink"),
+            "comments": p.get("comments_count"),
+            "info": catalog.get_post_info(p.get("id")),
+            "has_price": facts["has_price"],
+        })
+    return out
 
 
-@router.post("/api/catalog/shop")
-def api_catalog_shop(body: dict, x_init_data: str = Header(default="")):
+@router.post("/api/posts/{media_id}/info")
+def api_post_info(media_id: str, body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    return {"info": catalog.set_post_info(media_id, body)}
+
+
+@router.post("/api/shop")
+def api_shop(body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
     return {"shop": catalog.set_shop(body)}
-
-
-@router.post("/api/catalog/product")
-def api_catalog_product(body: dict, x_init_data: str = Header(default="")):
-    require_owner(x_init_data)
-    try:
-        return {"product": catalog.upsert_product(body)}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.delete("/api/catalog/product/{pid}")
-def api_catalog_delete(pid: str, x_init_data: str = Header(default="")):
-    require_owner(x_init_data)
-    catalog.delete_product(pid)
-    return {"ok": True}
-
-
-@router.post("/api/catalog/link")
-def api_catalog_link(body: dict, x_init_data: str = Header(default="")):
-    require_owner(x_init_data)
-    try:
-        catalog.link_post(str(body.get("media_id", "")), body.get("product_id") or None)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"ok": True}

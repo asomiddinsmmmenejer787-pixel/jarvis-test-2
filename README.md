@@ -152,15 +152,19 @@ Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari)
 - Kirish faqat Telegram imzosi (initData) orqali va faqat bot egasi uchun.
 - Dizaynni brauzerda ko'rish (soxta ma'lumot bilan): `/app?demo=1`.
 
-### Mahsulot katalogi va direkt xabar
+### Postlar bo'yicha ma'lumot va direkt xabar
 
-- HUD → MAHSULOT: mahsulotlar (nomi, narxi, tavsifi, kalit so'zlari), do'kon ma'lumotlari
-  (manzil, telefon, yetkazib berish...), postlarni mahsulotga biriktirish.
-- Narx so'ragan komentga Jarvis ochiq javob yozadi va mijozning direktiga xabar tayyorlaydi
-  (Instagram "private reply": har kommentga bitta, 7 kun ichida).
-- Mahsulotni aniqlash: postga biriktirilgan → post matnidagi kalit so'z → komment matni → AI (ishonchi yuqori bo'lsa).
-- Direkt matnidagi har bir raqam katalog bilan tekshiriladi; to'qilgan narx bo'lsa, katalogdagi shablon yuboriladi.
-- Rejim: `/direkt tasdiq` (standart), `/direkt avto`, `/direkt off`. Token `instagram_business_manage_messages` ruxsatiga ega bo'lishi kerak.
+- HUD → POSTLAR: oxirgi 30 post sana-vaqt, rasm va opisaniya bilan. Har postga mahsulot nomi,
+  narx va qo'shimcha ma'lumot kiritiladi; opisaniyadan foydalanishni o'chirish mumkin.
+  Pastda do'kon ma'lumotlari (manzil, telefon, yetkazib berish...) — hamma postga qo'shiladi.
+- Komentga javob va direkt xabar shu komment yozilgan postning FAKTLARiga tayanadi:
+  egasi kiritgan ma'lumot (eng ishonchli) + opisaniya + do'kon ma'lumotlari.
+- Narx so'ralsa: ochiq javob "narxni direktga yubordik", direktga esa aniq javob.
+  Oddiy savolga postda javob bo'lsa, ochiq javobda ham qisqa javob beriladi.
+- Direkt matnidagi har bir raqam faktlar bilan tekshiriladi. Mos kelmasa yoki postda javob
+  bo'lmasa, xabar avtomatik yuborilmaydi — egasiga tasdiqqa tushadi.
+- Rejim: `/direkt tasdiq` (standart), `/direkt avto`, `/direkt off`.
+  Token `instagram_business_manage_messages` ruxsatiga ega bo'lishi kerak.
 
 ### Komentlarga javob qanday ishlaydi
 
