@@ -537,17 +537,15 @@ async def diag_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         d = await asyncio.to_thread(ai.diagnose)
         ok = d.get("status") == 200
         lines.append(f"\nGemini: {'✅ ishlayapti' if ok else '❌ xato'}")
-        lines.append(f"Model: {d.get('model')} | javob: {d.get('status')} | {d.get('seconds')} s")
+        if d.get("working"):
+            lines.append(f"Ishlatilayotgan model: {d['working']}")
+        lines.append("Sinov:\n" + "\n".join("  " + t for t in d.get("tested", [])))
         if d.get("error"):
             lines.append(f"Google xabari: {d['error']}")
-        if d.get("alt"):
-            lines.append(f"Zaxira model: {d['alt']}")
-        if "model_exists" in d:
-            lines.append("Model kalitda mavjud: " + ("ha" if d["model_exists"] else "YO'Q"))
         if d.get("flash_models"):
-            lines.append("Mavjud flash modellar: " + ", ".join(d["flash_models"]))
+            lines.append("Kalitda ko'rinadigan modellar: " + ", ".join(d["flash_models"]))
         if d.get("models_error"):
-            lines.append(f"Modellar ro'yxati olinmadi: {d['models_error']}")
+            lines.append(f"Modellar ro'yxati: {d['models_error']}")
     else:
         lines.append(f"\nAI provider: {type(ai).__name__} (Gemini emas)")
 

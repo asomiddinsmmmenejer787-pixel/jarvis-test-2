@@ -9,11 +9,13 @@ Xavfsizlik:
 
 Barqarorlik:
 - Gemini vaqtincha band bo'lsa (503, 429 va h.k.), so'rov avtomatik qayta yuboriladi.
-- Agar GEMINI_MODEL topilmasa (404), provider mavjud "flash" modelni o'zi tanlaydi.
+- Model ishlamasa (404, band, javob bermadi), keyingi Gemini modeli avtomatik sinaladi
+  va birinchi ishlagani eslab qolinadi.
 """
 
 import json
 import logging
+import os
 import time
 import requests
 from ai.base import AIProvider
@@ -21,23 +23,28 @@ from ai.base import AIProvider
 logger = logging.getLogger(__name__)
 
 API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-import os
 
-# Yangi Gemini modellari uzoq "o'ylashi" mumkin, katta tahlil uchun 30 soniya kam
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT", "150") or 150)
-PREFERRED_ALIAS = "gemini-2.5-flash"
-# Bu nomlar Google'ning o'zgaruvchan taxalluslari; ba'zan juda sekin modelga ulanadi.
-# Shuning uchun ularning o'rniga barqaror modelni ishlatamiz.
-UNSTABLE_ALIASES = {"gemini-flash-latest", "gemini-pro-latest"}
-# Vaqtinchalik xatolar: shu kodlar chiqsa, qayta urinib ko'riladi
-RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
-# Har bir qayta urinishdan oldin kutish (soniya). 3 ta qayta urinish.
-RETRY_DELAYS_SECONDS = (2, 5, 10)
-# Matn generatsiyasi uchun mos kelmaydigan model turlari
-EXCLUDED_MODEL_KEYWORDS = (
-    "image", "tts", "live", "audio", "embedding", "vision",
-    "robotics", "computer", "native",
+# Bitta so'rov uchun kutish vaqti (soniya). Javob bermagan model darhol keyingisiga almashtiriladi.
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT", "90") or 90)
+# Navbat bilan sinaladigan modellar. Google ba'zi modellarni yangi kalitlar uchun yopadi (404)
+# yoki ular vaqtincha sekinlashadi, shuning uchun bittasiga bog'lanib qolmaymiz.
+MODEL_CANDIDATES = (
+    "gemini-2.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
 )
+# Ishlamagan modelni qancha vaqt chetlab o'tish (soniya)
+BAD_MODEL_TTL = {"not_found": 24 * 3600, "busy": 10 * 60, "timeout": 20 * 60}
+MAX_MODELS_PER_REQUEST = 3
+# Google'ning o'zgaruvchan taxalluslari: ba'zan juda sekin modelga ulanadi, shuning uchun oxirida sinaladi
+SLOW_ALIASES = {"gemini-flash-latest", "gemini-pro-latest"}
+# Vaqtinchalik xatolar
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
+# Bir model ichida qayta urinishdan oldin kutish (soniya)
+RETRY_DELAYS_SECONDS = (2, 5)
 
 
 class GeminiError(RuntimeError):
@@ -55,11 +62,11 @@ class GeminiProvider(AIProvider):
         if not api_key:
             raise ValueError("GeminiProvider uchun api_key kerak.")
         self.api_key = api_key
-        if model in UNSTABLE_ALIASES:
-            logger.warning(f"'{model}' o'rniga barqaror '{PREFERRED_ALIAS}' ishlatiladi.")
-            model = PREFERRED_ALIAS
         self.model = model
-        self._resolved_model = None  # 404 bo'lsa, avtomatik tanlangan model shu yerda saqlanadi
+        self._resolved_model = None  # oxirgi muvaffaqiyatli ishlagan model
+        self._bad = {}               # model -> qachongacha chetlab o'tiladi
+        self._names = None           # kalitga ochiq modellar ro'yxati (kesh)
+        self._names_at = 0
 
     def _headers(self) -> dict:
         return {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
@@ -111,111 +118,116 @@ class GeminiProvider(AIProvider):
             if "generateContent" in m.get("supportedGenerationMethods", [])
         ]
 
-    def _alternate_model(self, exclude: str):
-        """Hozirgi model ishlamasa, o'rniga boshqa barqaror flash modelni tanlaydi."""
-        try:
-            names = self._available_models()
-        except (requests.exceptions.RequestException, ValueError):
-            return None
-        if PREFERRED_ALIAS in names and PREFERRED_ALIAS != exclude:
-            return PREFERRED_ALIAS
-        flash = [n for n in names if "flash" in n and n != exclude
-                 and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
-                 and "preview" not in n and "exp" not in n and "latest" not in n]
-        full = [n for n in flash if "lite" not in n]
-        pool = full or flash
-        return sorted(pool)[-1] if pool else None
+    def _known_names(self):
+        """Kalitga ochiq modellar (1 soat kesh). Olib bo'lmasa None."""
+        if self._names is None or time.time() - self._names_at > 3600:
+            try:
+                self._names = set(self._available_models())
+                self._names_at = time.time()
+            except (requests.exceptions.RequestException, ValueError):
+                return None
+        return self._names
+
+    def _candidates(self) -> list:
+        order = []
+        configured = [] if self.model in SLOW_ALIASES else [self.model]
+        for m in (self._resolved_model, *configured, *MODEL_CANDIDATES):
+            if m and m not in order:
+                order.append(m)
+        names = self._known_names()
+        if names:
+            order = [m for m in order if m in names] or order
+        now = time.time()
+        fresh = [m for m in order if self._bad.get(m, 0) < now]
+        return fresh or order[:1]
+
+    def _mark_bad(self, model: str, reason: str):
+        self._bad[model] = time.time() + BAD_MODEL_TTL[reason]
+        if self._resolved_model == model:
+            self._resolved_model = None
+        logger.warning(f"Gemini modeli '{model}' vaqtincha chetlab o'tiladi ({reason}).")
 
     def _generate_with_fallback(self, payload: dict) -> requests.Response:
-        """Asosiy model bilan urinadi; band/uzilish bo'lsa, boshqa modelga o'tadi."""
-        model = self._resolved_model or self.model
-        try:
-            response = self._post_generate(model, payload)
-            if response.status_code == 404 and not self._resolved_model:
-                model = self._pick_available_model()
-                self._resolved_model = model
-                logger.warning(f"'{self.model}' topilmadi. '{model}' ishlatilmoqda.")
+        """Modellarni navbat bilan sinaydi, birinchi ishlaganini eslab qoladi."""
+        last_response, last_error = None, None
+        for model in self._candidates()[:MAX_MODELS_PER_REQUEST]:
+            try:
                 response = self._post_generate(model, payload)
-            if response.status_code not in RETRY_STATUS_CODES:
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                self._mark_bad(model, "timeout")
+                last_error = e
+                continue
+            if response.status_code == 200:
+                if self._resolved_model != model:
+                    logger.info(f"Gemini modeli: {model}")
+                self._resolved_model = model
                 return response
-            failure = None
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            failure = e
-            response = None
-
-        alt = self._alternate_model(exclude=model)
-        if not alt:
-            if failure:
-                raise failure
-            return response
-        logger.warning(f"'{model}' ishlamadi, '{alt}' modeliga o'tilmoqda.")
-        alt_response = self._post_generate(alt, payload)
-        if alt_response.status_code == 200:
-            self._resolved_model = alt
-        return alt_response
+            if response.status_code == 404:
+                self._mark_bad(model, "not_found")
+                last_response = response
+                continue
+            if response.status_code in RETRY_STATUS_CODES:
+                self._mark_bad(model, "busy")
+                last_response = response
+                continue
+            return response  # 400/401/403: kalit yoki so'rov xatosi, boshqa model yordam bermaydi
+        if last_response is not None:
+            return last_response
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Mos Gemini modeli topilmadi.")
 
     def diagnose(self) -> dict:
-        """Gemini'ni kichik so'rov bilan tekshiradi (/diag uchun). Kalitni hech qayerga chiqarmaydi."""
-        info = {"model": self._resolved_model or self.model, "timeout": REQUEST_TIMEOUT_SECONDS}
+        """Har bir nomzod modelni kichik so'rov bilan tekshiradi (/diag uchun). Kalit chiqarilmaydi."""
         payload = {"contents": [{"role": "user", "parts": [{"text": "Faqat OK deb javob ber."}]}]}
-        start = time.time()
-        try:
-            r = requests.post(
-                f"{API_BASE_URL}/models/{info['model']}:generateContent",
-                json=payload, headers=self._headers(), timeout=60,
-            )
-            info["status"] = r.status_code
+        names = self._known_names()
+        info = {"model": self._resolved_model or self.model, "tested": []}
+        order = []
+        configured = [] if self.model in SLOW_ALIASES else [self.model]
+        for m in (*configured, *MODEL_CANDIDATES):
+            if m not in order and (names is None or m in names):
+                order.append(m)
+        working = None
+        for model in order[:6]:
+            start = time.time()
             try:
-                body = r.json()
-            except ValueError:
-                body = {}
-            if r.status_code != 200:
-                info["error"] = str((body.get("error") or {}).get("message", ""))[:300]
-        except requests.exceptions.RequestException as e:
-            info["status"] = type(e).__name__
-        info["seconds"] = round(time.time() - start, 1)
-        if info.get("status") != 200:
-            alt = self._alternate_model(exclude=info["model"])
-            if alt:
-                start = time.time()
-                try:
-                    r = requests.post(
-                        f"{API_BASE_URL}/models/{alt}:generateContent",
-                        json=payload, headers=self._headers(), timeout=60,
-                    )
-                    info["alt"] = f"{alt}: {r.status_code}, {round(time.time() - start, 1)} s"
-                    if r.status_code == 200:
-                        self._resolved_model = alt
-                except requests.exceptions.RequestException as e:
-                    info["alt"] = f"{alt}: {type(e).__name__}"
-        try:
-            names = self._available_models()
-            info["flash_models"] = [n for n in names if "flash" in n][:10]
-            info["model_exists"] = info["model"] in names
-        except requests.exceptions.HTTPError as e:
-            info["models_error"] = e.response.status_code if e.response is not None else "?"
-        except requests.exceptions.RequestException as e:
-            info["models_error"] = type(e).__name__
+                r = requests.post(
+                    f"{API_BASE_URL}/models/{model}:generateContent",
+                    json=payload, headers=self._headers(), timeout=30,
+                )
+                status = r.status_code
+                if status != 200:
+                    try:
+                        msg = str((r.json().get("error") or {}).get("message", ""))[:120]
+                    except ValueError:
+                        msg = ""
+                    if status in (400, 401, 403) and "error" not in info:
+                        info["error"] = msg
+            except requests.exceptions.RequestException as e:
+                status = type(e).__name__
+            info["tested"].append(f"{model}: {status}, {round(time.time() - start, 1)} s")
+            if status == 200 and working is None:
+                working = model
+            if working and len(info["tested"]) >= 2:
+                break
+        if working:
+            self._resolved_model = working
+            self._bad.pop(working, None)
+        info["working"] = working
+        info["status"] = 200 if working else "xato"
+        if names is not None:
+            info["flash_models"] = sorted(n for n in names if "flash" in n)[:12]
+        else:
+            info["models_error"] = "ro'yxat olinmadi"
         return info
 
-    def _pick_available_model(self) -> str:
-        """Kalit uchun mavjud modellardan mos bittasini tanlaydi."""
-        names = self._available_models()
-
-        if PREFERRED_ALIAS in names:
-            return PREFERRED_ALIAS
-
-        flash = [
-            n for n in names
-            if "flash" in n and n not in UNSTABLE_ALIASES
-            and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
-        ]
-        stable = [n for n in flash if "preview" not in n and "exp" not in n]
-        full_size = [n for n in (stable or flash) if "lite" not in n]
-        pool = full_size or stable or flash
-        if not pool:
-            raise RuntimeError("Mos Gemini modeli topilmadi.")
-        return sorted(pool)[-1]
+    @staticmethod
+    def _extract_text(data: dict) -> str:
+        parts = data["candidates"][0]["content"]["parts"]
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        if not text:
+            raise KeyError("text")
+        return text
 
     def generate_text(self, system_instruction: str, user_message: str) -> str:
         payload = {
@@ -226,8 +238,7 @@ class GeminiProvider(AIProvider):
         try:
             response = self._generate_with_fallback(payload)
             response.raise_for_status()
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return self._extract_text(response.json())
 
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else "noma'lum"
@@ -279,7 +290,6 @@ class GeminiProvider(AIProvider):
             candidates = response.json().get("candidates") or []
             if not candidates:
                 return None
-            text = candidates[0]["content"]["parts"][0]["text"]
-            return json.loads(text)
+            return json.loads(self._extract_text({"candidates": candidates}))
         except (ValueError, KeyError, IndexError, TypeError):
             return None
