@@ -24,7 +24,7 @@ from datetime import datetime
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import analytics
 import config
@@ -264,6 +264,35 @@ def _ai_text(text):
 @router.get("/app")
 async def app_page():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+
+
+PRIVACY_HTML = """<!DOCTYPE html><html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Maxfiylik siyosati — Jarvis</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 18px;line-height:1.6;color:#1b2430}
+h1{font-size:24px}h2{font-size:18px;margin-top:28px}</style></head><body>
+<h1>Maxfiylik siyosati / Privacy Policy</h1>
+<p>Jarvis — @bolalar_dunyosi.uzb Instagram akkauntining egasi uchun ichki SMM yordamchisi.
+Ilovadan faqat akkaunt egasi foydalanadi.</p>
+<h2>Qanday ma'lumotlar ishlatiladi</h2>
+<p>Akkauntning o'z postlari statistikasi, postlarga yozilgan komentlar va ularga javob berish uchun zarur
+ma'lumotlar (komment matni va foydalanuvchi nomi). Ma'lumotlar faqat statistika tahlili va komentlarga javob
+berish uchun ishlatiladi, uchinchi shaxslarga sotilmaydi va berilmaydi.</p>
+<h2>Saqlash</h2>
+<p>Javob berilgan komentlarning identifikatorlari takror javob bermaslik uchun saqlanadi. Komment matnlari
+ruxsat kutayotgan holatda vaqtincha saqlanadi va ko'rib chiqilgandan keyin o'chiriladi.</p>
+<h2>Ma'lumotni o'chirish / Data deletion</h2>
+<p>Ma'lumotlaringizni o'chirishni so'rash uchun @bolalar_dunyosi.uzb Instagram sahifasiga direkt orqali yozing.
+So'rov 30 kun ichida bajariladi.</p>
+<h2>English summary</h2>
+<p>Jarvis is an internal assistant used only by the owner of the @bolalar_dunyosi.uzb Instagram account to view
+the account's own insights and reply to comments on its posts. Data is not sold or shared with third parties.
+To request deletion of your data, send a direct message to @bolalar_dunyosi.uzb on Instagram.</p>
+</body></html>"""
+
+
+@router.get("/privacy")
+async def privacy_page():
+    return HTMLResponse(PRIVACY_HTML)
 
 
 # ---------- API ----------
