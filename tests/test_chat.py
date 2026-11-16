@@ -1,0 +1,145 @@
+"""
+tests/test_chat.py
+------------------
+Direktga o'zi yozgan mijozlarga javob (dm_chat.py) testlari.
+
+Ishga tushirish:
+    python -m tests.test_chat
+"""
+
+import os
+import sys
+import tempfile
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="jarvis-chat-")
+os.environ["INSTAGRAM_ACCESS_TOKEN"] = "ENV_TOKEN_1"
+
+import catalog  # noqa: E402
+import dm_chat  # noqa: E402
+import instagram_api as ig  # noqa: E402
+from tests.test_instagram import FakeInstagram, check  # noqa: E402
+
+ME = {"id": "1", "username": "bolalar_dunyosi.uzb"}
+
+
+class ChatAI:
+    def __init__(self, res):
+        self.res = res
+        self.last = None
+
+    def generate_json(self, system, message, temperature=0.4):
+        self.last = message
+        return self.res
+
+
+def conv(cid, *msgs):
+    """msgs: (mid, kimdan, matn, necha soniya oldin) - eskidan yangiga."""
+    data = [{"id": mid, "from": frm, "message": text, "created_time": time.time() - ago}
+            for mid, frm, text, ago in msgs]
+    return {"id": cid, "messages": {"data": list(reversed(data))}}
+
+
+def run():
+    fake = FakeInstagram()
+    ig.requests.request = fake.request
+    catalog.set_shop({"phone": "+998 77 499 47 44"})
+    catalog.set_post_info("m1", {"title": "Samokat S10", "price": "1 250 000 so'm"})
+    u1 = {"id": "U1", "username": "dilnoza"}
+    u2 = {"id": "U2", "username": "aziz"}
+
+    print("\n1) Bilim bazasi")
+    facts, source = dm_chat.knowledge()
+    check("Samokat S10" in facts and "1 250 000" in facts and "+998 77 499 47 44" in facts
+          and "Yangi kolleksiya" in facts, "Faktlarda do'kon, kiritilgan narx va opisaniyalar bor")
+
+    print("\n2) TASDIQ rejimi")
+    ai = ChatAI({"text": "Samokat S10 narxi 1 250 000 so'm.", "kind": "answer", "topic": "samokat narxi"})
+    chat = dm_chat.DirectChat(ai)
+    check(chat.mode == "approve", "Standart rejim: tasdiq")
+    fake.conversations = [conv("t0", ("old1", u2, "Eski savol", 30))]
+    chat.s["since"] = time.time() - 10
+    check(chat.run_once() == [], "Tizim yoqilishidan oldingi xabarga javob berilmadi")
+    fake.conversations = [
+        conv("t1", ("a1", u1, "Assalomu alaykum", 8), ("a2", u1, "Samokat narxi qancha?", 5)),
+        conv("t2", ("b1", u2, "Bormi?", 9), ("b2", ME, "Ha, bor", 4)),
+        conv("t3", ("c1", {"id": "U3", "username": "x"}, "", 3)),
+    ]
+    events = chat.run_once()
+    check(len(events) == 1 and events[0]["type"] == "chat_approval" and events[0]["username"] == "dilnoza",
+          "Faqat javobsiz mijoz xabari olindi (biz javob bergan va matnsiz xabar o'tkazildi)")
+    check("Mijoz: Assalomu alaykum\nMijoz: Samokat narxi qancha?" in ai.last, "AI'ga yozishma tarixi uzatildi")
+    check(not fake.chat_sent, "Tasdiqsiz hech narsa yuborilmadi")
+    check(chat.run_once() == [], "Takror tekshiruvda takrorlanmadi")
+    key = chat.get_pending()[0]["key"]
+    check(len(f"dc|ok|{key}".encode()) <= 64, "Telegram tugmasi uchun kalit qisqa")
+    chat.set_message_id(key, 77)
+    check(chat.find_by_message(77) == key, "Telegram xabari yozishmaga bog'landi")
+    check(chat.approve(key).startswith("💬") and fake.chat_sent[-1] == ("U1", "Samokat S10 narxi 1 250 000 so'm."),
+          "Tasdiqlangach javob mijozga yuborildi")
+    check("allaqachon" in chat.approve(key), "Ikki marta yuborilmaydi")
+
+    print("\n3) AVTO rejim va himoya")
+    chat.set_mode("auto")
+    fake.conversations = [conv("t1", ("a3", u1, "Rahmat, manzil qayer?", 2))]
+    ai.res = {"text": "Qaysi mahsulot qiziqtirdi?", "kind": "clarify", "topic": "manzil"}
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_sent" and fake.chat_sent[-1][1] == "Qaysi mahsulot qiziqtirdi?",
+          "Xavfsiz javob darhol yuborildi")
+    fake.conversations = [conv("t1", ("a4", u1, "Narxi?", 2))]
+    ai.res = {"text": "Narxi 990 000 so'm", "kind": "answer", "topic": "narx"}
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_approval" and "raqam" in events[0]["reason"] and len(fake.chat_sent) == 2,
+          "To'qilgan narx yuborilmadi, tasdiqqa tushdi")
+    fake.conversations = [conv("t1", ("a5", u1, "Pulimni qaytaring", 1))]
+    ai.res = {"text": "Hozir aniqlab, tez orada javob beramiz.", "kind": "human", "topic": "qaytarish"}
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_approval" and len(chat.get_pending()) == 1,
+          "Odam kerak bo'lgan holat tasdiqqa tushdi, eski tasdiq yangisi bilan almashtirildi")
+    check(chat.reject(events[0]["key"]).startswith("❌") and not chat.get_pending(), "Javobsiz qoldirish ishlaydi")
+    ai.res = {"text": "Ha", "kind": "answer", "topic": "x"}
+    for i in range(12):
+        fake.conversations = [conv("t9", (f"z{i}", u2, f"savol {i}", 1))]
+        chat.run_once()
+    sent_u2 = [s for s in fake.chat_sent if s[0] == "U2"]
+    check(len(sent_u2) == dm_chat.MAX_AUTO_PER_USER_DAY, "Bir mijozga kunlik avtojavob chegarasi ishlaydi")
+    fake.dm_forbidden = True
+    fake.conversations = [conv("t5", ("e1", {"id": "U5", "username": "n"}, "Salom", 1))]
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_error" and "ruxsat" in events[0]["error"], "Ruxsat yo'q bo'lsa tushunarli xato")
+    fake.dm_forbidden = False
+    chat.set_mode("off")
+    check(chat.run_once() == [], "O'chiq rejimda ishlamaydi")
+
+    print("\n4) HUD API")
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import webapp
+    from auto_reply import CommentResponder
+    from core.jarvis import Jarvis
+    from tests.test_instagram import FakeAI
+    from tests.test_webapp import BOT_TOKEN, OWNER, sign
+    webapp.init(Jarvis(ai_provider=FakeAI(), memory_dir=os.environ["DATA_DIR"] + "/m"),
+                CommentResponder(FakeAI()), lambda: OWNER, BOT_TOKEN, chat)
+    app = FastAPI()
+    app.include_router(webapp.router)
+    c = TestClient(app)
+    H = {"X-Init-Data": sign(OWNER)}
+    check(c.post("/api/inbox/mode", json={"mode": "approve"}, headers=H).json()["status"]["mode"] == "approve",
+          "Rejim HUD orqali o'zgardi")
+    fake.conversations = [conv("t6", ("f1", {"id": "U6", "username": "m"}, "Narxi?", 0))]
+    ai.res = {"text": "Qaysi mahsulot?", "kind": "clarify", "topic": "narx"}
+    chat.run_once()
+    d = c.get("/api/comments", headers=H).json()["chat"]
+    item = next((p for p in d["pending"] if p["igsid"] == "U6"), None)
+    check(item is not None, "Tasdiq kutayotgan yozishma HUD'da ko'rinadi")
+    r = c.post(f"/api/inbox/{item['key']}", json={"action": "send", "text": "O'z javobim"}, headers=H).json()
+    check(r["message"].startswith("💬") and fake.chat_sent[-1] == ("U6", "O'z javobim"), "HUD'dan javob yuborildi")
+    check(c.post("/api/inbox/mode", json={"mode": "auto"}).status_code == 401, "API imzosiz yopiq")
+
+    print("\n✅ Direkt yozishma testlari o'tdi")
+
+
+if __name__ == "__main__":
+    run()

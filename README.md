@@ -166,6 +166,14 @@ Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari)
 - Rejim: `/direkt tasdiq` (standart), `/direkt avto`, `/direkt off`.
   Token `instagram_business_manage_messages` ruxsatiga ega bo'lishi kerak.
 
+### Direktga yozgan mijozlarga javob
+
+- Jarvis har tekshiruvda oxirgi yozishmalarni o'qiydi; javobsiz mijoz xabariga do'kon va postlar
+  ma'lumotidan javob tayyorlaydi. Mahsulot aniq bo'lmasa, mijozdan so'raydi; javob ma'lumotlarda
+  bo'lmasa yoki odam kerak bo'lsa (buyurtma, shikoyat), egasiga tasdiqqa yuboradi.
+- Rejim: `/yozishma tasdiq` (standart), `/yozishma avto`, `/yozishma off`. Faqat tizim yoqilgandan
+  keyin kelgan xabarlarga javob beriladi. Token `instagram_business_manage_messages` ruxsati kerak.
+
 ### Komentlarga javob qanday ishlaydi
 
 - Har 10 daqiqada oxirgi postlardagi yangi komentlar tekshiriladi.
@@ -182,6 +190,7 @@ Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari)
 python -m tests.test_instagram
 python -m tests.test_webapp
 python -m tests.test_direkt
+python -m tests.test_chat
 ```
 
 ## 10. Future integrations (kelajakdagi rejalar)

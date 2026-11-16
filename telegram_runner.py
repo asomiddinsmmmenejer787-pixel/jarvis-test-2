@@ -22,6 +22,7 @@ import catalog
 import instagram_api as ig
 import webapp
 from auto_reply import CATEGORY_NAMES, CommentResponder
+from dm_chat import DirectChat
 from instagram_api import InstagramError
 from core.jarvis import Jarvis
 from ai.gemini import GeminiError, GeminiProvider
@@ -152,6 +153,10 @@ responder = (
     if hasattr(jarvis.ai_provider, "generate_json")
     else None
 )
+
+
+# Direktga o'zi yozgan mijozlarga javob
+chat = DirectChat(jarvis.ai_provider) if responder is not None else None
 
 
 # ---------- mini ilova (Jarvis HUD) ----------
@@ -305,7 +310,8 @@ HELP_TEXT = (
     "/autoreply — komentlarga javob tizimi holati va rejimi\n"
     "/pending — ruxsat kutayotgan komentlar\n"
     "/checknow — komentlarni hoziroq tekshirish\n"
-    "/direkt — direkt xabar rejimi (tasdiq / avto / off)\n"
+    "/direkt — komentdan keyingi direkt xabar rejimi (tasdiq / avto / off)\n"
+    "/yozishma — direktga yozganlarga javob rejimi (tasdiq / avto / off)\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
     "/diag — Gemini va Instagram holatini tekshirish\n\n"
     "Yoki oddiy tilda savolingizni yozing."
@@ -397,6 +403,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ruxsat so'ralgan komentga egasi Reply qilib o'z javobini yozdi
     replied = update.message.reply_to_message
     if responder and replied is not None:
+        chat_key = chat.find_by_message(replied.message_id) if chat else None
+        if chat_key:
+            try:
+                result = await asyncio.to_thread(chat.approve, chat_key, user_text)
+            except InstagramError as e:
+                result = ig_error_text(e)
+            await update.message.reply_text(result)
+            return
         dm_cid = responder.find_dm_by_message(replied.message_id)
         if dm_cid:
             try:
@@ -689,6 +703,97 @@ async def send_approval(bot, owner, item):
     responder.set_message_id(item["cid"], msg.message_id)
 
 
+# ---------- direkt yozishmalar ----------
+
+CHAT_MODE_TEXT = {
+    "approve": "TASDIQ — Jarvis javob tayyorlaydi, siz tasdiqlagach yuboriladi",
+    "auto": "AVTO — javob ma'lumotlarda aniq bo'lsa darhol yuboriladi, shubhalisi sizga tasdiqqa",
+    "off": "O'CHIQ — direktga yozganlarga javob berilmaydi",
+}
+
+
+def chat_approval_text(item):
+    lines = ["💬 Direktga xabar keldi"]
+    if item.get("reason"):
+        lines.append(f"⚠️ {item['reason']}")
+    lines.append(f"Mijoz: @{item.get('username') or '?'}")
+    if item.get("topic"):
+        lines.append(f"So'radi: {item['topic']}")
+    lines.append(f"\nYozishma:\n{item.get('history', '')}")
+    lines.append("\nJarvis javobi:\n" + (item.get("text") or "(tayyor matn yo'q)"))
+    lines.append("\nBoshqa javob yozmoqchi bo'lsangiz, shu xabarga Reply qilib yozing.")
+    return "\n".join(lines)[:3900]
+
+
+async def send_chat_approval(bot, owner, item):
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("💬 Yuborish", callback_data=f"dc|ok|{item['key']}"),
+        InlineKeyboardButton("❌ Javobsiz", callback_data=f"dc|no|{item['key']}"),
+    ]])
+    msg = await bot.send_message(chat_id=owner, text=chat_approval_text(item), reply_markup=kb,
+                                 disable_web_page_preview=True)
+    chat.set_message_id(item["key"], msg.message_id)
+
+
+async def send_unsent_chat_approvals(bot, owner):
+    for item in chat.get_pending():
+        if item.get("msg_id"):
+            continue
+        try:
+            await send_chat_approval(bot, owner, item)
+        except Exception:
+            logger.exception("Direkt tasdig'ini yuborib bo'lmadi.")
+
+
+async def notify_chat_event(bot, owner, ev):
+    if ev["type"] == "chat_sent":
+        text = f"💬 Direktda javob berildi: @{ev.get('username')}\nMijoz: «{ev['message']}»\n→ {ev['text']}"
+        await bot.send_message(chat_id=owner, text=text, disable_notification=True, disable_web_page_preview=True)
+    elif ev["type"] == "chat_error":
+        await bot.send_message(chat_id=owner, text=f"⚠️ @{ev.get('username')} ga direkt javobi yuborilmadi: {ev.get('error')}")
+
+
+@owner_only
+async def chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        _, action, key = query.data.split("|", 2)
+    except ValueError:
+        await query.answer()
+        return
+    await query.answer("Bajarilmoqda...")
+    try:
+        result = await asyncio.to_thread(chat.approve if action == "ok" else chat.reject, key)
+    except InstagramError as e:
+        result = ig_error_text(e)
+    try:
+        await query.edit_message_text((query.message.text or "") + "\n\n— " + result, disable_web_page_preview=True)
+    except Exception:
+        await context.bot.send_message(chat_id=query.message.chat_id, text=result)
+
+
+@owner_only
+async def yozishma_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if chat is None:
+        await update.message.reply_text("Bu funksiya uchun Gemini kerak.")
+        return
+    names = {"tasdiq": "approve", "approve": "approve", "auto": "auto", "avto": "auto", "off": "off"}
+    if context.args:
+        mode = names.get(context.args[0].lower())
+        if not mode:
+            await update.message.reply_text("Rejimlar: /yozishma tasdiq | /yozishma avto | /yozishma off")
+            return
+        chat.set_mode(mode)
+    st = chat.status()
+    lines = [f"Direkt yozishmalar: {CHAT_MODE_TEXT[st['mode']]}", f"Tasdiq kutayotgan: {st['pending']}"]
+    if st.get("last_run"):
+        r = st["last_run"]
+        lines.append(f"Oxirgi tekshiruv ({r['time']}): {r['convs']} yozishma, yangi {r['new']}, "
+                     f"yuborildi {r['sent']}, tasdiqqa {r['approval']}")
+    lines.append("\nO'zgartirish: /yozishma tasdiq | /yozishma avto | /yozishma off")
+    await update.message.reply_text("\n".join(lines))
+
+
 def dm_approval_text(item):
     lines = ["📩 Direkt xabar tayyor, tasdiqlaysizmi?"]
     if item.get("reason"):
@@ -938,6 +1043,25 @@ async def instagram_tick(app):
                 except Exception:
                     logger.exception("Voqeani yuborib bo'lmadi.")
 
+        if chat is not None and chat.mode != "off":
+            try:
+                chat_events = await asyncio.to_thread(chat.run_once)
+            except InstagramError as e:
+                if e.fatal or e.rate_limited:
+                    raise
+                chat_events = []
+                await alert_owner(
+                    bot, owner, "chat_error",
+                    f"⚠️ Direkt yozishmalarni o'qib bo'lmadi: {e}\nToken xabarlar ruxsati "
+                    "(instagram_business_manage_messages) bilan olinganini tekshiring.", every_hours=24)
+            finally:
+                await send_unsent_chat_approvals(bot, owner)
+            for ev in chat_events:
+                try:
+                    await notify_chat_event(bot, owner, ev)
+                except Exception:
+                    logger.exception("Voqeani yuborib bo'lmadi.")
+
         await maybe_daily_jobs(bot, owner)
 
     except InstagramError as e:
@@ -976,7 +1100,8 @@ async def post_init(app):
             BotCommand("stories", "Faol storylar statistikasi"),
             BotCommand("autoreply", "Komentlarga javob rejimi"),
             BotCommand("pending", "Ruxsat kutayotgan komentlar"),
-            BotCommand("direkt", "Direkt xabar rejimi"),
+            BotCommand("direkt", "Komentdan keyingi direkt"),
+            BotCommand("yozishma", "Direktga yozganlarga javob"),
             BotCommand("checknow", "Komentlarni hozir tekshirish"),
             BotCommand("script", "Video ssenariysi"),
             BotCommand("hook", "Hook variantlari"),
@@ -1044,6 +1169,8 @@ def build_app(token):
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
     app.add_handler(CallbackQueryHandler(dm_callback, pattern=r"^dm\|"))
     app.add_handler(CommandHandler("direkt", direkt_cmd))
+    app.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^dc\|"))
+    app.add_handler(CommandHandler("yozishma", yozishma_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app
@@ -1061,7 +1188,7 @@ def main():
         raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi.")
 
     # Mini ilova uchun kontekst (initData imzosi bot tokeni bilan tekshiriladi)
-    webapp.init(jarvis, responder, get_owner_id, token)
+    webapp.init(jarvis, responder, get_owner_id, token, chat)
 
     # OAuth callback va mini ilova web-serveri
     start_web_server()

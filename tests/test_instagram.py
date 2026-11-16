@@ -54,6 +54,8 @@ class FakeInstagram:
         self.replies = []
         self.hidden = []
         self.dms = []
+        self.chat_sent = []
+        self.conversations = []
         self.token_valid = True
         self.posts = [
             {"id": "m1", "caption": "Bolangiz bu samokatni ko'rsa, uyda qolmaydi\nDirektga yozing #samokat",
@@ -98,6 +100,9 @@ class FakeInstagram:
                 msg = json.loads(data["message"])
                 if getattr(self, "dm_forbidden", False):
                     return self.error(10, "(#10) Application does not have permission for this action", 403)
+                if "id" in rec:
+                    self.chat_sent.append((rec["id"], msg["text"]))
+                    return FakeResponse({"recipient_id": rec["id"], "message_id": "mid"})
                 self.dms.append((rec["comment_id"], msg["text"]))
                 return FakeResponse({"recipient_id": "u1", "message_id": "mid"})
             if path.endswith("/replies"):
@@ -115,6 +120,8 @@ class FakeInstagram:
                 return FakeResponse({"data": self.posts[2:]})
             return FakeResponse({"data": self.posts[:2], "paging": {
                 "next": "https://graph.instagram.com/v23.0/me/media?after=P2&access_token=ENV_TOKEN_1"}})
+        if path == "me/conversations":
+            return FakeResponse({"data": self.conversations})
         if path == "me/stories":
             return FakeResponse({"data": []})
         if path == "me/insights":

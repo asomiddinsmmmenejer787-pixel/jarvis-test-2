@@ -274,10 +274,16 @@ a{color:var(--cyan)}
       <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
     </div>
     <div class="panel">
-      <div class="ptitle">Direkt xabarlar</div>
+      <div class="ptitle">Komentdan keyingi direkt</div>
       <div class="seg" id="dmSeg"><button data-m="approve">TASDIQ</button><button data-m="auto">AVTO</button><button data-m="off">O'CHIQ</button></div>
       <div class="muted" id="dmText" style="margin-top:8px"></div>
       <div id="dmPending" style="margin-top:6px"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Direkt yozishmalar <span id="chatCount">0</span></div>
+      <div class="seg" id="chatSeg"><button data-m="approve">TASDIQ</button><button data-m="auto">AVTO</button><button data-m="off">O'CHIQ</button></div>
+      <div class="muted" id="chatText" style="margin-top:8px"></div>
+      <div id="chatPending" style="margin-top:6px"></div>
     </div>
     <div class="panel">
       <div class="ptitle">Ruxsat kutayotganlar <span id="pendCount">0</span></div>
@@ -511,7 +517,7 @@ async function loadComments(){
   try{
     const r=await api('/api/comments');
     if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
-    const st=r.status; renderDm(st, r.dm_pending); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
+    const st=r.status; renderDm(st, r.dm_pending); renderChat(r.chat); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
     const lr=st.last_run; $('#modeText').textContent=MODE_TEXT[st.mode] + (lr ? `\nOxirgi tekshiruv ${lr.time}: ${lr.posts} post, ${lr.comments} komment, yangi ${lr.new}, yuborildi ${lr.sent}, ruxsatga ${lr.approval}.` : '');
     $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
     $('#pendCount').textContent=r.pending.length;
@@ -552,6 +558,29 @@ function renderDm(st, items){
 async function dmAct(cid, action){
   const text=($('#dmt-'+cid)||{}).value||'';
   try{ const r=await api('/api/dm/'+cid,{method:'POST',body:{action,text}}); haptic('ok'); $('#dm-'+cid).innerHTML=`<div class="muted">${esc(r.message)}</div>`; setTimeout(loadComments,1500) }
+  catch(e){ haptic('err'); alert(e.message) }
+}
+
+// ---------- DIREKT YOZISHMALAR ----------
+const CHAT_TEXT={approve:'Direktga yozgan mijozga Jarvis javob tayyorlaydi, siz tasdiqlagach yuboriladi.',auto:'Javob ma\'lumotlarda aniq bo\'lsa darhol yuboriladi; shubhalisi tasdiqqa keladi.',off:'Direktga yozganlarga javob berilmaydi.'};
+document.querySelectorAll('#chatSeg button').forEach(b=>b.onclick=async()=>{
+  const m=b.dataset.m; if (m==='auto' && !confirm('Jarvis direktda mijozlarga o\'zi javob yozadi. Yoqilsinmi?')) return;
+  try{ await api('/api/inbox/mode',{method:'POST',body:{mode:m}}); haptic('ok'); loadComments() }catch(e){ alert(e.message) } });
+function renderChat(c){
+  if (!c) return; const st=c.status;
+  document.querySelectorAll('#chatSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
+  const lr=st.last_run; $('#chatText').textContent=CHAT_TEXT[st.mode]+(lr?`\nOxirgi tekshiruv ${lr.time}: ${lr.convs} yozishma, yangi ${lr.new}.`:''); $('#chatText').style.whiteSpace='pre-line';
+  $('#chatCount').textContent=(c.pending||[]).length;
+  $('#chatPending').innerHTML=(c.pending||[]).map(d=>`<div class="cm" id="ch-${d.key}">
+    <span class="tag" style="border-color:var(--cyan);color:var(--cyan)">${esc(d.topic||'xabar')}</span>
+    ${d.reason?`<div class="muted" style="color:var(--amber);margin-top:4px">⚠️ ${esc(d.reason)}</div>`:''}
+    <div class="who">@${esc(d.username||'?')}</div><div class="txt" style="white-space:pre-wrap;font-size:13.5px">${esc(d.history)}</div>
+    <textarea id="cht-${d.key}" rows="4" style="margin-top:8px">${esc(d.text)}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn sm green" onclick="chatAct('${d.key}','send')">Yuborish</button><button class="btn sm red" onclick="chatAct('${d.key}','skip')">Javobsiz</button></div></div>`).join('');
+}
+async function chatAct(key, action){
+  const text=($('#cht-'+key)||{}).value||'';
+  try{ const r=await api('/api/inbox/'+key,{method:'POST',body:{action,text}}); haptic('ok'); $('#ch-'+key).innerHTML=`<div class="muted">${esc(r.message)}</div>`; setTimeout(loadComments,1500) }
   catch(e){ haptic('err'); alert(e.message) }
 }
 
@@ -612,6 +641,7 @@ function demoApi(path, opts){
   if (path==='/api/status') return Promise.resolve({uptime:15400,ai:{provider:'Gemini',model:'gemini-2.5-flash'},autoreply:{mode:'test',sent_today:3,limit_day:40,pending:2},
     instagram:{connected:true,username:'bolalar_dunyosi.uzb',followers:104191,media_count:1834,change:{'7':412},account:{reach:182400,views:640300,accounts_engaged:9100,total_interactions:21400,profile_links_taps:312}},report});
   if (path==='/api/comments') return Promise.resolve({enabled:true,status:{mode:'on',dm_mode:'approve',sent_today:3,limit_day:40,pending:2},
+    chat:{status:{mode:'approve',pending:1,last_run:{time:'16:20',convs:15,new:1}},pending:[{key:'k1',username:'dilnoza_m',topic:'samokat narxi',history:'Mijoz: Assalomu alaykum\nMijoz: Samokat narxi qancha?',text:'Vaalaykum assalom! Samokat narxi 1 250 000 so\'m. Buyurtma uchun: +998 77 499 47 44',reason:''}]},
     dm_pending:[{cid:'9',username:'ona_1',comment:'Narxi qancha?',topic:'samokat narxi',post_time:'16.11.2026 19:30',title:'',text:'Assalomu alaykum! Bolalar elektr samokati S10 bilan qiziqqaningiz uchun rahmat 😊\n\nNarxi: 1 250 000 so\'m\n📍 Manzil: Toshkent, Chilonzor 9\n📞 Buyurtma: +998 77 499 47 44'}],pending:[
     {cid:'1',username:'rival_shop',text:'Bizda arzonroq, profilga kiring',category_name:'Raqobatchi',reason:'Raqobatchi komment',reply:'Narx emas, kafolat muhim. Tanlov sizda.'},
     {cid:'2',username:'troll_22',text:'Bu nima o\'zi, ahmoqona narsa',category_name:'Salbiy / haqorat',reason:'Komentda so\'kinish yoki haqorat bor',reply:''}]});
@@ -620,7 +650,7 @@ function demoApi(path, opts){
     {id:'m2',kind:'Reels',time:'15.11.2026 20:10',comments:12,caption:'Narx qiziqmi?',has_price:false,info:{title:'Rolikli krossovka',price:'389 000 so\'m',info:'31-38 o\'lcham',use_caption:true},thumb:''},
     {id:'m3',kind:'Karusel',time:'14.11.2026 12:00',comments:3,caption:'Yangi kolleksiya keldi',has_price:false,info:{title:'',price:'',info:'',use_caption:true},thumb:''}]});
   if (path==='/api/stories') return Promise.resolve({stories:[{time:'10:12',views:612,reach:540},{time:'14:40',views:488,reach:430},{time:'19:05',views:701,reach:650}]});
-  if (path.startsWith('/api/comments/') || path.startsWith('/api/posts/') || path==='/api/shop') return Promise.resolve({message:'✅ Bajarildi (demo)',status:{mode:opts.body.mode||'test',sent_today:3,limit_day:40,pending:1}});
+  if (path.startsWith('/api/comments/') || path.startsWith('/api/posts/') || path.startsWith('/api/inbox/') || path==='/api/shop') return Promise.resolve({message:'✅ Bajarildi (demo)',status:{mode:opts.body.mode||'test',sent_today:3,limit_day:40,pending:1}});
   const kinds={'/api/insta':[['received','So\'rov qabul qilindi'],['connect','Instagram\'ga ulanish'],['collect','Postlar, statistika va komentlar yig\'ilmoqda'],['metrics','Ko\'rsatkichlar hisoblanmoqda'],['analyze','Jarvis ma\'lumotlarni tahlil qilmoqda'],['prepare','Hisobot tayyorlanmoqda']],
     '/api/chat':[['received','So\'rov qabul qilindi'],['understand','So\'rov tushunilmoqda'],['context','Oldingi suhbat konteksti olinmoqda'],['generate','Javob yaratilmoqda'],['prepare','Javob tayyorlanmoqda']],
     '/api/post':[['received','So\'rov qabul qilindi'],['find','Post qidirilmoqda'],['collect','Statistika va komentlar yig\'ilmoqda'],['compare','Akkaunt o\'rtachasi bilan solishtirilmoqda'],['analyze','Jarvis postni tahlil qilmoqda'],['prepare','Xulosa tayyorlanmoqda']]};

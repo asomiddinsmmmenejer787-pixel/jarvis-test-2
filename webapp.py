@@ -44,8 +44,8 @@ _jobs_lock = threading.Lock()
 _cache = {}
 
 
-def init(jarvis, responder, get_owner_id, bot_token):
-    _ctx.update(jarvis=jarvis, responder=responder, get_owner_id=get_owner_id, bot_token=bot_token)
+def init(jarvis, responder, get_owner_id, bot_token, chat=None):
+    _ctx.update(jarvis=jarvis, responder=responder, get_owner_id=get_owner_id, bot_token=bot_token, chat=chat)
 
 
 def webapp_url():
@@ -476,8 +476,10 @@ def api_comments(x_init_data: str = Header(default="")):
     from auto_reply import CATEGORY_NAMES
     items = [{**p, "category_name": CATEGORY_NAMES.get(p.get("category"), p.get("category"))}
              for p in responder.get_pending()]
+    chat = _ctx.get("chat")
     return {"enabled": True, "status": responder.status(), "pending": items,
-            "dm_pending": responder.get_dm_pending()}
+            "dm_pending": responder.get_dm_pending(),
+            "chat": {"status": chat.status(), "pending": chat.get_pending()} if chat else None}
 
 
 @router.post("/api/comments/mode")
@@ -583,3 +585,34 @@ def api_post_info(media_id: str, body: dict, x_init_data: str = Header(default="
 def api_shop(body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
     return {"shop": catalog.set_shop(body)}
+
+
+# ---------- direkt yozishmalar ----------
+
+@router.post("/api/inbox/mode")
+async def api_inbox_mode(request: Request, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    chat = _ctx.get("chat")
+    mode = str((await request.json()).get("mode", ""))
+    if chat is None or mode not in ("approve", "auto", "off"):
+        raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
+    chat.set_mode(mode)
+    return {"status": chat.status()}
+
+
+@router.post("/api/inbox/{key}")
+def api_inbox_action(key: str, body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    chat = _ctx.get("chat")
+    if chat is None:
+        raise HTTPException(status_code=400, detail="Tizim o'chiq")
+    try:
+        if body.get("action") == "send":
+            msg = chat.approve(key, (body.get("text") or "").strip() or None)
+        elif body.get("action") == "skip":
+            msg = chat.reject(key)
+        else:
+            raise HTTPException(status_code=400, detail="Noma'lum amal")
+    except InstagramError as e:
+        raise HTTPException(status_code=502, detail=_ig_error(e))
+    return {"message": msg}

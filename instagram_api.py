@@ -427,3 +427,38 @@ def send_private_reply(comment_id, text):
             "message": json.dumps({"text": text}, ensure_ascii=False),
         },
     )
+
+
+# ---------- direkt yozishmalar (Conversations API) ----------
+
+_MSG_FIELDS = "id,created_time,from,to,message"
+
+
+def get_conversations(limit=15, per_conv=6):
+    """Oxirgi yozishmalar, har birida oxirgi xabarlar (yangisi birinchi)."""
+    try:
+        return _paged("me/conversations", {
+            "platform": "instagram", "limit": min(limit, 25),
+            "fields": f"id,updated_time,messages.limit({per_conv}){{{_MSG_FIELDS}}}",
+        }, limit)
+    except InstagramError as e:
+        if e.fatal or e.rate_limited:
+            raise
+    # Zaxira yo'l: xabarlarni birma-bir olish
+    convs = _paged("me/conversations", {"platform": "instagram", "limit": min(limit, 25)}, limit)
+    for c in convs:
+        ids = (_request("GET", str(c["id"]), {"fields": "messages"}).get("messages") or {}).get("data", [])
+        c["messages"] = {"data": [_request("GET", str(m["id"]), {"fields": _MSG_FIELDS}) for m in ids[:per_conv]]}
+    return convs
+
+
+def send_message(igsid, text):
+    """Direktda mijozga javob (mijoz oxirgi 24 soat ichida yozgan bo'lishi kerak)."""
+    return _request(
+        "POST",
+        f"{_my_ig_id()}/messages",
+        data={
+            "recipient": json.dumps({"id": str(igsid)}),
+            "message": json.dumps({"text": text}, ensure_ascii=False),
+        },
+    )
