@@ -19,13 +19,21 @@ from fastapi.responses import PlainTextResponse
 
 import analytics
 import instagram_api as ig
+import webapp
 from auto_reply import CATEGORY_NAMES, CommentResponder
 from instagram_api import InstagramError
 from core.jarvis import Jarvis
 from ai.gemini import GeminiError, GeminiProvider
 from ai.mock import MockProvider
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Update,
+    WebAppInfo,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -145,6 +153,11 @@ responder = (
 )
 
 
+# ---------- mini ilova (Jarvis HUD) ----------
+
+web.include_router(webapp.router)
+
+
 # ---------- bot egasi ----------
 
 def _owner_file():
@@ -198,6 +211,20 @@ def owner_only(handler):
         return await handler(update, context)
 
     return wrapper
+
+
+@owner_only
+async def app_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = webapp.webapp_url()
+    if not url:
+        await update.message.reply_text(
+            "Mini ilova manzili topilmadi. Railway'da servisga public domen bo'lishi kerak."
+        )
+        return
+    await update.message.reply_text(
+        "Jarvis boshqaruv paneli:",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🛰 Jarvis HUD'ni ochish", web_app=WebAppInfo(url=url))]]),
+    )
 
 
 # ---------- yordamchilar ----------
@@ -269,6 +296,7 @@ HELP_TEXT = (
     "/ad <mavzu> — reklama ssenariysi\n"
     "/ideas <mavzu> — kontent g'oyalari\n"
     "/ai_video <mavzu> — AI video uchun prompt\n\n"
+    "/app — Jarvis HUD mini ilovasi\n\n"
     "Instagram:\n"
     "/insta — oxirgi 12 kontentning to'liq tahlili (/insta 20 — 20 tasi)\n"
     "/post 1 — bitta postni chuqur tahlil (1 = eng oxirgisi, yoki post havolasi)\n"
@@ -791,6 +819,7 @@ async def instagram_loop(app):
 async def post_init(app):
     try:
         await app.bot.set_my_commands([
+            BotCommand("app", "Jarvis HUD mini ilovasi"),
             BotCommand("insta", "Instagram to'liq tahlili"),
             BotCommand("post", "Bitta postni chuqur tahlil"),
             BotCommand("stories", "Faol storylar statistikasi"),
@@ -804,6 +833,15 @@ async def post_init(app):
         ])
     except Exception:
         logger.exception("Bot buyruqlar menyusini o'rnatib bo'lmadi.")
+    url = webapp.webapp_url()
+    if url:
+        try:
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Jarvis HUD", web_app=WebAppInfo(url=url))
+            )
+            logger.info("Mini ilova menyu tugmasi o'rnatildi.")
+        except Exception:
+            logger.exception("Mini ilova tugmasini o'rnatib bo'lmadi.")
     app.bot_data["instagram_task"] = asyncio.create_task(instagram_loop(app))
     logger.info(
         "Instagram fon jarayoni ishga tushdi | instagram=%s | autoreply=%s",
@@ -847,6 +885,7 @@ def build_app(token):
     app.add_handler(CommandHandler("pending", pending_cmd))
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
     app.add_handler(CommandHandler("diag", diag_cmd))
+    app.add_handler(CommandHandler("app", app_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -865,7 +904,10 @@ def main():
         )
         raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi.")
 
-    # OAuth callback web-serveri
+    # Mini ilova uchun kontekst (initData imzosi bot tokeni bilan tekshiriladi)
+    webapp.init(jarvis, responder, get_owner_id, token)
+
+    # OAuth callback va mini ilova web-serveri
     start_web_server()
 
     app = build_app(token)

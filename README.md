@@ -141,6 +141,17 @@ Shunda suhbat tarixi, komentlar holati va yangilangan Instagram tokeni deploy'da
 - `/pending` — ruxsat kutayotgan komentlar
 - `/myid` — Telegram ID
 
+### Mini ilova (Jarvis HUD)
+
+Telegram'da bot oynasidagi **Jarvis HUD** tugmasi yoki `/app` buyrug'i ochadi.
+Bo'limlar: HUD (akkaunt ko'rsatkichlari), TAHLIL (akkaunt, bitta post, storylar),
+KONTENT (Jarvis bilan ishlash: ssenariy, hook, caption...), KOMENT (avtojavob rejimi, ruxsat kutayotganlar).
+Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari).
+
+- Manzil avtomatik: `https://<RAILWAY_PUBLIC_DOMAIN>/app` (yoki `WEBAPP_URL` bilan o'zgartiriladi).
+- Kirish faqat Telegram imzosi (initData) orqali va faqat bot egasi uchun.
+- Dizaynni brauzerda ko'rish (soxta ma'lumot bilan): `/app?demo=1`.
+
 ### Komentlarga javob qanday ishlaydi
 
 - Har 10 daqiqada oxirgi postlardagi yangi komentlar tekshiriladi.
@@ -155,6 +166,7 @@ Shunda suhbat tarixi, komentlar holati va yangilangan Instagram tokeni deploy'da
 
 ```
 python -m tests.test_instagram
+python -m tests.test_webapp
 ```
 
 ## 10. Future integrations (kelajakdagi rejalar)

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>JARVIS HUD</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#02070d; --bg2:#06121c; --panel:rgba(8,28,42,.62); --line:rgba(63,224,255,.22);
+  --cyan:#3fe0ff; --cyan2:#9af1ff; --dim:#5f8ea3; --text:#d8f6ff;
+  --amber:#ffb547; --red:#ff4d5e; --green:#46f2a0;
+  --glow:0 0 12px rgba(63,224,255,.55);
+  --mono:'Share Tech Mono',ui-monospace,monospace; --ui:'Rajdhani',system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;min-height:100%}
+body{overflow-x:hidden;padding-bottom:84px}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(63,224,255,.13),transparent 55%),
+    linear-gradient(rgba(63,224,255,.05) 1px,transparent 1px) 0 0/100% 26px,
+    linear-gradient(90deg,rgba(63,224,255,.05) 1px,transparent 1px) 0 0/26px 100%;}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);mix-blend-mode:overlay}
+main{position:relative;z-index:1;padding:12px 14px}
+.mono{font-family:var(--mono)}
+/* header */
+header{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 4px}
+.brand{letter-spacing:.32em;font-weight:700;font-size:19px;color:var(--cyan);text-shadow:var(--glow)}
+.brand small{display:block;letter-spacing:.24em;font-size:9.5px;color:var(--dim);font-weight:600;margin-top:2px}
+.sys{text-align:right;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.sys b{color:var(--green);font-weight:400}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);margin-right:5px;animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.35}}
+/* core */
+.core-wrap{position:relative;display:flex;justify-content:center;margin:2px 0 6px}
+.core{width:230px;height:230px;position:relative}
+.core svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ring{transform-origin:115px 115px;animation:spin linear infinite}
+.r1{animation-duration:26s}.r2{animation-duration:14s;animation-direction:reverse}.r3{animation-duration:40s}.r4{animation-duration:9s;animation-direction:reverse}
+.busy .r1{animation-duration:5s}.busy .r2{animation-duration:2.6s}.busy .r3{animation-duration:8s}.busy .r4{animation-duration:1.6s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.orb{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;
+  background:radial-gradient(circle at 50% 45%,rgba(154,241,255,.95),rgba(63,224,255,.45) 38%,rgba(5,40,60,.2) 70%,transparent 72%);
+  box-shadow:0 0 30px rgba(63,224,255,.55),inset 0 0 18px rgba(255,255,255,.4);animation:pulse 3.2s ease-in-out infinite;
+  display:flex;align-items:center;justify-content:center;flex-direction:column}
+.busy .orb{animation-duration:.9s}
+@keyframes pulse{50%{transform:scale(.93);box-shadow:0 0 50px rgba(63,224,255,.85),inset 0 0 22px rgba(255,255,255,.55)}}
+.orb .val{font-family:var(--mono);font-size:20px;color:#022;text-shadow:0 0 6px #fff;font-weight:700}
+.orb .lbl{font-size:9px;letter-spacing:.2em;color:#033;font-weight:700}
+.core-caption{text-align:center;font-family:var(--mono);font-size:12px;color:var(--cyan2);min-height:18px;margin-top:-4px;text-shadow:var(--glow)}
+/* panels */
+.panel{position:relative;background:var(--panel);border:1px solid var(--line);padding:12px 12px 12px;margin:12px 0;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));backdrop-filter:blur(4px)}
+.panel::before,.panel::after{content:"";position:absolute;width:12px;height:12px;border:2px solid var(--cyan);opacity:.85}
+.panel::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.panel::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.ptitle{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:.22em;color:var(--cyan);font-weight:700;margin-bottom:10px;text-transform:uppercase}
+.ptitle span{font-family:var(--mono);letter-spacing:.05em;color:var(--dim);font-weight:400;text-transform:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border:1px solid var(--line);padding:9px 10px;background:rgba(2,12,20,.55);position:relative;overflow:hidden}
+.tile::after{content:"";position:absolute;left:0;top:0;height:2px;width:36%;background:var(--cyan);box-shadow:var(--glow)}
+.tile .k{font-size:10.5px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;font-weight:600}
+.tile .v{font-family:var(--mono);font-size:22px;color:var(--text);margin-top:3px;text-shadow:0 0 8px rgba(63,224,255,.35)}
+.tile .d{font-family:var(--mono);font-size:11px;margin-top:2px}
+.up{color:var(--green)}.down{color:var(--red)}.warn{color:var(--amber)}
+.bar{display:grid;grid-template-columns:86px 1fr auto;gap:8px;align-items:center;margin:7px 0;font-size:13px}
+.bar .lbl{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:8px;background:rgba(63,224,255,.08);border:1px solid rgba(63,224,255,.18);position:relative}
+.fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,rgba(63,224,255,.35),var(--cyan));box-shadow:var(--glow);width:0;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+.bar .num{font-family:var(--mono);font-size:12px;color:var(--cyan2);text-align:right;white-space:nowrap;min-width:54px}
+/* buttons */
+.btn{appearance:none;border:1px solid var(--cyan);background:rgba(63,224,255,.1);color:var(--cyan);font-family:var(--ui);font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;font-size:13px;padding:11px 14px;width:100%;cursor:pointer;
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);transition:.2s}
+.btn:active{background:rgba(63,224,255,.3);transform:scale(.985)}
+.btn[disabled]{opacity:.4}
+.btn.sm{width:auto;padding:8px 11px;font-size:11.5px}
+.btn.red{border-color:var(--red);color:var(--red);background:rgba(255,77,94,.08)}
+.btn.amber{border-color:var(--amber);color:var(--amber);background:rgba(255,181,71,.08)}
+.btn.green{border-color:var(--green);color:var(--green);background:rgba(70,242,160,.08)}
+.row{display:flex;gap:8px;align-items:center}
+.seg{display:flex;border:1px solid var(--line)}
+.seg button{flex:1;background:transparent;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;letter-spacing:.14em;padding:9px 4px;font-size:12.5px}
+.seg button.on{background:rgba(63,224,255,.16);color:var(--cyan);box-shadow:inset 0 -2px 0 var(--cyan)}
+input,textarea{width:100%;background:rgba(2,12,20,.8);border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:14px;padding:10px;outline:none}
+input:focus,textarea:focus{border-color:var(--cyan);box-shadow:var(--glow)}
+textarea{resize:none;min-height:44px}
+/* process */
+.proc{display:none}
+.proc.show{display:block;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.prog{height:4px;background:rgba(63,224,255,.1);margin:4px 0 10px;position:relative;overflow:hidden}
+.prog i{position:absolute;inset:0 auto 0 0;background:var(--cyan);box-shadow:var(--glow);transition:width .5s}
+.prog.run::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:sweep 1.2s infinite}
+@keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.step{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;font-size:14px;padding:5px 0;color:var(--dim);border-bottom:1px dashed rgba(63,224,255,.08)}
+.step .ic{width:14px;height:14px;border:1.5px solid currentColor;transform:rotate(45deg);margin-left:3px}
+.step.active{color:var(--cyan2)}
+.step.active .ic{border-color:var(--cyan);animation:spin45 1s linear infinite;box-shadow:var(--glow)}
+@keyframes spin45{from{transform:rotate(45deg)}to{transform:rotate(405deg)}}
+.step.done{color:var(--text)}
+.step.done .ic{background:var(--green);border-color:var(--green);box-shadow:0 0 8px var(--green)}
+.step.error{color:var(--red)}.step.error .ic{background:var(--red);border-color:var(--red)}
+.step .t{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.term{font-family:var(--mono);font-size:11.5px;color:#7fd8ee;background:rgba(0,8,14,.75);border:1px solid rgba(63,224,255,.12);padding:8px;max-height:120px;overflow:auto;margin-top:10px;line-height:1.55}
+.term .e{color:var(--red)}.term .ok{color:var(--green)}
+/* text output */
+.out{white-space:pre-wrap;font-size:15px;line-height:1.5;color:var(--text)}
+.cursor::after{content:"▌";color:var(--cyan);animation:blink .8s infinite}
+.err{border:1px solid rgba(255,77,94,.45);background:rgba(255,77,94,.08);color:#ffc2c8;padding:10px;font-size:14px;margin-top:8px}
+.post{border-left:2px solid var(--cyan);padding:6px 0 6px 10px;margin:8px 0}
+.post .h{font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post .m{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:2px}
+.post a{color:var(--cyan);font-family:var(--mono);font-size:11px;text-decoration:none}
+.post.weak{border-left-color:var(--red)}
+/* chat */
+.msgs{display:flex;flex-direction:column;gap:9px;min-height:120px}
+.msg{max-width:88%;padding:9px 11px;font-size:15px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+.msg.me{align-self:flex-end;background:rgba(63,224,255,.14);border:1px solid rgba(63,224,255,.35)}
+.msg.j{align-self:flex-start;background:rgba(2,12,20,.8);border:1px solid var(--line);border-left:2px solid var(--cyan)}
+.msg.j .who{font-size:10px;letter-spacing:.24em;color:var(--cyan);font-weight:700;margin-bottom:3px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);color:var(--cyan2);background:rgba(63,224,255,.06);font-size:12.5px;padding:6px 10px;font-weight:600;letter-spacing:.06em}
+.chip.on{border-color:var(--cyan);background:rgba(63,224,255,.2);color:#fff}
+.mini-steps{font-family:var(--mono);font-size:11.5px;color:var(--cyan2);margin-top:4px}
+/* comments */
+.cm{border:1px solid var(--line);padding:10px;margin:9px 0;background:rgba(2,12,20,.6)}
+.cm .tag{display:inline-block;font-size:10.5px;letter-spacing:.14em;font-weight:700;padding:2px 7px;border:1px solid var(--amber);color:var(--amber);text-transform:uppercase}
+.cm .who{font-family:var(--mono);color:var(--cyan2);font-size:12.5px;margin:6px 0 3px}
+.cm .txt{font-size:15px}
+.cm .draft{font-size:14px;color:var(--dim);border-left:2px solid var(--green);padding-left:8px;margin:8px 0}
+.gauge{height:10px;border:1px solid var(--line);position:relative;margin:6px 0}
+.gauge i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--green),var(--cyan))}
+.muted{color:var(--dim);font-size:13px}
+/* nav */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);
+  background:rgba(2,9,15,.94);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);backdrop-filter:blur(8px)}
+nav button{background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:11px;letter-spacing:.16em;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6}
+nav button.on{color:var(--cyan);text-shadow:var(--glow)}
+nav button.on svg{filter:drop-shadow(0 0 5px var(--cyan))}
+.view{display:none}.view.on{display:block;animation:in .3s ease}
+.lock{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;align-items:center;justify-content:center;text-align:center;padding:30px}
+.lock.show{display:flex}
+.lock h2{color:var(--cyan);letter-spacing:.2em;text-shadow:var(--glow)}
+a{color:var(--cyan)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">JARVIS<small>SMM INTELLECT SYSTEM</small></div>
+  <div class="sys"><div><span class="dot"></span><b id="sysState">ONLINE</b></div><div id="clock">--:--:--</div></div>
+</header>
+
+<main>
+  <div class="core-wrap" id="coreWrap">
+    <div class="core">
+      <svg viewBox="0 0 230 230" aria-hidden="true">
+        <defs>
+          <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#3fe0ff" stop-opacity="0"/><stop offset="1" stop-color="#3fe0ff"/></linearGradient>
+        </defs>
+        <g class="ring r3"><circle cx="115" cy="115" r="110" fill="none" stroke="rgba(63,224,255,.25)" stroke-width="1" stroke-dasharray="2 6"/></g>
+        <g class="ring r1"><circle cx="115" cy="115" r="98" fill="none" stroke="#3fe0ff" stroke-opacity=".7" stroke-width="2" stroke-dasharray="120 40 30 40 90 60"/></g>
+        <g class="ring r2"><circle cx="115" cy="115" r="84" fill="none" stroke="url(#g1)" stroke-width="5" stroke-dasharray="70 200"/>
+          <circle cx="115" cy="115" r="84" fill="none" stroke="rgba(63,224,255,.25)" stroke-width="1"/></g>
+        <g class="ring r4"><circle cx="115" cy="115" r="70" fill="none" stroke="#9af1ff" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="4 4 18 4"/></g>
+        <g id="ticks"></g>
+        <circle id="progArc" cx="115" cy="115" r="104" fill="none" stroke="#46f2a0" stroke-width="2.5" stroke-dasharray="0 999" transform="rotate(-90 115 115)" style="transition:stroke-dasharray .6s;filter:drop-shadow(0 0 4px #46f2a0)"/>
+      </svg>
+      <div class="orb"><div class="val" id="orbVal">—</div><div class="lbl" id="orbLbl">OBUNACHI</div></div>
+    </div>
+  </div>
+  <div class="core-caption" id="coreCaption">Tizim tayyor</div>
+
+  <!-- jarayon paneli (hamma bo'limlar uchun umumiy) -->
+  <section class="panel proc" id="proc">
+    <div class="ptitle">Jarayon <span id="procTime">0.0 s</span></div>
+    <div class="prog run" id="procBar"><i style="width:0"></i></div>
+    <div id="procSteps"></div>
+    <div class="term" id="term"></div>
+  </section>
+
+  <!-- HUD -->
+  <section class="view on" id="v-hud">
+    <div class="panel">
+      <div class="ptitle">Akkaunt <span id="igUser">—</span></div>
+      <div class="grid" id="tiles"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Format samaradorligi <span id="repDate"></span></div>
+      <div id="hudFormats" class="muted">Hali tahlil qilinmagan. TAHLIL bo'limida ishga tushiring.</div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Auditoriya</div>
+      <div id="hudAudience" class="muted">Ma'lumot tahlildan keyin chiqadi.</div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Tizim</div>
+      <div class="grid" id="sysTiles"></div>
+      <div style="margin-top:10px"><button class="btn" onclick="go('analysis');runInsta()">▶ To'liq tahlilni boshlash</button></div>
+    </div>
+  </section>
+
+  <!-- TAHLIL -->
+  <section class="view" id="v-analysis">
+    <div class="panel">
+      <div class="ptitle">Akkaunt tahlili</div>
+      <div class="seg" id="limitSeg">
+        <button data-v="6">6</button><button data-v="12" class="on">12</button><button data-v="20">20</button><button data-v="30">30</button>
+      </div>
+      <div class="muted" style="margin:6px 0 10px">Oxirgi nechta kontent tahlil qilinsin</div>
+      <button class="btn" id="btnInsta" onclick="runInsta()">▶ Tahlilni boshlash</button>
+    </div>
+    <div id="report"></div>
+    <div class="panel">
+      <div class="ptitle">Bitta post</div>
+      <div class="row"><input id="postRef" placeholder="1 yoki post havolasi" value="1"><button class="btn sm" id="btnPost" onclick="runPost()">Tahlil</button></div>
+      <div id="postOut"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Storylar <span>oxirgi 24 soat</span></div>
+      <button class="btn sm" onclick="loadStories()">Yangilash</button>
+      <div id="storiesOut" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- KONTENT -->
+  <section class="view" id="v-chat">
+    <div class="panel">
+      <div class="ptitle">Jarvis bilan ishlash</div>
+      <div class="chips" id="chips">
+        <div class="chip on" data-c="">Suhbat</div><div class="chip" data-c="/script">Ssenariy</div><div class="chip" data-c="/hook">Hook</div>
+        <div class="chip" data-c="/caption">Caption</div><div class="chip" data-c="/ideas">G'oyalar</div><div class="chip" data-c="/ad">Reklama</div>
+        <div class="chip" data-c="/telegram">Telegram post</div><div class="chip" data-c="/ai_video">AI video prompt</div>
+      </div>
+      <div class="msgs" id="msgs"><div class="msg j"><div class="who">JARVIS</div>Tayyorman. Mavzuni yozing yoki yuqoridan vazifa turini tanlang.</div></div>
+      <div class="row" style="margin-top:10px;align-items:flex-end">
+        <textarea id="chatIn" rows="1" placeholder="Masalan: elektr samokat uchun reklama"></textarea>
+        <button class="btn sm" id="btnSend" onclick="sendChat()">Yuborish</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- KOMENTLAR -->
+  <section class="view" id="v-comments">
+    <div class="panel">
+      <div class="ptitle">Avtojavob rejimi</div>
+      <div class="seg" id="modeSeg"><button data-m="on">YONIQ</button><button data-m="test">TEST</button><button data-m="off">O'CHIQ</button></div>
+      <div class="muted" id="modeText" style="margin-top:8px"></div>
+      <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Ruxsat kutayotganlar <span id="pendCount">0</span></div>
+      <div id="pending" class="muted">Yuklanmoqda...</div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button class="on" data-v="hud"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>HUD</button>
+  <button data-v="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 16v-5M11 16V7M16 16v-8M21 16V4"/></svg>TAHLIL</button>
+  <button data-v="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/></svg>KONTENT</button>
+  <button data-v="comments"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>KOMENT</button>
+</nav>
+
+<div class="lock" id="lock"><div><h2>KIRISH YOPIQ</h2><p class="muted" id="lockText">Bu panel faqat Telegram'dagi Jarvis boti orqali ochiladi.</p></div></div>
+
+<script>
+const tg = window.Telegram ? Telegram.WebApp : null;
+const DEMO = new URLSearchParams(location.search).has('demo');
+const $ = s => document.querySelector(s);
+const state = {limit:12, cmd:'', busy:false};
+const haptic = t => { try{ tg && tg.HapticFeedback && (t==='ok'?tg.HapticFeedback.notificationOccurred('success'):t==='err'?tg.HapticFeedback.notificationOccurred('error'):tg.HapticFeedback.impactOccurred('light')) }catch(e){} };
+
+if (tg){ tg.ready(); tg.expand(); try{tg.setHeaderColor('#02070d');tg.setBackgroundColor('#02070d')}catch(e){} }
+
+// ---------- formatlash ----------
+const fmt = n => n==null||isNaN(n) ? '—' : Math.round(+n).toLocaleString('ru-RU').replace(/,/g,' ');
+const pct = n => n==null ? '—' : (n*100).toFixed(1)+'%';
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const short = n => n==null?'—': n>=1e6?(n/1e6).toFixed(1)+'M': n>=1e4?Math.round(n/1e3)+'K': fmt(n);
+
+// ---------- API ----------
+async function api(path, opts={}){
+  if (DEMO) return demoApi(path, opts);
+  const r = await fetch(path, {method: opts.method||'GET', headers:{'Content-Type':'application/json','X-Init-Data': tg ? tg.initData : ''},
+    body: opts.body ? JSON.stringify(opts.body) : undefined});
+  let data = {}; try{ data = await r.json() }catch(e){}
+  if (r.status===401 || r.status===403){ showLock(data.detail); throw new Error(data.detail||'Ruxsat yo\'q') }
+  if (!r.ok) throw new Error(data.detail || ('Xato '+r.status));
+  return data;
+}
+function showLock(t){ $('#lock').classList.add('show'); if(t) $('#lockText').textContent = t }
+
+// ---------- soat va yadro ----------
+setInterval(()=>{ const d=new Date(); $('#clock').textContent=d.toLocaleTimeString('ru-RU') },1000);
+(function ticks(){ let g=''; for(let i=0;i<60;i++){ const a=i*6*Math.PI/180, r1=i%5?60:56, r2=64;
+  g+=`<line x1="${115+r1*Math.cos(a)}" y1="${115+r1*Math.sin(a)}" x2="${115+r2*Math.cos(a)}" y2="${115+r2*Math.sin(a)}" stroke="rgba(63,224,255,${i%5?.3:.8})" stroke-width="1"/>` }
+  $('#ticks').innerHTML=g })();
+function setBusy(on, caption){
+  state.busy=on; $('#coreWrap').classList.toggle('busy',on);
+  $('#sysState').textContent = on ? 'PROCESSING' : 'ONLINE';
+  $('#sysState').style.color = on ? 'var(--amber)' : 'var(--green)';
+  document.querySelector('.dot').style.background = on ? 'var(--amber)' : 'var(--green)';
+  document.querySelector('.dot').style.boxShadow = on ? '0 0 8px var(--amber)' : '0 0 8px var(--green)';
+  if (caption!==undefined) $('#coreCaption').textContent = caption;
+  document.querySelectorAll('#btnInsta,#btnPost,#btnSend').forEach(b=>b.disabled=on);
+}
+function setArc(p){ const c=2*Math.PI*104; $('#progArc').setAttribute('stroke-dasharray', `${c*p} ${c}`) }
+
+// ---------- jarayon ko'rsatkichi ----------
+let termSeen = {};
+function log(text, cls=''){
+  const t=new Date().toLocaleTimeString('ru-RU'); const el=$('#term');
+  el.insertAdjacentHTML('beforeend', `<div class="${cls}">[${t}] ${esc(text)}</div>`); el.scrollTop=el.scrollHeight;
+}
+function renderJob(job){
+  $('#proc').classList.add('show');
+  const n=job.steps.length, done=job.steps.filter(s=>s.state==='done').length;
+  const active=job.steps.find(s=>s.state==='active');
+  const p = job.status==='done' ? 1 : (done + (active?.5:0))/n;
+  $('#procBar i').style.width=(p*100)+'%'; $('#procBar').classList.toggle('run', job.status==='running');
+  $('#procTime').textContent = job.elapsed.toFixed(1)+' s'; setArc(p);
+  $('#procSteps').innerHTML = job.steps.map(s=>`<div class="step ${s.state}"><div class="ic"></div><div>${esc(s.name)}</div><div class="t">${s.dur!=null?s.dur+' s':s.state==='active'?'...':''}</div></div>`).join('');
+  job.steps.forEach(s=>{ const k=job.id+s.key+s.state; if(!termSeen[k] && s.state!=='wait'){ termSeen[k]=1;
+    if(s.state==='active') log('> '+s.name); if(s.state==='done' && s.dur!=null) log('✓ '+s.name+' ('+s.dur+' s)','ok') } });
+  if (active) $('#coreCaption').textContent = active.name+'...';
+  $('#orbVal').textContent = Math.round(p*100)+'%'; $('#orbLbl').textContent='JARAYON';
+}
+async function runJob(path, body, onDone, label){
+  if (state.busy) return;
+  setBusy(true, label); $('#term').innerHTML=''; termSeen={}; haptic();
+  log('Buyruq: '+label);
+  try{
+    let job = await api(path,{method:'POST',body});
+    renderJob(job);
+    while(job.status==='running'){ await new Promise(r=>setTimeout(r,700)); job = await api('/api/job/'+job.id); renderJob(job) }
+    if (job.status==='error'){ log('✗ '+job.error,'e'); haptic('err'); onDone(null, job.error) }
+    else { log('Tayyor. Umumiy vaqt '+job.elapsed.toFixed(1)+' s','ok'); haptic('ok'); onDone(job.result) }
+  }catch(e){ log('✗ '+e.message,'e'); haptic('err'); onDone(null, e.message) }
+  finally{ setBusy(false, 'Tizim tayyor'); setTimeout(restoreOrb, 2500) }
+}
+
+// ---------- typewriter ----------
+function typeOut(el, text){
+  el.classList.add('cursor'); el.textContent=''; let i=0; const step=Math.max(2,Math.ceil(text.length/450));
+  (function tick(){ el.textContent=text.slice(0,i); i+=step; if(i<=text.length+step) requestAnimationFrame(tick); else el.classList.remove('cursor') })();
+}
+
+// ---------- HUD ----------
+let lastStatus=null;
+function restoreOrb(){ const f=lastStatus?.instagram?.followers; $('#orbVal').textContent= f?short(f):'—'; $('#orbLbl').textContent='OBUNACHI'; setArc(0) }
+function tile(k,v,d='',cls=''){ return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d ${cls}">${d}</div></div>` }
+function bars(rows, max, fmtNum){ max = max || Math.max(1,...rows.map(r=>r[1]||0));
+  return rows.map(([l,v,extra])=>`<div class="bar"><div class="lbl">${esc(l)}</div><div class="track"><div class="fill" data-w="${Math.max(2,(v||0)/max*100)}"></div></div><div class="num">${fmtNum?fmtNum(v):v}${extra?' '+extra:''}</div></div>`).join('') }
+function animateBars(root){ requestAnimationFrame(()=>root.querySelectorAll('.fill').forEach(f=>f.style.width=f.dataset.w+'%')) }
+
+async function loadStatus(){
+  try{
+    const s = await api('/api/status'); lastStatus=s; const ig=s.instagram||{}; const acc=ig.account||{};
+    $('#igUser').textContent = ig.username ? '@'+ig.username : (ig.connected?'':'ulanmagan');
+    const ch = ig.change||{}; const ch7 = ch['7']; const ch30 = ch['30'];
+    let tiles = tile('Obunachilar', fmt(ig.followers), ch7!=null?(ch7>=0?'▲ +':'▼ ')+fmt(ch7)+' / 7 kun':ch30!=null?(ch30>=0?'▲ +':'▼ ')+fmt(ch30)+' / 30 kun':'o\'sish kuzatilmoqda', (ch7??ch30??0)>=0?'up':'down')
+      + tile('Qamrov · 7 kun', short(acc.reach))
+      + tile('Ko\'rishlar · 7 kun', short(acc.views))
+      + tile('Faol auditoriya', short(acc.accounts_engaged), acc.total_interactions!=null?fmt(acc.total_interactions)+' interaksiya':'')
+      + tile('Link bosishlar', fmt(acc.profile_links_taps))
+      + tile('Postlar', fmt(ig.media_count));
+    if (ig.error) tiles = `<div class="err" style="grid-column:1/-1">${esc(ig.error)}</div>` + tiles;
+    $('#tiles').innerHTML = tiles;
+    const ar = s.autoreply;
+    $('#sysTiles').innerHTML = tile('AI model', `<span style="font-size:14px">${esc(s.ai.model||s.ai.provider)}</span>`)
+      + tile('Ish vaqti', Math.floor(s.uptime/3600)+' soat '+Math.floor(s.uptime%3600/60)+' daq')
+      + tile('Avtojavob', ar?({on:'YONIQ',test:'TEST',off:'O\'CHIQ'})[ar.mode]:'—', ar?ar.sent_today+'/'+ar.limit_day+' bugun':'', ar&&ar.mode==='on'?'up':'warn')
+      + tile('Ruxsat kutmoqda', ar?ar.pending:'—', ar&&ar.pending?'javob bering':'', ar&&ar.pending?'warn':'');
+    if (s.report) renderHudReport(s.report);
+    if (!state.busy) restoreOrb();
+  }catch(e){ $('#tiles').innerHTML = `<div class="err" style="grid-column:1/-1">${esc(e.message)}</div>` }
+}
+function renderHudReport(r){
+  $('#repDate').textContent = r.created||'';
+  const f = Object.entries(r.formats||{});
+  if (f.length){ const rows=f.map(([k,v])=>[k+' ('+v.count+')', v.views||0, v.er!=null?'· '+pct(v.er):'']);
+    $('#hudFormats').innerHTML = '<div class="muted" style="margin-bottom:4px">O\'rtacha ko\'rish va ER</div>'+bars(rows,null,short); $('#hudFormats').classList.remove('muted'); animateBars($('#hudFormats')) }
+  const a=r.audience||{}; let h='';
+  if (a.city) h+='<div class="muted">Shaharlar</div>'+bars(a.city.slice(0,4).map(([l,v])=>[l.split(',')[0],v]),100,v=>v+'%');
+  if (a.age) h+='<div class="muted" style="margin-top:6px">Yosh</div>'+bars(a.age.slice(0,4),100,v=>v+'%');
+  if (a.gender) h+='<div class="muted" style="margin-top:6px">Jins</div>'+bars(a.gender,100,v=>v+'%');
+  if (h){ $('#hudAudience').innerHTML=h; $('#hudAudience').classList.remove('muted'); animateBars($('#hudAudience')) }
+}
+
+// ---------- TAHLIL ----------
+document.querySelectorAll('#limitSeg button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#limitSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); state.limit=+b.dataset.v; haptic() });
+function runInsta(){
+  runJob('/api/insta',{limit:state.limit},(r,err)=>{
+    if (err){ $('#report').innerHTML=`<div class="err">${esc(err)}</div>`; return }
+    renderReport(r); renderHudReport(r); loadStatus();
+    setTimeout(()=>$('#report').scrollIntoView({behavior:'smooth',block:'start'}),300);
+  }, `Oxirgi ${state.limit} ta kontent tahlili`);
+}
+function renderReport(r){
+  const posts=r.posts||[]; const perf=p=>p.views??p.reach??p.likes??0;
+  const ranked=[...posts].sort((a,b)=>perf(b)-perf(a));
+  const fr=r.frequency||{};
+  let h=`<div class="panel"><div class="ptitle">Natijalar <span>${esc(r.created)}</span></div><div class="grid">`
+    + tile('Kontentlar', posts.length, `7 kunda ${fr['7']??'—'} ta post`)
+    + tile('O\'rtacha ko\'rish', short(avg(posts.map(p=>p.views))))
+    + tile('O\'rtacha ER', pct(avg(posts.map(p=>p.er))))
+    + tile('Saqlash ulushi', pct(avg(posts.map(p=>p.save_rate))), 'ulashish '+pct(avg(posts.map(p=>p.share_rate))))
+    + `</div></div>`;
+  const f=Object.entries(r.formats||{});
+  if (f.length) h+=`<div class="panel"><div class="ptitle">Formatlar</div>${bars(f.map(([k,v])=>[k+' ('+v.count+')',v.views||0,v.er!=null?'· '+pct(v.er):'']),null,short)}</div>`;
+  const sl=Object.entries(r.slots||{});
+  if (sl.length) h+=`<div class="panel"><div class="ptitle">Joylash vaqti <span>o'rtacha natija</span></div>${bars(sl.map(([k,v])=>[k.split(' ')[0],v.avg||0,'· '+v.count+' ta']),null,short)}</div>`;
+  const postHtml=(p,weak)=>`<div class="post ${weak?'weak':''}"><div class="h">${esc(p.hook||'(caption yo\'q)')}</div><div class="m">${p.kind} · ${p.date} · ${short(p.views)} ko'rish · ER ${pct(p.er)} · 💾 ${fmt(p.saved)} · ↗ ${fmt(p.shares)}</div>${p.permalink?`<a href="#" onclick="openLink('${esc(p.permalink)}');return false">ochish →</a>`:''}</div>`;
+  if (ranked.length) h+=`<div class="panel"><div class="ptitle">Eng kuchli</div>${ranked.slice(0,3).map(p=>postHtml(p)).join('')}${ranked.length>5?'<div class="ptitle" style="margin-top:12px">Eng zaif</div>'+ranked.slice(-2).map(p=>postHtml(p,true)).join(''):''}</div>`;
+  h+=`<div class="panel"><div class="ptitle">Jarvis xulosasi</div><div class="out" id="aiOut"></div>${r.analysis_error?`<div class="err">AI tahlil bermadi: ${esc(r.analysis_error)}</div>`:''}</div>`;
+  if ((r.missing||[]).length) h+=`<div class="muted">Instagram bermagan: ${esc(r.missing.join(', '))}</div>`;
+  $('#report').innerHTML=h; animateBars($('#report'));
+  if (r.analysis) typeOut($('#aiOut'), r.analysis); else $('#aiOut').textContent='—';
+}
+function avg(a){ a=a.filter(x=>x!=null); return a.length? a.reduce((s,x)=>s+x,0)/a.length : null }
+function openLink(u){ tg&&tg.openLink ? tg.openLink(u) : window.open(u,'_blank') }
+function runPost(){
+  const ref=$('#postRef').value.trim()||'1';
+  runJob('/api/post',{ref},(r,err)=>{
+    if (err){ $('#postOut').innerHTML=`<div class="err">${esc(err)}</div>`; return }
+    $('#postOut').innerHTML=`<div class="out" style="margin-top:10px;color:var(--cyan2);font-family:var(--mono);font-size:12.5px">${esc(r.summary)}</div><div class="out" id="postAi" style="margin-top:10px"></div>${r.analysis_error?`<div class="err">AI tahlil bermadi: ${esc(r.analysis_error)}</div>`:''}`;
+    if (r.analysis) typeOut($('#postAi'), r.analysis);
+  }, 'Post tahlili: '+ref);
+}
+async function loadStories(){
+  $('#storiesOut').innerHTML='<div class="muted">Yuklanmoqda...</div>';
+  try{ const r=await api('/api/stories'); const s=r.stories||[];
+    $('#storiesOut').innerHTML = s.length ? bars(s.map((x,i)=>[(i+1)+'. '+x.time, x.views||0, x.reach!=null?'· '+short(x.reach)+' qamrov':'']),null,short) : '<div class="muted">Hozir faol story yo\'q.</div>';
+    animateBars($('#storiesOut'));
+  }catch(e){ $('#storiesOut').innerHTML=`<div class="err">${esc(e.message)}</div>` }
+}
+
+// ---------- KONTENT ----------
+document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>{ document.querySelectorAll('#chips .chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); state.cmd=c.dataset.c; haptic();
+  $('#chatIn').placeholder = state.cmd ? 'Mavzu: masalan, bolalar elektr mashinasi' : 'Savolingizni yozing'; $('#chatIn').focus() });
+$('#chatIn').addEventListener('input',e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(140,e.target.scrollHeight)+'px' });
+function addMsg(cls, html){ $('#msgs').insertAdjacentHTML('beforeend',`<div class="msg ${cls}">${html}</div>`); const m=$('#msgs').lastElementChild; m.scrollIntoView({behavior:'smooth',block:'end'}); return m }
+function sendChat(){
+  const t=$('#chatIn').value.trim(); if(!t||state.busy) return;
+  const text=(state.cmd?state.cmd+' ':'')+t; $('#chatIn').value=''; $('#chatIn').style.height='auto';
+  addMsg('me', esc(text));
+  const box=addMsg('j','<div class="who">JARVIS</div><div class="mini-steps">ishlamoqda...</div>');
+  runJob('/api/chat',{text},(r,err)=>{
+    if (err){ box.innerHTML=`<div class="who">JARVIS</div><span style="color:#ffc2c8">${esc(err)}</span>`; return }
+    box.innerHTML='<div class="who">JARVIS</div><div class="out"></div>'; typeOut(box.querySelector('.out'), r.reply);
+  }, text.length>40?text.slice(0,40)+'…':text);
+}
+
+// ---------- KOMENTLAR ----------
+const MODE_TEXT={on:'Oddiy komentlarga Jarvis o\'zi javob yozadi. Raqobatchi va so\'kingan komentlar shu yerga keladi.',test:'Jarvis hech kimga yozmaydi, faqat qanday javob berishini Telegram\'da ko\'rsatadi.',off:'Komentlar tekshirilmaydi.'};
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=async()=>{
+  const m=b.dataset.m; if (m==='on' && !confirm('Jarvis oddiy komentlarga o\'zi javob yoza boshlaydi. Yoqilsinmi?')) return;
+  try{ await api('/api/comments/mode',{method:'POST',body:{mode:m}}); haptic('ok'); loadComments() }catch(e){ alert(e.message) } });
+async function loadComments(){
+  try{
+    const r=await api('/api/comments');
+    if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
+    const st=r.status; document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
+    $('#modeText').textContent=MODE_TEXT[st.mode]; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
+    $('#pendCount').textContent=r.pending.length;
+    $('#pending').classList.toggle('muted', !r.pending.length);
+    $('#pending').innerHTML = r.pending.length ? r.pending.map(p=>`<div class="cm" id="cm-${p.cid}">
+      <span class="tag">${esc(p.category_name)}</span> <span class="muted">${esc(p.reason||'')}</span>
+      <div class="who">@${esc(p.username)}</div><div class="txt">${esc(p.text)}</div>
+      ${p.reply?`<div class="draft">${esc(p.reply)}</div>`:'<div class="muted" style="margin:8px 0">Tayyor javob yo\'q</div>'}
+      <textarea id="ct-${p.cid}" placeholder="O'z javobingiz (ixtiyoriy)"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn sm green" onclick="cmAct('${p.cid}','send')">Yuborish</button><button class="btn sm amber" onclick="cmAct('${p.cid}','hide')">Yashirish</button><button class="btn sm red" onclick="cmAct('${p.cid}','skip')">O'tkazish</button></div>
+      ${p.permalink?`<div style="margin-top:6px"><a href="#" onclick="openLink('${esc(p.permalink)}');return false" class="mono" style="font-size:11px">postni ochish →</a></div>`:''}</div>`).join('') : 'Hozircha ruxsat kutayotgan komment yo\'q.';
+  }catch(e){ $('#pending').innerHTML=`<div class="err">${esc(e.message)}</div>` }
+}
+async function cmAct(cid, action){
+  const text=($('#ct-'+cid)||{}).value||'';
+  if (action==='send' && !text.trim() && !document.querySelector('#cm-'+cid+' .draft')){ alert('Javob matnini yozing'); return }
+  try{ const r=await api('/api/comments/'+cid,{method:'POST',body:{action,text}}); haptic('ok');
+    const el=$('#cm-'+cid); el.innerHTML=`<div class="muted">${esc(r.message)}</div>`; setTimeout(loadComments,1500) }
+  catch(e){ haptic('err'); alert(e.message) }
+}
+
+// ---------- navigatsiya ----------
+function go(v){ if(!state.busy) $('#proc').classList.remove('show'); document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
+  if (v==='comments') loadComments(); window.scrollTo({top:0,behavior:'smooth'}) }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
+
+// ---------- demo rejim (faqat dizaynni ko'rish uchun) ----------
+function demoApi(path, opts){
+  const posts=[['Reels','Bolangiz bu samokatni ko\'rsa uyda qolmaydi',48200,.061],['Reels','3 yoshdan 8 yoshgacha: qaysi mashina?',31500,.048],['Karusel','Yangi kolleksiya keldi',7388,.012],['Reels','Narx qiziqmi?',1078,.003],['Reels','+998 77 499 47 44',1266,.002],['Rasm','Dam olish kunlari ochiqmiz',2100,.009]]
+    .map(([kind,hook,views,er],i)=>({kind,hook,views,reach:views*.7,er,likes:views*.03,saved:views*.004,shares:views*.006,save_rate:.004,share_rate:.006,date:(15-i)+'.11 19:30',permalink:'https://instagram.com/'}));
+  const report={created:'16.11.2026 09:10',profile:{username:'bolalar_dunyosi.uzb',followers:104191},formats:{Reels:{count:4,views:20511,er:.029},Karusel:{count:1,views:7388,er:.012},Rasm:{count:1,views:2100,er:.009}},
+    slots:{'Kechqurun (17-22)':{count:4,avg:21000},'Kunduzi (12-17)':{count:2,avg:4200}},frequency:{'7':5},posts,audience:{city:[['Yangiyer, Sirdaryo',35],['Turtkul, Karakalpakstan',27],['Zomin, Jizzakh',11],['Urgench, Xorazm',10]],age:[['25-34',36],['35-44',32],['18-24',12]],gender:[['Noma\'lum',54],['Erkak',29],['Ayol',17]]},
+    analysis:'1. UMUMIY HOLAT\nReels akkauntning asosiy dvigateli: o\'rtacha 20 511 ko\'rish, karuseldan 2.8 barobar ko\'p.\n\n2. NIMA ISHLAYAPTI\n- Bola reaksiyasi bilan boshlangan hooklar ER 6.1% bergan.\n- Kechqurun 17-22 da joylangan postlar o\'rtacha 21 000 ko\'rish olgan.\n\n6. KEYINGI 7 KUN UCHUN HARAKATLAR\n1. Haftada 4 ta Reels, hammasi 19:00-21:00 orasida.\n2. Birinchi 2 soniyada bolaning yuzi va mahsulot birga ko\'rinsin.'};
+  if (path==='/api/status') return Promise.resolve({uptime:15400,ai:{provider:'Gemini',model:'gemini-2.5-flash'},autoreply:{mode:'test',sent_today:3,limit_day:40,pending:2},
+    instagram:{connected:true,username:'bolalar_dunyosi.uzb',followers:104191,media_count:1834,change:{'7':412},account:{reach:182400,views:640300,accounts_engaged:9100,total_interactions:21400,profile_links_taps:312}},report});
+  if (path==='/api/comments') return Promise.resolve({enabled:true,status:{mode:'test',sent_today:3,limit_day:40,pending:2},pending:[
+    {cid:'1',username:'rival_shop',text:'Bizda arzonroq, profilga kiring',category_name:'Raqobatchi',reason:'Raqobatchi komment',reply:'Narx emas, kafolat muhim. Tanlov sizda.'},
+    {cid:'2',username:'troll_22',text:'Bu nima o\'zi, ahmoqona narsa',category_name:'Salbiy / haqorat',reason:'Komentda so\'kinish yoki haqorat bor',reply:''}]});
+  if (path==='/api/stories') return Promise.resolve({stories:[{time:'10:12',views:612,reach:540},{time:'14:40',views:488,reach:430},{time:'19:05',views:701,reach:650}]});
+  if (path.startsWith('/api/comments/')) return Promise.resolve({message:'✅ Bajarildi (demo)',status:{mode:opts.body.mode||'test',sent_today:3,limit_day:40,pending:1}});
+  const kinds={'/api/insta':[['received','So\'rov qabul qilindi'],['connect','Instagram\'ga ulanish'],['collect','Postlar, statistika va komentlar yig\'ilmoqda'],['metrics','Ko\'rsatkichlar hisoblanmoqda'],['analyze','Jarvis ma\'lumotlarni tahlil qilmoqda'],['prepare','Hisobot tayyorlanmoqda']],
+    '/api/chat':[['received','So\'rov qabul qilindi'],['understand','So\'rov tushunilmoqda'],['context','Oldingi suhbat konteksti olinmoqda'],['generate','Javob yaratilmoqda'],['prepare','Javob tayyorlanmoqda']],
+    '/api/post':[['received','So\'rov qabul qilindi'],['find','Post qidirilmoqda'],['collect','Statistika va komentlar yig\'ilmoqda'],['compare','Akkaunt o\'rtachasi bilan solishtirilmoqda'],['analyze','Jarvis postni tahlil qilmoqda'],['prepare','Xulosa tayyorlanmoqda']]};
+  if (kinds[path]){ demoApi.job={path,start:Date.now(),steps:kinds[path]}; return demoApi(('/api/job/x')) }
+  if (path.startsWith('/api/job/')){ const j=demoApi.job, el=(Date.now()-j.start)/1000, per=1.1, idx=Math.floor(el/per), n=j.steps.length;
+    const steps=j.steps.map(([key,name],i)=>({key,name,state:i<idx?'done':i===idx?'active':'wait',dur:i<idx?per:null}));
+    const done=idx>=n; const result= j.path==='/api/insta'?report: j.path==='/api/chat'?{reply:'Hook variantlari:\n1. "Bu samokatni ko\'rgan bola endi telefon so\'ramaydi"\n2. "3 soniyada: bola + samokat = baxt"'}:{summary:'🔎 Reels, 14-noy\nKo\'rish: 48 200\nER: 6.1% (o\'rtacha 2.4%)',analysis:'1. NATIJA\nOdatdagi postdan 4.1 barobar ko\'p ko\'rilgan.'};
+    return Promise.resolve({id:'x',status:done?'done':'running',steps:done?steps.map(s=>({...s,state:'done',dur:per})):steps,elapsed:el,result:done?result:null}) }
+  return Promise.resolve({});
+}
+
+// ---------- ishga tushirish ----------
+if (!DEMO && (!tg || !tg.initData)) showLock();
+else { loadStatus(); setInterval(()=>{ if(!state.busy) loadStatus() }, 60000) }
+</script>
+</body>
+</html>

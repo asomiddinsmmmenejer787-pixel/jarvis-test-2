@@ -39,15 +39,22 @@ class Jarvis:
         self.script_engine = ScriptEngine(ai_provider)
         self.memory = Memory(memory_dir)
 
-    def handle(self, user_text: str) -> str:
+    def handle(self, user_text: str, progress=None) -> str:
         """
         Foydalanuvchi xabarini qabul qilib, mos javobni qaytaradi.
         Bu Jarvis bilan ishlashning yagona kirish nuqtasi.
+        progress: ixtiyoriy, mini ilovada jarayon bosqichlarini ko'rsatish uchun
+        (faqat umumiy bosqich nomlari, AI'ning ichki fikrlari emas).
         """
+        step = progress or (lambda name: None)
+        step("understand")
         parsed = parse_input(user_text)
+        step("context")
         history = self.memory.get_recent(CHAT_HISTORY_LIMIT)
 
+        step("generate")
         reply = self._route_to_engine(parsed.command, parsed.topic, history)
+        step("prepare")
 
         # Xato javoblar xotiraga yozilmaydi, keyingi suhbatni buzmasligi uchun
         if not reply.startswith(ERROR_PREFIX):
