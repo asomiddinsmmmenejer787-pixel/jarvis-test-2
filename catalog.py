@@ -46,6 +46,7 @@ def load():
             data = {}
         data.setdefault("shop", {})
         data.setdefault("posts", {})
+        data.setdefault("memory", [])
         return data
 
 
@@ -90,6 +91,54 @@ def set_post_info(media_id, fields):
             data["posts"].pop(str(media_id), None)
         save(data)
         return get_post_info(media_id)
+
+
+# ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------
+
+def get_memory():
+    return list(load()["memory"])
+
+
+def add_memory(text):
+    text = _clean(text, 400)
+    if not text:
+        raise ValueError("Bo'sh ma'lumot")
+    with _lock:
+        data = load()
+        if text not in data["memory"]:
+            data["memory"].append(text)
+            data["memory"] = data["memory"][-200:]
+            save(data)
+        return data["memory"]
+
+
+def delete_memory(index):
+    with _lock:
+        data = load()
+        if not 0 <= index < len(data["memory"]):
+            raise ValueError("Bunday qator yo'q")
+        removed = data["memory"].pop(index)
+        save(data)
+        return removed
+
+
+def memory_block():
+    """(AI uchun matn, raqamlarni tekshirish uchun manba)."""
+    mem = get_memory()
+    if not mem:
+        return "", ""
+    return ("DO'KON XOTIRASI (egasi kiritgan, barcha mahsulotlar va narxlar; ishonchli):\n"
+            + "\n".join(f"- {m}" for m in mem)), "\n".join(mem)
+
+
+def fallback_dm():
+    """Narxsiz, xavfsiz xabar: AI matni tekshiruvdan o'tmaganda yuboriladi."""
+    shop = load()["shop"]
+    text = ("Assalomu alaykum! Qiziqishingiz uchun rahmat 😊 Qaysi mahsulot qiziqtirganini yozsangiz, "
+            "narxi va ma'lumotini shu yerda aytamiz.")
+    if shop.get("phone"):
+        text += f"\nTezroq javob uchun: {shop['phone']}"
+    return text
 
 
 def set_task(media_id, task):
@@ -162,6 +211,10 @@ def post_facts(post):
         if shop.get(k):
             lines.append(f"Do'kon — {SHOP_LABELS[k]}: {shop[k]}")
             sources.append(shop[k])
+    mem_text, mem_src = memory_block()
+    if mem_text:
+        lines.append(mem_text)
+        sources.append(mem_src)
     has_price = bool(info["price"]) or bool(info["use_caption"] and PRICE_HINT_RE.search(caption))
     return {"lines": lines, "has_price": has_price, "source_text": "\n".join(sources),
             "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"]),

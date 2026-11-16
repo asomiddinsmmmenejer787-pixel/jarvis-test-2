@@ -139,7 +139,18 @@ QOIDALAR
 - Ikkilansang, sarkazm o'rniga iliq javob ber va confidence ni past qo'y.
 
 JAVOB FORMATI: faqat JSON.
-{{"category": "price|question|positive|negative|complaint|competitor|spam", "confidence": 0.0 dan 1.0 gacha son, "reply": "javob matni yoki bo'sh satr"}}
+{{"category": "price|question|positive|negative|complaint|competitor|spam", "confidence": 0.0 dan 1.0 gacha son, "reply": "javob matni yoki bo'sh satr", "dm": "direkt xabar yoki bo'sh satr", "dm_answered": true yoki false, "topic": "mijoz nimani so'radi, 2-5 so'z"}}
+
+DIREKT XABAR (dm)
+Faqat price va question kategoriyasida to'ldir, boshqalarida bo'sh satr. Bu mijozning direktiga boradigan
+birinchi xabar va uning maqsadi sotuv:
+- Mijoz so'ragan narsaga FAKTLARdan aniq javob ber. Narxni FAKTLARda qanday yozilgan bo'lsa, shunday yoz
+  (direktda narx yozish mumkin). "Egasi kiritgan" narx va DO'KON XOTIRASI opisaniyadan ustun.
+- DO'KON XOTIRASIda bir nechta mahsulot bo'lsa, faqat shu postga tegishlisini ol. Qaysi biri ekani aniq
+  bo'lmasa, narx yozma, qaysi mahsulot qiziqtirganini so'ra va dm_answered=false qil.
+- FAKTLARda javob bo'lmasa, to'qima: qaysi mahsulot/rang/o'lcham kerakligini so'ra, dm_answered=false.
+- 3-6 qator, iliq, mijoz tilida. Mahsulotning FAKTLARdagi bitta foydali tomonini ayt.
+- Oxirida keyingi qadamga unda: bitta savol (rang, o'lcham, qaysi shahar) yoki buyurtma yo'li (telefon/manzil FAKTLARda bo'lsa).
 
 NAMUNA USLUB (nusxa ko'chirma, ruhini ol)
 - price: "Narxni bu yerda aytsak, boshqa mijozlar ham tomosha qilib qoladi 😄 Direktga yozing, shaxsan javob beramiz. Qaysi rangini ko'zlab turibsiz?"
@@ -252,6 +263,7 @@ class State:
         self.pending = {}
         self.dm_pending = {}
         self.dm_mode = None
+        self.auto_v2 = False
         self.test_seen = {}
         self.daily = {"date": "", "count": 0}
         self.mode = None
@@ -270,6 +282,7 @@ class State:
             self.pending = dict(raw.get("pending", {}))
             self.dm_pending = dict(raw.get("dm_pending", {}))
             self.dm_mode = raw.get("dm_mode") if raw.get("dm_mode") in DM_MODES else None
+            self.auto_v2 = bool(raw.get("auto_v2"))
             self.test_seen = dict(raw.get("test_seen", {}))
             self.daily = dict(raw.get("daily", self.daily))
             self.mode = raw.get("mode") if raw.get("mode") in MODES else None
@@ -290,6 +303,7 @@ class State:
             data = {
                 "mode": self.mode,
                 "dm_mode": self.dm_mode,
+                "auto_v2": self.auto_v2,
                 "dm_pending": self.dm_pending,
                 "done": dict(list(self.done.items())[-5000:]),
                 "attempts": self.attempts,
@@ -339,8 +353,14 @@ class CommentResponder:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
         if self.state.dm_mode is None:
-            env_dm = os.environ.get("DM_MODE", "approve").strip().lower()
-            self.state.dm_mode = env_dm if env_dm in DM_MODES else "approve"
+            env_dm = os.environ.get("DM_MODE", "auto").strip().lower()
+            self.state.dm_mode = env_dm if env_dm in DM_MODES else "auto"
+        if not self.state.auto_v2:
+            # Egasining qarori (16.11): direkt tasdiqsiz, avtomatik yuborilsin
+            self.state.auto_v2 = True
+            if self.state.dm_mode == "approve":
+                self.state.dm_mode = "auto"
+            self.state.save()
 
     # ----- rejim -----
 
@@ -477,6 +497,11 @@ class CommentResponder:
                     continue
 
                 verdict = assess(result, text)
+                verdict["dm"] = {
+                    "text": result.get("dm") if isinstance(result, dict) else "",
+                    "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
+                    "topic": result.get("topic") if isinstance(result, dict) else "",
+                }
                 info = {
                     "cid": cid,
                     "username": c.get("username") or "",
@@ -576,29 +601,39 @@ class CommentResponder:
 
     def _plan_dm(self, post, comment, verdict, preview=False):
         """
-        Komentga javobdan keyin direkt xabarni tayyorlaydi (shu post faktlari asosida).
-        - price: har doim direkt tayyorlanadi;
-        - question: faqat postda javob bo'lsa.
-        auto rejim: xabar xavfsiz bo'lsa (raqamlar faktlardan, savolga javob bor) yuboriladi,
-        aks holda egasiga tasdiqqa tushadi. approve: har doim tasdiqqa. preview: faqat ko'rsatadi.
+        Komentga javobdan keyin direkt xabar (matn komentga javob bilan bitta AI so'rovida keladi).
+        - price: har doim; question: faqat faktlarda javob bo'lsa.
+        - Matndagi raqamlar faktlar bilan tekshiriladi. Mos kelmasa, AI matni o'rniga narxsiz
+          xavfsiz xabar ishlatiladi.
+        auto: darhol yuboriladi (egasi faqat xabardor qilinadi). approve: tasdiqqa. preview: ko'rsatadi.
         """
         if self.dm_mode == "off" or verdict["category"] not in DM_CATEGORIES:
             return None
+        dm = verdict.get("dm") or {}
+        dm_text = (dm.get("text") or "").strip()[:1000] if isinstance(dm.get("text"), str) else ""
+        answered = bool(dm.get("answered")) and bool(dm_text)
+        if verdict["category"] == "question" and not answered:
+            return None  # faktlarda javob yo'q: ochiq javobda direktga yo'naltirilgan
+        facts = catalog.post_facts(post)
+        reason = ""
+        if not dm_text:
+            dm_text, reason = catalog.fallback_dm(), "Jarvis direkt matnini tayyorlamadi, umumiy xabar ishlatildi"
+        elif not catalog.numbers_ok(dm_text, facts["source_text"]):
+            dm_text, reason = catalog.fallback_dm(), "Matnda ma'lumotlarda yo'q raqam bor edi, narxsiz xabar ishlatildi"
+        elif not answered:
+            reason = "Ma'lumotlarda javob yo'q, mijozdan aniqlashtirildi"
         text = (comment.get("text") or "").strip()
-        res = catalog.compose_dm(self.ai, post, text)
-        if verdict["category"] == "question" and not res["answered"]:
-            return None  # postda javob yo'q: ochiq javobda direktga yo'naltirilgan
         cid = comment.get("id")
         info = {
             "cid": cid, "username": comment.get("username") or "", "comment": text[:300],
             "post_time": catalog._post_time(post), "caption": (post.get("caption") or "")[:120],
-            "title": res["title"], "topic": res["topic"], "text": res["text"],
-            "safe": res["safe"], "reason": res["reason"], "permalink": post.get("permalink") or "",
+            "title": facts["title"], "topic": catalog._clean(dm.get("topic"), 60), "text": dm_text,
+            "safe": not reason, "reason": reason, "permalink": post.get("permalink") or "",
         }
         if preview:
             return info
-        if self.dm_mode == "auto" and res["safe"]:
-            ok, err = self._send_dm(cid, res["text"])
+        if self.dm_mode == "auto":
+            ok, err = self._send_dm(cid, dm_text)
             return {"type": "dm_sent" if ok else "dm_error", **info, "error": err}
         with self.lock:
             self.state.dm_pending[cid] = {**info, "created": int(time.time()), "msg_id": None}

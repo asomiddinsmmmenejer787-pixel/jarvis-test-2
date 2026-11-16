@@ -552,7 +552,7 @@ def api_dm_action(cid: str, body: dict, x_init_data: str = Header(default="")):
 def api_posts(x_init_data: str = Header(default="")):
     require_owner(x_init_data)
     data = catalog.load()
-    out = {"shop": data["shop"], "posts": []}
+    out = {"shop": data["shop"], "memory": data["memory"], "posts": []}
     if not ig.is_configured():
         out["posts_error"] = "Instagram ulanmagan"
         return out
@@ -605,6 +605,25 @@ def api_tasks_set(body: dict, x_init_data: str = Header(default="")):
     media_id = body.get("media_id") or None
     catalog.set_task(str(media_id) if media_id else None, body.get("task", ""))
     return {"ok": True}
+
+
+@router.post("/api/memory")
+def api_memory_add(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        return {"memory": catalog.add_memory(body.get("text", ""))}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/api/memory/{index}")
+def api_memory_delete(index: int, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        catalog.delete_memory(index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"memory": catalog.get_memory()}
 
 
 @router.post("/api/shop")

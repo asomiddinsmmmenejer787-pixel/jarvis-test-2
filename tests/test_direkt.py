@@ -36,7 +36,11 @@ class DmAI(FakeAI):
             self.last_dm_msg = message
             return self.dm
         self.last_reply_msg = message
-        return super().generate_json(system, message, temperature)
+        res = super().generate_json(system, message, temperature)
+        if self.dm and res.get("category") in ("price", "question"):  # endi direkt matni shu javob ichida keladi
+            res.update(dm=self.dm.get("text", ""), dm_answered=self.dm.get("answered", False),
+                       topic=self.dm.get("topic", ""))
+        return res
 
 
 def run():
@@ -85,7 +89,8 @@ def run():
     print("\n3) Komentdan keyin direkt — TASDIQ rejimi")
     ai = DmAI(dm={"text": "Salom! Narxini aniqlab yozamiz.", "answered": False, "topic": "narx"})
     r = auto_reply.CommentResponder(ai)
-    check(r.dm_mode == "approve", "Standart direkt rejimi: tasdiq")
+    check(r.dm_mode == "auto", "Standart direkt rejimi: avto")
+    r.set_dm_mode("approve")
     events = r.run_once()
     types = [(e["type"], e["cid"]) for e in events]
     check(("sent", "c1") in types and ("dm_approval", "c1") in types, "Narx so'ragan komentga direkt tayyorlandi")
@@ -111,8 +116,16 @@ def run():
     ai.dm = {"text": "Narxi 999 000 so'm", "answered": True, "topic": "narx"}
     fake.comments["m1"].append({"id": "c21", "text": "Narxi qancha", "username": "u21", "timestamp": ts(1)})
     events = r.run_once()
-    check(any(e["type"] == "dm_approval" and e["cid"] == "c21" for e in events) and fake.dms[-1][0] != "c21",
-          "Shubhali narx bo'lsa avto rejimda ham tasdiqqa tushdi")
+    sent = next(e for e in events if e["type"] == "dm_sent" and e["cid"] == "c21")
+    check("999" not in fake.dms[-1][1] and fake.dms[-1] == ("c21", catalog.fallback_dm()) and sent["reason"],
+          "To'qilgan narx yuborilmadi: o'rniga narxsiz xabar ketdi va egasi ogohlantirildi")
+    catalog.add_memory("Rolikli krossovka — 389 000 so'm, 31-38 o'lcham")
+    ai.dm = {"text": "Rolikli krossovka 389 000 so'm.", "answered": True, "topic": "narx"}
+    fake.comments["m1"].append({"id": "c25", "text": "Narxi nechchi?", "username": "u25", "timestamp": ts(1)})
+    events = r.run_once()
+    check(any(e["type"] == "dm_sent" and e["cid"] == "c25" and not e["reason"] for e in events)
+          and "DO'KON XOTIRASI" in ai.last_reply_msg, "Xotiradagi narx AI'ga uzatildi va tekshiruvdan o'tdi")
+    check(catalog.delete_memory(0).startswith("Rolikli") and not catalog.get_memory(), "Xotiradan o'chirish ishlaydi")
     fake.dm_forbidden = True
     ai.dm = {"text": "Samokat narxi 1 250 000 so'm.", "answered": True, "topic": "narx"}
     fake.comments["m1"].append({"id": "c22", "text": "Narxi?", "username": "u22", "timestamp": ts(1)})

@@ -57,7 +57,8 @@ def run():
     print("\n2) TASDIQ rejimi")
     ai = ChatAI({"text": "Samokat S10 narxi 1 250 000 so'm.", "kind": "answer", "topic": "samokat narxi"})
     chat = dm_chat.DirectChat(ai)
-    check(chat.mode == "approve", "Standart rejim: tasdiq")
+    check(chat.mode == "auto", "Standart rejim: avto")
+    chat.set_mode("approve")
     fake.conversations = [conv("t0", ("old1", u2, "Eski savol", 30))]
     chat.s["since"] = time.time() - 10
     check(chat.run_once() == [], "Tizim yoqilishidan oldingi xabarga javob berilmadi")
@@ -90,16 +91,23 @@ def run():
     fake.conversations = [conv("t1", ("a4", u1, "Narxi?", 2))]
     ai.res = {"text": "Narxi 990 000 so'm", "kind": "answer", "topic": "narx"}
     events = chat.run_once()
-    check(events[0]["type"] == "chat_approval" and "raqam" in events[0]["reason"] and len(fake.chat_sent) == 2,
-          "To'qilgan narx yuborilmadi, tasdiqqa tushdi")
+    check(events[0]["type"] == "chat_sent" and "raqam" in events[0]["reason"]
+          and fake.chat_sent[-1] == ("U1", catalog.fallback_dm()),
+          "To'qilgan narx yuborilmadi: o'rniga narxsiz xabar ketdi")
     fake.conversations = [conv("t1", ("a5", u1, "Pulimni qaytaring", 1))]
     ai.res = {"text": "Hozir aniqlab, tez orada javob beramiz.", "kind": "human", "topic": "qaytarish"}
     events = chat.run_once()
-    check(events[0]["type"] == "chat_approval" and len(chat.get_pending()) == 1,
-          "Odam kerak bo'lgan holat tasdiqqa tushdi, eski tasdiq yangisi bilan almashtirildi")
-    check(chat.reject(events[0]["key"]).startswith("❌") and not chat.get_pending(), "Javobsiz qoldirish ishlaydi")
+    check(events[0]["type"] == "chat_sent" and "o'zingiz" in events[0]["reason"] and not chat.get_pending(),
+          "Odam kerak bo'lgan holatda mijozga javob ketdi va egasi ogohlantirildi")
+    fake.conversations = [conv("t1", ("a6", u1, "Olaman, qanday buyurtma qilaman?", 1))]
+    ai.res = {"text": "Ajoyib! Ism va manzilingizni yozing yoki +998 77 499 47 44 ga qo'ng'iroq qiling.",
+              "kind": "order", "topic": "buyurtma"}
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_sent" and events[0]["reason"].startswith("🛒"), "Buyurtma niyati egasiga bildirildi")
+    catalog.add_memory("Velosiped — 900 000 so'm")
+    check("DO'KON XOTIRASI" in dm_chat.knowledge()[0] and "900 000" in dm_chat.knowledge()[1], "Xotira faktlarga qo'shildi")
     ai.res = {"text": "Ha", "kind": "answer", "topic": "x"}
-    for i in range(12):
+    for i in range(dm_chat.MAX_AUTO_PER_USER_DAY + 4):
         fake.conversations = [conv("t9", (f"z{i}", u2, f"savol {i}", 1))]
         chat.run_once()
     sent_u2 = [s for s in fake.chat_sent if s[0] == "U2"]

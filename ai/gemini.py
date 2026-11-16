@@ -16,6 +16,7 @@ Barqarorlik:
 import json
 import logging
 import os
+import threading
 import time
 import requests
 from ai.base import AIProvider
@@ -40,6 +41,9 @@ MODEL_CANDIDATES = (
 # Ishlamagan modelni qancha vaqt chetlab o'tish (soniya)
 BAD_MODEL_TTL = {"not_found": 24 * 3600, "busy": 10 * 60, "timeout": 20 * 60}
 MAX_MODELS_PER_REQUEST = 3
+MIN_INTERVAL_SECONDS = float(os.environ.get("GEMINI_MIN_INTERVAL", "4") or 4)
+_pace = {"next": 0.0}
+_pace_lock = threading.Lock()
 # Google'ning o'zgaruvchan taxalluslari: ba'zan juda sekin modelga ulanadi, shuning uchun oxirida sinaladi
 SLOW_ALIASES = {"gemini-flash-latest", "gemini-pro-latest"}
 # Vaqtinchalik xatolar
@@ -72,11 +76,20 @@ class GeminiProvider(AIProvider):
     def _headers(self) -> dict:
         return {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
 
+    def _throttle(self):
+        """So'rovlar orasida kamida MIN_INTERVAL soniya: bepul limitga (429) kamroq urilish uchun."""
+        with _pace_lock:
+            wait = _pace["next"] - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            _pace["next"] = time.time() + MIN_INTERVAL_SECONDS
+
     def _post_generate(self, model: str, payload: dict) -> requests.Response:
         """So'rov yuboradi. Vaqtinchalik xato bo'lsa, bir necha marta qayta uriniladi."""
         url = f"{API_BASE_URL}/models/{model}:generateContent"
 
         def send() -> requests.Response:
+            self._throttle()
             # Ulanish uzilsa yoki javob kechiksa, yana 2 marta urinib ko'ramiz
             for attempt in range(3):
                 try:

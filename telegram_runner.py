@@ -312,6 +312,8 @@ HELP_TEXT = (
     "/checknow — komentlarni hoziroq tekshirish\n"
     "/direkt — komentdan keyingi direkt xabar rejimi (tasdiq / avto / off)\n"
     "/yozishma — direktga yozganlarga javob rejimi (tasdiq / avto / off)\n"
+    "/eslab <ma'lumot> — mahsulot, narx yoki boshqa ma'lumotni xotiraga saqlash\n"
+    "/xotira — xotiradagi yozuvlar, /unut <raqam> — o'chirish\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
     "/diag — Gemini va Instagram holatini tekshirish\n\n"
     "Yoki oddiy tilda savolingizni yozing."
@@ -398,6 +400,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if token_match:
         context.args = [token_match.group(0)]
         await igtoken_cmd.__wrapped__(update, context)
+        return
+
+    # "Eslab qol: ..." deb yozilsa, xotiraga saqlaymiz
+    m = re.match(r"\s*(eslab qol|eslab qo['’`]?y|yodda tut|запомни)\s*[:,\-–—]?\s*(.+)", user_text,
+                 re.IGNORECASE | re.DOTALL)
+    if m:
+        await remember(update, m.group(2))
         return
 
     # Ruxsat so'ralgan komentga egasi Reply qilib o'z javobini yozdi
@@ -703,11 +712,55 @@ async def send_approval(bot, owner, item):
     responder.set_message_id(item["cid"], msg.message_id)
 
 
+# ---------- xotira ----------
+
+def memory_text():
+    mem = catalog.get_memory()
+    if not mem:
+        return ("Xotira bo'sh.\nQo'shish: /eslab Rolikli krossovka — 389 000 so'm, 31-38 o'lcham\n"
+                "yoki shunchaki yozing: eslab qol: ...")
+    return ("🧠 Jarvis xotirasi:\n" + "\n".join(f"{i}. {m}" for i, m in enumerate(mem, 1))
+            + "\n\nQo'shish: /eslab <ma'lumot>\nO'chirish: /unut <raqam>")
+
+
+async def remember(update, text):
+    try:
+        mem = catalog.add_memory(text)
+    except ValueError:
+        await update.message.reply_text("Nimani eslab qolay? Masalan: /eslab Rolikli krossovka — 389 000 so'm")
+        return
+    await update.message.reply_text(
+        f"🧠 Eslab qoldim ({len(mem)} ta yozuv). Komment va direkt javoblarida shundan foydalanaman.\nKo'rish: /xotira")
+
+
+@owner_only
+async def eslab_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remember(update, " ".join(context.args or []))
+
+
+@owner_only
+async def xotira_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_long(context.bot, update.effective_chat.id, memory_text())
+
+
+@owner_only
+async def unut_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Qaysi yozuvni? Masalan: /unut 2 (raqamlarni /xotira ko'rsatadi)")
+        return
+    try:
+        removed = catalog.delete_memory(int(context.args[0]) - 1)
+    except ValueError as e:
+        await update.message.reply_text(str(e))
+        return
+    await update.message.reply_text(f"O'chirildi: {removed}")
+
+
 # ---------- direkt yozishmalar ----------
 
 CHAT_MODE_TEXT = {
     "approve": "TASDIQ — Jarvis javob tayyorlaydi, siz tasdiqlagach yuboriladi",
-    "auto": "AVTO — javob ma'lumotlarda aniq bo'lsa darhol yuboriladi, shubhalisi sizga tasdiqqa",
+    "auto": "AVTO — Jarvis o'zi javob beradi va sotuvga olib boradi; buyurtma yoki muammo bo'lsa sizni xabardor qiladi",
     "off": "O'CHIQ — direktga yozganlarga javob berilmaydi",
 }
 
@@ -747,8 +800,11 @@ async def send_unsent_chat_approvals(bot, owner):
 
 async def notify_chat_event(bot, owner, ev):
     if ev["type"] == "chat_sent":
-        text = f"💬 Direktda javob berildi: @{ev.get('username')}\nMijoz: «{ev['message']}»\n→ {ev['text']}"
-        await bot.send_message(chat_id=owner, text=text, disable_notification=True, disable_web_page_preview=True)
+        text = (f"💬 Direktda javob berildi: @{ev.get('username')}\n"
+                + (f"{'' if ev['reason'].startswith('🛒') else '⚠️ '}{ev['reason']}\n" if ev.get("reason") else "")
+                + f"Mijoz: «{ev['message']}»\n→ {ev['text']}")
+        await bot.send_message(chat_id=owner, text=text, disable_notification=not ev.get("reason"),
+                               disable_web_page_preview=True)
     elif ev["type"] == "chat_error":
         await bot.send_message(chat_id=owner, text=f"⚠️ @{ev.get('username')} ga direkt javobi yuborilmadi: {ev.get('error')}")
 
@@ -892,7 +948,7 @@ async def direkt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         responder.set_dm_mode(mode)
     texts = {
         "approve": "TASDIQ — narx so'ragan mijozga direkt xabar tayyorlanadi, siz tasdiqlagach yuboriladi",
-        "auto": "AVTO — javob postdagi ma'lumotdan aniq topilsa darhol yuboriladi, aks holda sizga tasdiqqa",
+        "auto": "AVTO — direkt xabar darhol yuboriladi; narx aniq bo'lmasa, mijozdan aniqlashtiruvchi xabar ketadi",
         "off": "O'CHIQ — direktga yozilmaydi",
     }
     n = len(catalog.load()["posts"])
@@ -986,7 +1042,8 @@ async def notify_event(bot, owner, ev):
         return  # send_unsent_approvals() yuboradi
     elif ev["type"] == "dm_sent":
         text = (f"📩 Direktga yuborildi: @{ev.get('username')}\n"
-                f"Komment: «{ev.get('comment', '')}» · post {ev.get('post_time', '')}\n\n{ev['text']}")
+                + (f"⚠️ {ev['reason']}\n" if ev.get("reason") else "")
+                + f"Komment: «{ev.get('comment', '')}» · post {ev.get('post_time', '')}\n\n{ev['text']}")
     elif ev["type"] == "dm_error":
         text = f"⚠️ @{ev.get('username')} ga direkt yuborilmadi: {ev.get('error')}"
         await bot.send_message(chat_id=owner, text=text, disable_web_page_preview=True)
@@ -1102,6 +1159,7 @@ async def post_init(app):
             BotCommand("pending", "Ruxsat kutayotgan komentlar"),
             BotCommand("direkt", "Komentdan keyingi direkt"),
             BotCommand("yozishma", "Direktga yozganlarga javob"),
+            BotCommand("xotira", "Jarvis xotirasi (mahsulot va narxlar)"),
             BotCommand("checknow", "Komentlarni hozir tekshirish"),
             BotCommand("script", "Video ssenariysi"),
             BotCommand("hook", "Hook variantlari"),
@@ -1171,6 +1229,9 @@ def build_app(token):
     app.add_handler(CommandHandler("direkt", direkt_cmd))
     app.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^dc\|"))
     app.add_handler(CommandHandler("yozishma", yozishma_cmd))
+    app.add_handler(CommandHandler("eslab", eslab_cmd))
+    app.add_handler(CommandHandler("xotira", xotira_cmd))
+    app.add_handler(CommandHandler("unut", unut_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app
