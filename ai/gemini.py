@@ -29,8 +29,9 @@ REQUEST_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT", "90") or 90)
 # Navbat bilan sinaladigan modellar. Google ba'zi modellarni yangi kalitlar uchun yopadi (404)
 # yoki ular vaqtincha sekinlashadi, shuning uchun bittasiga bog'lanib qolmaymiz.
 MODEL_CANDIDATES = (
-    "gemini-2.5-flash",
+    "gemini-3.5-flash",
     "gemini-3-flash-preview",
+    "gemini-2.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
     "gemini-flash-lite-latest",
