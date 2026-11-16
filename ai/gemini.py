@@ -87,21 +87,94 @@ class GeminiProvider(AIProvider):
             response = send()
         return response
 
-    def _pick_available_model(self) -> str:
-        """Kalit uchun mavjud modellardan mos bittasini tanlaydi."""
+    def _available_models(self) -> list:
         response = requests.get(
             f"{API_BASE_URL}/models",
             headers=self._headers(),
             params={"pageSize": 200},
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            timeout=30,
         )
         response.raise_for_status()
-
-        names = [
+        return [
             m["name"].split("/", 1)[1]
             for m in response.json().get("models", [])
             if "generateContent" in m.get("supportedGenerationMethods", [])
         ]
+
+    def _alternate_model(self, exclude: str):
+        """Hozirgi model ishlamasa, o'rniga boshqa barqaror flash modelni tanlaydi."""
+        try:
+            names = self._available_models()
+        except (requests.exceptions.RequestException, ValueError):
+            return None
+        flash = [n for n in names if "flash" in n and n != exclude
+                 and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
+                 and "preview" not in n and "exp" not in n and "latest" not in n]
+        full = [n for n in flash if "lite" not in n]
+        pool = full or flash
+        return sorted(pool)[-1] if pool else None
+
+    def _generate_with_fallback(self, payload: dict) -> requests.Response:
+        """Asosiy model bilan urinadi; band/uzilish bo'lsa, boshqa modelga o'tadi."""
+        model = self._resolved_model or self.model
+        try:
+            response = self._post_generate(model, payload)
+            if response.status_code == 404 and not self._resolved_model:
+                model = self._pick_available_model()
+                self._resolved_model = model
+                logger.warning(f"'{self.model}' topilmadi. '{model}' ishlatilmoqda.")
+                response = self._post_generate(model, payload)
+            if response.status_code not in RETRY_STATUS_CODES:
+                return response
+            failure = None
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            failure = e
+            response = None
+
+        alt = self._alternate_model(exclude=model)
+        if not alt:
+            if failure:
+                raise failure
+            return response
+        logger.warning(f"'{model}' ishlamadi, '{alt}' modeliga o'tilmoqda.")
+        alt_response = self._post_generate(alt, payload)
+        if alt_response.status_code == 200:
+            self._resolved_model = alt
+        return alt_response
+
+    def diagnose(self) -> dict:
+        """Gemini'ni kichik so'rov bilan tekshiradi (/diag uchun). Kalitni hech qayerga chiqarmaydi."""
+        info = {"model": self._resolved_model or self.model, "timeout": REQUEST_TIMEOUT_SECONDS}
+        payload = {"contents": [{"role": "user", "parts": [{"text": "Faqat OK deb javob ber."}]}]}
+        start = time.time()
+        try:
+            r = requests.post(
+                f"{API_BASE_URL}/models/{info['model']}:generateContent",
+                json=payload, headers=self._headers(), timeout=60,
+            )
+            info["status"] = r.status_code
+            try:
+                body = r.json()
+            except ValueError:
+                body = {}
+            if r.status_code != 200:
+                info["error"] = str((body.get("error") or {}).get("message", ""))[:300]
+        except requests.exceptions.RequestException as e:
+            info["status"] = type(e).__name__
+        info["seconds"] = round(time.time() - start, 1)
+        try:
+            names = self._available_models()
+            info["flash_models"] = [n for n in names if "flash" in n][:10]
+            info["model_exists"] = info["model"] in names
+        except requests.exceptions.HTTPError as e:
+            info["models_error"] = e.response.status_code if e.response is not None else "?"
+        except requests.exceptions.RequestException as e:
+            info["models_error"] = type(e).__name__
+        return info
+
+    def _pick_available_model(self) -> str:
+        """Kalit uchun mavjud modellardan mos bittasini tanlaydi."""
+        names = self._available_models()
 
         if PREFERRED_ALIAS in names:
             return PREFERRED_ALIAS
@@ -124,18 +197,7 @@ class GeminiProvider(AIProvider):
         }
 
         try:
-            model = self._resolved_model or self.model
-            response = self._post_generate(model, payload)
-
-            if response.status_code == 404 and not self._resolved_model:
-                model = self._pick_available_model()
-                self._resolved_model = model
-                logger.warning(
-                    f"'{self.model}' topilmadi. '{model}' ishlatilmoqda. "
-                    f"Doimiy qilish uchun Railway'da GEMINI_MODEL={model} qiling."
-                )
-                response = self._post_generate(model, payload)
-
+            response = self._generate_with_fallback(payload)
             response.raise_for_status()
             data = response.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -175,13 +237,7 @@ class GeminiProvider(AIProvider):
             },
         }
         try:
-            model = self._resolved_model or self.model
-            response = self._post_generate(model, payload)
-            if response.status_code == 404 and not self._resolved_model:
-                model = self._pick_available_model()
-                self._resolved_model = model
-                logger.warning(f"'{self.model}' topilmadi. '{model}' ishlatilmoqda.")
-                response = self._post_generate(model, payload)
+            response = self._generate_with_fallback(payload)
         except requests.exceptions.RequestException as e:
             raise GeminiError(f"Gemini bilan bog'lanib bo'lmadi ({type(e).__name__})")
         except RuntimeError as e:

@@ -275,7 +275,8 @@ HELP_TEXT = (
     "/stories — faol storylar statistikasi\n"
     "/autoreply — komentlarga javob tizimi holati va rejimi\n"
     "/pending — ruxsat kutayotgan komentlar\n"
-    "/igtoken <token> — yangi Instagram tokenni ulash\n\n"
+    "/igtoken <token> — yangi Instagram tokenni ulash\n"
+    "/diag — Gemini va Instagram holatini tekshirish\n\n"
     "Yoki oddiy tilda savolingizni yozing."
 )
 
@@ -496,6 +497,41 @@ async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=chat_id,
         text=f"✅ Instagram ulandi: @{username}\nToken saqlandi va o'zi yangilanib turadi. Endi /insta yozib ko'ring.",
     )
+
+
+@owner_only
+async def diag_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gemini va Instagram holatini tekshiradi."""
+    await update.message.reply_text("⏳ Tekshirilmoqda (1 daqiqagacha)...")
+    lines = ["🔧 Diagnostika"]
+    ai = jarvis.ai_provider
+    if hasattr(ai, "diagnose"):
+        d = await asyncio.to_thread(ai.diagnose)
+        ok = d.get("status") == 200
+        lines.append(f"\nGemini: {'✅ ishlayapti' if ok else '❌ xato'}")
+        lines.append(f"Model: {d.get('model')} | javob: {d.get('status')} | {d.get('seconds')} s")
+        if d.get("error"):
+            lines.append(f"Google xabari: {d['error']}")
+        if "model_exists" in d:
+            lines.append("Model kalitda mavjud: " + ("ha" if d["model_exists"] else "YO'Q"))
+        if d.get("flash_models"):
+            lines.append("Mavjud flash modellar: " + ", ".join(d["flash_models"]))
+        if d.get("models_error"):
+            lines.append(f"Modellar ro'yxati olinmadi: {d['models_error']}")
+    else:
+        lines.append(f"\nAI provider: {type(ai).__name__} (Gemini emas)")
+
+    if ig.is_configured():
+        try:
+            p = await asyncio.to_thread(ig.get_profile)
+            lines.append(f"\nInstagram: ✅ @{p.get('username')} ({p.get('followers_count')} obunachi)")
+        except InstagramError as e:
+            lines.append(f"\nInstagram: ❌ {e}")
+    else:
+        lines.append("\nInstagram: ulanmagan")
+    if responder:
+        lines.append(f"Komentlarga javob rejimi: {responder.mode}")
+    await send_long(context.bot, update.effective_chat.id, "\n".join(lines))
 
 
 # ---------- komentlarga javob ----------
@@ -808,6 +844,7 @@ def build_app(token):
     app.add_handler(CommandHandler("autoreply", autoreply_cmd))
     app.add_handler(CommandHandler("pending", pending_cmd))
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
+    app.add_handler(CommandHandler("diag", diag_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
