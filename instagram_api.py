@@ -400,3 +400,30 @@ def reply_to_comment(comment_id, message):
 
 def hide_comment(comment_id, hide=True):
     return _request("POST", str(comment_id), data={"hide": "true" if hide else "false"})
+
+
+# ---------- direkt (private reply) ----------
+
+_ig_user_id = {"value": None}
+
+
+def _my_ig_id():
+    if not _ig_user_id["value"]:
+        _ig_user_id["value"] = str(get_profile().get("user_id") or "me")
+    return _ig_user_id["value"]
+
+
+def send_private_reply(comment_id, text):
+    """
+    Komment yozgan odamga direktga xabar yuboradi (Instagram "private reply").
+    Qoidalar: har bir kommentga bitta, komment yozilganidan keyin 7 kun ichida.
+    instagram_business_manage_messages ruxsati kerak.
+    """
+    return _request(
+        "POST",
+        f"{_my_ig_id()}/messages",
+        data={
+            "recipient": json.dumps({"comment_id": str(comment_id)}),
+            "message": json.dumps({"text": text}, ensure_ascii=False),
+        },
+    )

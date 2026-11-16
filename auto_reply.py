@@ -26,6 +26,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
+import catalog
 import config
 import instagram_api as ig
 from instagram_api import InstagramError
@@ -45,6 +46,8 @@ CATEGORY_NAMES = {
     "unknown": "Aniqlanmadi",
 }
 MODES = ("on", "off", "test")
+DM_MODES = ("approve", "auto", "off")
+DM_CATEGORIES = {"price", "question"}
 MAX_REPLY_LEN = 200
 MAX_MANUAL_REPLY_LEN = 2000
 MAX_ATTEMPTS = 3
@@ -228,6 +231,8 @@ class State:
         self.done = {}
         self.attempts = {}
         self.pending = {}
+        self.dm_pending = {}
+        self.dm_mode = None
         self.test_seen = {}
         self.daily = {"date": "", "count": 0}
         self.mode = None
@@ -244,6 +249,8 @@ class State:
             self.done = dict(raw.get("done", {}))
             self.attempts = dict(raw.get("attempts", {}))
             self.pending = dict(raw.get("pending", {}))
+            self.dm_pending = dict(raw.get("dm_pending", {}))
+            self.dm_mode = raw.get("dm_mode") if raw.get("dm_mode") in DM_MODES else None
             self.test_seen = dict(raw.get("test_seen", {}))
             self.daily = dict(raw.get("daily", self.daily))
             self.mode = raw.get("mode") if raw.get("mode") in MODES else None
@@ -263,6 +270,8 @@ class State:
                 os.makedirs(folder, exist_ok=True)
             data = {
                 "mode": self.mode,
+                "dm_mode": self.dm_mode,
+                "dm_pending": self.dm_pending,
                 "done": dict(list(self.done.items())[-5000:]),
                 "attempts": self.attempts,
                 "pending": self.pending,
@@ -307,6 +316,9 @@ class CommentResponder:
         if self.state.mode is None:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
+        if self.state.dm_mode is None:
+            env_dm = os.environ.get("DM_MODE", "approve").strip().lower()
+            self.state.dm_mode = env_dm if env_dm in DM_MODES else "approve"
 
     # ----- rejim -----
 
@@ -331,6 +343,8 @@ class CommentResponder:
                 "sent_today": self.state.today_count(),
                 "limit_day": _env_int("MAX_PER_DAY", 40),
                 "pending": len(self.state.pending),
+                "dm_mode": self.state.dm_mode,
+                "dm_pending": len(self.state.dm_pending),
                 "last_run": self.last_run,
             }
 
@@ -341,7 +355,11 @@ class CommentResponder:
             f"<post>{(post_caption or '')[:300]}</post>\n"
             f"<komment>{comment_text[:500]}</komment>"
         )
-        return self.ai.generate_json(SYSTEM_PROMPT, message, temperature=0.9)
+        system = SYSTEM_PROMPT
+        if self.dm_mode != "off":
+            system += ("\n\nDIREKT YOQILGAN: price va question javoblarida mijozga 'batafsil ma'lumot va narxni "
+                       "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt. 'Direktga yozing' dema.")
+        return self.ai.generate_json(system, message, temperature=0.9)
 
     # ----- bitta tekshiruv sikli -----
 
@@ -457,7 +475,8 @@ class CommentResponder:
                         self.state.test_seen[cid] = int(time.time())
                         self.state.save()
                     stats["test"] += 1
-                    events.append({"type": "test", **info})
+                    dm = self._plan_dm(post, c, verdict, preview=True)
+                    events.append({"type": "test", **info, "dm": dm})
                     processed += 1
                     continue
 
@@ -484,6 +503,10 @@ class CommentResponder:
                 stats["sent"] += 1
                 log.info("[SENT] %s | comment=%s", verdict["category"], cid)
                 events.append({"type": "sent", **info})
+                dm = self._plan_dm(post, c, verdict)
+                if dm:
+                    events.append(dm)
+                    stats["dm"] = stats.get("dm", 0) + 1
                 processed += 1
                 time.sleep(random.randint(delay_min, delay_max))
 
@@ -498,6 +521,101 @@ class CommentResponder:
             stats["known"], stats["already"] + stats["mine"], stats["sent"], stats["approval"],
             stats["test"], stats["skipped"], stats["ai_errors"] + stats["send_errors"],
         )
+
+    # ----- direkt (private reply) -----
+
+    @property
+    def dm_mode(self):
+        return self.state.dm_mode
+
+    def set_dm_mode(self, mode):
+        if mode not in DM_MODES:
+            raise ValueError(mode)
+        with self.lock:
+            self.state.dm_mode = mode
+            self.state.save()
+
+    def _plan_dm(self, post, comment, verdict, preview=False):
+        """
+        Komentga javobdan keyin direkt xabarni tayyorlaydi.
+        auto: darhol yuboradi; approve: egasining tasdig'iga qo'yadi; preview: faqat ko'rsatadi.
+        Qaytaradi: voqea (dict) yoki None.
+        """
+        if self.dm_mode == "off" or verdict["category"] not in DM_CATEGORIES:
+            return None
+        text = (comment.get("text") or "").strip()
+        product, source = catalog.match_product(post, text, self.ai)
+        if verdict["category"] == "question" and product is None:
+            return None  # oddiy savol, mahsulot aniqlanmadi: direkt shart emas
+        dm_text, how = catalog.compose_dm(self.ai, product, text)
+        cid = comment.get("id")
+        info = {
+            "cid": cid, "username": comment.get("username") or "", "comment": text[:300],
+            "product": product["name"] if product else None, "source": source,
+            "text": dm_text, "how": how, "permalink": post.get("permalink") or "",
+        }
+        if preview:
+            return info
+        if self.dm_mode == "auto":
+            ok, err = self._send_dm(cid, dm_text)
+            return {"type": "dm_sent" if ok else "dm_error", **info, "error": err}
+        with self.lock:
+            self.state.dm_pending[cid] = {**info, "created": int(time.time()), "msg_id": None}
+            self.state.save()
+        return {"type": "dm_approval", **info}
+
+    def _send_dm(self, cid, text):
+        try:
+            ig.send_private_reply(cid, text)
+            log.info("[DM] comment=%s", cid)
+            return True, None
+        except InstagramError as e:
+            if e.fatal:
+                raise
+            msg = str(e)
+            if e.code in (10, 200, 3) or "permission" in msg.lower():
+                msg = ("Direktga yuborishga ruxsat yo'q. Token instagram_business_manage_messages "
+                       "ruxsati bilan olinishi kerak.")
+            log.warning("Direkt yuborilmadi (%s), comment=%s", e, cid)
+            return False, msg
+
+    def get_dm_pending(self):
+        with self.lock:
+            return [{"cid": cid, **item} for cid, item in self.state.dm_pending.items()]
+
+    def set_dm_message_id(self, cid, msg_id):
+        with self.lock:
+            if cid in self.state.dm_pending:
+                self.state.dm_pending[cid]["msg_id"] = msg_id
+                self.state.save()
+
+    def find_dm_by_message(self, msg_id):
+        with self.lock:
+            for cid, item in self.state.dm_pending.items():
+                if item.get("msg_id") == msg_id:
+                    return cid
+        return None
+
+    def approve_dm(self, cid, text=None):
+        with self.lock:
+            item = self.state.dm_pending.get(cid)
+        if item is None:
+            return "Bu direkt allaqachon ko'rib chiqilgan."
+        body = (text or "").strip()[:1000] or item.get("text", "")
+        ok, err = self._send_dm(cid, body)
+        if not ok:
+            return f"❌ Yuborilmadi: {err}"
+        with self.lock:
+            self.state.dm_pending.pop(cid, None)
+            self.state.save()
+        return "📩 Direktga yuborildi."
+
+    def reject_dm(self, cid):
+        with self.lock:
+            if self.state.dm_pending.pop(cid, None) is None:
+                return "Bu direkt allaqachon ko'rib chiqilgan."
+            self.state.save()
+        return "❌ Direkt yuborilmadi."
 
     # ----- egasining qarorlari -----
 

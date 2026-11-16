@@ -152,6 +152,16 @@ Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari)
 - Kirish faqat Telegram imzosi (initData) orqali va faqat bot egasi uchun.
 - Dizaynni brauzerda ko'rish (soxta ma'lumot bilan): `/app?demo=1`.
 
+### Mahsulot katalogi va direkt xabar
+
+- HUD → MAHSULOT: mahsulotlar (nomi, narxi, tavsifi, kalit so'zlari), do'kon ma'lumotlari
+  (manzil, telefon, yetkazib berish...), postlarni mahsulotga biriktirish.
+- Narx so'ragan komentga Jarvis ochiq javob yozadi va mijozning direktiga xabar tayyorlaydi
+  (Instagram "private reply": har kommentga bitta, 7 kun ichida).
+- Mahsulotni aniqlash: postga biriktirilgan → post matnidagi kalit so'z → komment matni → AI (ishonchi yuqori bo'lsa).
+- Direkt matnidagi har bir raqam katalog bilan tekshiriladi; to'qilgan narx bo'lsa, katalogdagi shablon yuboriladi.
+- Rejim: `/direkt tasdiq` (standart), `/direkt avto`, `/direkt off`. Token `instagram_business_manage_messages` ruxsatiga ega bo'lishi kerak.
+
 ### Komentlarga javob qanday ishlaydi
 
 - Har 10 daqiqada oxirgi postlardagi yangi komentlar tekshiriladi.
@@ -167,6 +177,7 @@ Har bir vazifaning bosqichlari jonli ko'rsatiladi (faqat umumiy bosqich nomlari)
 ```
 python -m tests.test_instagram
 python -m tests.test_webapp
+python -m tests.test_direkt
 ```
 
 ## 10. Future integrations (kelajakdagi rejalar)

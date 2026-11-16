@@ -137,12 +137,22 @@ textarea{resize:none;min-height:44px}
 .gauge i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--green),var(--cyan))}
 .muted{color:var(--dim);font-size:13px}
 /* nav */
-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);
   background:rgba(2,9,15,.94);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);backdrop-filter:blur(8px)}
-nav button{background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:11px;letter-spacing:.16em;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+nav button{background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:10.5px;letter-spacing:.1em;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
 nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6}
 nav button.on{color:var(--cyan);text-shadow:var(--glow)}
 nav button.on svg{filter:drop-shadow(0 0 5px var(--cyan))}
+.prod{border:1px solid var(--line);padding:10px;margin:8px 0;background:rgba(2,12,20,.6)}
+.prod .n{font-size:16px;font-weight:700;color:var(--text)}
+.prod .p{font-family:var(--mono);color:var(--green);font-size:14px;margin:2px 0}
+.prod .p s{color:var(--dim);margin-left:6px}
+.kw{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--cyan2);border:1px solid var(--line);padding:1px 6px;margin:3px 4px 0 0}
+.off{opacity:.45}
+label.f{display:block;font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;font-weight:700;margin:9px 0 4px}
+select{width:100%;background:rgba(2,12,20,.85);border:1px solid var(--line);color:var(--text);font-family:var(--ui);font-size:14px;padding:8px}
+.lp{border-bottom:1px dashed rgba(63,224,255,.12);padding:8px 0}
+.lp .c{font-size:13.5px;color:var(--text);margin:2px 0 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .view{display:none}.view.on{display:block;animation:in .3s ease}
 .lock{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;align-items:center;justify-content:center;text-align:center;padding:30px}
 .lock.show{display:flex}
@@ -254,8 +264,50 @@ a{color:var(--cyan)}
       <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
     </div>
     <div class="panel">
+      <div class="ptitle">Direkt xabarlar</div>
+      <div class="seg" id="dmSeg"><button data-m="approve">TASDIQ</button><button data-m="auto">AVTO</button><button data-m="off">O'CHIQ</button></div>
+      <div class="muted" id="dmText" style="margin-top:8px"></div>
+      <div id="dmPending" style="margin-top:6px"></div>
+    </div>
+    <div class="panel">
       <div class="ptitle">Ruxsat kutayotganlar <span id="pendCount">0</span></div>
       <div id="pending" class="muted">Yuklanmoqda...</div>
+    </div>
+  </section>
+  <!-- MAHSULOT -->
+  <section class="view" id="v-catalog">
+    <div class="panel">
+      <div class="ptitle">Mahsulotlar <span id="prodCount">0</span></div>
+      <div class="muted" style="margin-bottom:8px">Jarvis direktda faqat shu yerdagi narxni yozadi. Kalit so'zlar — mahsulot postlarda qanday atalishi (masalan: samokat, kick scooter, s10).</div>
+      <div id="prodList"></div>
+      <button class="btn" style="margin-top:8px" onclick="editProduct()">+ Yangi mahsulot</button>
+    </div>
+    <div class="panel" id="prodForm" style="display:none">
+      <div class="ptitle" id="prodFormTitle">Mahsulot</div>
+      <input type="hidden" id="pf-id">
+      <label class="f">Nomi *</label><input id="pf-name" placeholder="Bolalar elektr samokati S10">
+      <div class="row"><div style="flex:1"><label class="f">Narxi *</label><input id="pf-price" placeholder="1 250 000 so'm"></div>
+        <div style="flex:1"><label class="f">Eski narx</label><input id="pf-old" placeholder="1 450 000 so'm"></div></div>
+      <label class="f">Tavsif</label><textarea id="pf-desc" rows="3" placeholder="3-8 yosh, 3 tezlik, chiroqli g'ildiraklar, kafolat 6 oy"></textarea>
+      <label class="f">Kalit so'zlar (vergul bilan)</label><input id="pf-kw" placeholder="samokat, s10, kick">
+      <label class="f">Havola (ixtiyoriy)</label><input id="pf-link" placeholder="https://uzum.uz/...">
+      <label class="row" style="margin-top:10px;font-size:14px"><input type="checkbox" id="pf-active" style="width:auto" checked> Sotuvda bor</label>
+      <div class="row" style="margin-top:10px"><button class="btn green" onclick="saveProduct()">Saqlash</button><button class="btn red" onclick="$('#prodForm').style.display='none'">Bekor</button></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Postlar va mahsulotlar</div>
+      <div class="muted" style="margin-bottom:6px">Har post qaysi mahsulot haqida ekanini belgilang. Belgilanmasa, Jarvis kalit so'zlardan o'zi topadi.</div>
+      <div id="postLinks" class="muted">Yuklanmoqda...</div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Do'kon ma'lumotlari <span>direktga qo'shiladi</span></div>
+      <label class="f">Manzil / lokatsiya</label><input id="sh-address" placeholder="Toshkent, Chilonzor 9, Bolalar Dunyosi">
+      <label class="f">Telefon</label><input id="sh-phone" placeholder="+998 77 499 47 44">
+      <label class="f">Ish vaqti</label><input id="sh-hours" placeholder="Har kuni 09:00-21:00">
+      <label class="f">Yetkazib berish</label><input id="sh-delivery" placeholder="Toshkent bo'ylab bepul, viloyatlarga 1-3 kun">
+      <label class="f">Uzum Market</label><input id="sh-uzum" placeholder="https://uzum.uz/shop/...">
+      <label class="f">Qo'shimcha</label><input id="sh-extra" placeholder="Bo'lib to'lash mavjud">
+      <button class="btn" style="margin-top:10px" onclick="saveShop()">Saqlash</button>
     </div>
   </section>
 </main>
@@ -264,6 +316,7 @@ a{color:var(--cyan)}
   <button class="on" data-v="hud"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>HUD</button>
   <button data-v="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 16v-5M11 16V7M16 16v-8M21 16V4"/></svg>TAHLIL</button>
   <button data-v="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/></svg>KONTENT</button>
+  <button data-v="catalog"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>MAHSULOT</button>
   <button data-v="comments"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>KOMENT</button>
 </nav>
 
@@ -466,7 +519,7 @@ async function loadComments(){
   try{
     const r=await api('/api/comments');
     if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
-    const st=r.status; document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
+    const st=r.status; renderDm(st, r.dm_pending); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
     const lr=st.last_run; $('#modeText').textContent=MODE_TEXT[st.mode] + (lr ? `\nOxirgi tekshiruv ${lr.time}: ${lr.posts} post, ${lr.comments} komment, yangi ${lr.new}, yuborildi ${lr.sent}, ruxsatga ${lr.approval}.` : '');
     $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
     $('#pendCount').textContent=r.pending.length;
@@ -488,9 +541,73 @@ async function cmAct(cid, action){
   catch(e){ haptic('err'); alert(e.message) }
 }
 
+
+// ---------- DIREKT ----------
+const DM_TEXT={approve:'Narx so\'ragan mijozga direkt xabar tayyorlanadi, siz tasdiqlagach yuboriladi.',auto:'Direkt xabar darhol yuboriladi. Narx faqat katalogdan olinadi.',off:'Direktga yozilmaydi.'};
+document.querySelectorAll('#dmSeg button').forEach(b=>b.onclick=async()=>{
+  const m=b.dataset.m; if (m==='auto' && !confirm('Jarvis direktga o\'zi yozadi. Katalogdagi narxlar to\'g\'riligini tekshirdingizmi?')) return;
+  try{ await api('/api/dm/mode',{method:'POST',body:{mode:m}}); haptic('ok'); loadComments() }catch(e){ alert(e.message) } });
+function renderDm(st, items){
+  document.querySelectorAll('#dmSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.dm_mode));
+  $('#dmText').textContent=DM_TEXT[st.dm_mode]||'';
+  $('#dmPending').innerHTML = (items||[]).map(d=>`<div class="cm" id="dm-${d.cid}">
+    <span class="tag" style="border-color:var(--green);color:var(--green)">${esc(d.product||'mahsulot aniqlanmadi')}</span> <span class="muted">${esc(d.source||'')}</span>
+    <div class="who">@${esc(d.username)}</div><div class="txt">«${esc(d.comment)}»</div>
+    <textarea id="dmt-${d.cid}" rows="6" style="margin-top:8px">${esc(d.text)}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn sm green" onclick="dmAct('${d.cid}','send')">Direktga yuborish</button><button class="btn sm red" onclick="dmAct('${d.cid}','skip')">Yubormaslik</button></div></div>`).join('');
+}
+async function dmAct(cid, action){
+  const text=($('#dmt-'+cid)||{}).value||'';
+  try{ const r=await api('/api/dm/'+cid,{method:'POST',body:{action,text}}); haptic('ok'); $('#dm-'+cid).innerHTML=`<div class="muted">${esc(r.message)}</div>`; setTimeout(loadComments,1500) }
+  catch(e){ haptic('err'); alert(e.message) }
+}
+
+// ---------- MAHSULOT ----------
+let CAT={products:[],shop:{},post_links:{},posts:[]};
+async function loadCatalog(){
+  try{ CAT=await api('/api/catalog'); renderCatalog() }catch(e){ $('#prodList').innerHTML=`<div class="err">${esc(e.message)}</div>` }
+}
+function renderCatalog(){
+  const ps=CAT.products||[]; $('#prodCount').textContent=ps.length;
+  $('#prodList').innerHTML = ps.length ? ps.map(p=>`<div class="prod ${p.active?'':'off'}">
+    <div class="n">${esc(p.name)}${p.active?'':' (sotuvda yo\'q)'}</div>
+    <div class="p">${esc(p.price)}${p.old_price?`<s>${esc(p.old_price)}</s>`:''}</div>
+    ${p.description?`<div class="muted">${esc(p.description)}</div>`:''}
+    <div>${(p.keywords||[]).map(k=>`<span class="kw">${esc(k)}</span>`).join('')}</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" onclick="editProduct('${p.id}')">Tahrirlash</button><button class="btn sm red" onclick="delProduct('${p.id}')">O'chirish</button></div></div>`).join('')
+    : '<div class="muted">Hali mahsulot yo\'q. Birinchisini qo\'shing.</div>';
+  const sh=CAT.shop||{}; ['address','phone','hours','delivery','uzum','extra'].forEach(k=>{ const el=$('#sh-'+k); if(el && document.activeElement!==el) el.value=sh[k]||'' });
+  const opts=pid=>'<option value="">— avtomatik —</option>'+ps.map(p=>`<option value="${p.id}" ${pid===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  const name=id=>(ps.find(p=>p.id===id)||{}).name;
+  $('#postLinks').classList.remove('muted');
+  $('#postLinks').innerHTML = CAT.posts_error ? `<div class="err">${esc(CAT.posts_error)}</div>` : (CAT.posts||[]).map(p=>`<div class="lp">
+    <div class="mono" style="font-size:11px;color:var(--dim)">${p.kind} · ${p.date} ${p.auto&&!p.linked?`· <span style="color:var(--green)">avto: ${esc(name(p.auto))}</span>`:''}</div>
+    <div class="c">${esc(p.caption||'(caption yo\'q)')}</div>
+    <select onchange="linkPost('${p.id}',this.value)">${opts(p.linked)}</select></div>`).join('') || '<div class="muted">Postlar topilmadi.</div>';
+}
+function editProduct(id){
+  const p=(CAT.products||[]).find(x=>x.id===id)||{active:true};
+  $('#prodFormTitle').textContent=id?'Tahrirlash':'Yangi mahsulot';
+  $('#pf-id').value=p.id||''; $('#pf-name').value=p.name||''; $('#pf-price').value=p.price||''; $('#pf-old').value=p.old_price||'';
+  $('#pf-desc').value=p.description||''; $('#pf-kw').value=(p.keywords||[]).join(', '); $('#pf-link').value=p.link||''; $('#pf-active').checked=p.active!==false;
+  $('#prodForm').style.display='block'; $('#prodForm').scrollIntoView({behavior:'smooth'}); haptic();
+}
+async function saveProduct(){
+  const body={id:$('#pf-id').value||undefined,name:$('#pf-name').value,price:$('#pf-price').value,old_price:$('#pf-old').value,
+    description:$('#pf-desc').value,keywords:$('#pf-kw').value,link:$('#pf-link').value,active:$('#pf-active').checked};
+  try{ await api('/api/catalog/product',{method:'POST',body}); haptic('ok'); $('#prodForm').style.display='none'; loadCatalog() }catch(e){ haptic('err'); alert(e.message) }
+}
+async function delProduct(id){ if(!confirm('Mahsulot o\'chirilsinmi?')) return;
+  try{ await api('/api/catalog/product/'+id,{method:'DELETE'}); haptic('ok'); loadCatalog() }catch(e){ alert(e.message) } }
+async function linkPost(mid,pid){ try{ await api('/api/catalog/link',{method:'POST',body:{media_id:mid,product_id:pid||null}}); haptic('ok'); loadCatalog() }catch(e){ alert(e.message) } }
+async function saveShop(){
+  const body={}; ['address','phone','hours','delivery','uzum','extra'].forEach(k=>body[k]=$('#sh-'+k).value);
+  try{ await api('/api/catalog/shop',{method:'POST',body}); haptic('ok'); alert('Saqlandi') }catch(e){ alert(e.message) }
+}
+
 // ---------- navigatsiya ----------
 function go(v){ if(!state.busy) $('#proc').classList.remove('show'); document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
-  if (v==='comments') loadComments(); window.scrollTo({top:0,behavior:'smooth'}) }
+  if (v==='comments') loadComments(); if (v==='catalog') loadCatalog(); window.scrollTo({top:0,behavior:'smooth'}) }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
 
 // ---------- demo rejim (faqat dizaynni ko'rish uchun) ----------
@@ -502,9 +619,14 @@ function demoApi(path, opts){
     analysis:'1. UMUMIY HOLAT\nReels akkauntning asosiy dvigateli: o\'rtacha 20 511 ko\'rish, karuseldan 2.8 barobar ko\'p.\n\n2. NIMA ISHLAYAPTI\n- Bola reaksiyasi bilan boshlangan hooklar ER 6.1% bergan.\n- Kechqurun 17-22 da joylangan postlar o\'rtacha 21 000 ko\'rish olgan.\n\n6. KEYINGI 7 KUN UCHUN HARAKATLAR\n1. Haftada 4 ta Reels, hammasi 19:00-21:00 orasida.\n2. Birinchi 2 soniyada bolaning yuzi va mahsulot birga ko\'rinsin.'};
   if (path==='/api/status') return Promise.resolve({uptime:15400,ai:{provider:'Gemini',model:'gemini-2.5-flash'},autoreply:{mode:'test',sent_today:3,limit_day:40,pending:2},
     instagram:{connected:true,username:'bolalar_dunyosi.uzb',followers:104191,media_count:1834,change:{'7':412},account:{reach:182400,views:640300,accounts_engaged:9100,total_interactions:21400,profile_links_taps:312}},report});
-  if (path==='/api/comments') return Promise.resolve({enabled:true,status:{mode:'test',sent_today:3,limit_day:40,pending:2},pending:[
+  if (path==='/api/comments') return Promise.resolve({enabled:true,status:{mode:'on',dm_mode:'approve',sent_today:3,limit_day:40,pending:2},
+    dm_pending:[{cid:'9',username:'ona_1',comment:'Narxi qancha?',product:'Bolalar elektr samokati S10',source:'post matni',text:'Assalomu alaykum! Bolalar elektr samokati S10 bilan qiziqqaningiz uchun rahmat 😊\n\nNarxi: 1 250 000 so\'m\n📍 Manzil: Toshkent, Chilonzor 9\n📞 Buyurtma: +998 77 499 47 44'}],pending:[
     {cid:'1',username:'rival_shop',text:'Bizda arzonroq, profilga kiring',category_name:'Raqobatchi',reason:'Raqobatchi komment',reply:'Narx emas, kafolat muhim. Tanlov sizda.'},
     {cid:'2',username:'troll_22',text:'Bu nima o\'zi, ahmoqona narsa',category_name:'Salbiy / haqorat',reason:'Komentda so\'kinish yoki haqorat bor',reply:''}]});
+  if (path==='/api/catalog') return Promise.resolve({shop:{address:'Toshkent, Chilonzor 9',phone:'+998 77 499 47 44',delivery:'Toshkent bo\'ylab bepul'},post_links:{},
+    products:[{id:'a1',name:'Bolalar elektr samokati S10',price:'1 250 000 so\'m',old_price:'1 450 000 so\'m',description:'3-8 yosh, 3 tezlik, chiroqli g\'ildiraklar',keywords:['samokat','s10'],active:true},
+      {id:'b2',name:'Rolikli krossovka',price:'389 000 so\'m',description:'31-38 o\'lcham',keywords:['rolik','krossovka'],active:true}],
+    posts:[{id:'m1',kind:'Reels',date:'15.11',caption:'Bolangiz bu samokatni ko\'rsa uyda qolmaydi',auto:'a1'},{id:'m2',kind:'Reels',date:'14.11',caption:'Narx qiziqmi?',auto:null}]});
   if (path==='/api/stories') return Promise.resolve({stories:[{time:'10:12',views:612,reach:540},{time:'14:40',views:488,reach:430},{time:'19:05',views:701,reach:650}]});
   if (path.startsWith('/api/comments/')) return Promise.resolve({message:'✅ Bajarildi (demo)',status:{mode:opts.body.mode||'test',sent_today:3,limit_day:40,pending:1}});
   const kinds={'/api/insta':[['received','So\'rov qabul qilindi'],['connect','Instagram\'ga ulanish'],['collect','Postlar, statistika va komentlar yig\'ilmoqda'],['metrics','Ko\'rsatkichlar hisoblanmoqda'],['analyze','Jarvis ma\'lumotlarni tahlil qilmoqda'],['prepare','Hisobot tayyorlanmoqda']],

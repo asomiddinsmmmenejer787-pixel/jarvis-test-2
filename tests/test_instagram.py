@@ -8,6 +8,7 @@ Ishga tushirish:
     python -m tests.test_instagram
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -52,6 +53,7 @@ class FakeInstagram:
         self.calls = []
         self.replies = []
         self.hidden = []
+        self.dms = []
         self.token_valid = True
         self.posts = [
             {"id": "m1", "caption": "Bolangiz bu samokatni ko'rsa, uyda qolmaydi\nDirektga yozing #samokat",
@@ -91,6 +93,13 @@ class FakeInstagram:
             return self.error(190, "Error validating access token", 400)
 
         if method == "POST":
+            if path.endswith("/messages"):
+                rec = json.loads(data["recipient"])
+                msg = json.loads(data["message"])
+                if getattr(self, "dm_forbidden", False):
+                    return self.error(10, "(#10) Application does not have permission for this action", 403)
+                self.dms.append((rec["comment_id"], msg["text"]))
+                return FakeResponse({"recipient_id": "u1", "message_id": "mid"})
             if path.endswith("/replies"):
                 self.replies.append((path.split("/")[0], data["message"]))
                 return FakeResponse({"id": "r" + str(len(self.replies))})

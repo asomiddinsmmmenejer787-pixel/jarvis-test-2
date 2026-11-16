@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
 import analytics
+import catalog
 import instagram_api as ig
 import webapp
 from auto_reply import CATEGORY_NAMES, CommentResponder
@@ -304,6 +305,7 @@ HELP_TEXT = (
     "/autoreply — komentlarga javob tizimi holati va rejimi\n"
     "/pending — ruxsat kutayotgan komentlar\n"
     "/checknow — komentlarni hoziroq tekshirish\n"
+    "/direkt — direkt xabar rejimi (tasdiq / avto / off)\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
     "/diag — Gemini va Instagram holatini tekshirish\n\n"
     "Yoki oddiy tilda savolingizni yozing."
@@ -395,6 +397,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ruxsat so'ralgan komentga egasi Reply qilib o'z javobini yozdi
     replied = update.message.reply_to_message
     if responder and replied is not None:
+        dm_cid = responder.find_dm_by_message(replied.message_id)
+        if dm_cid:
+            try:
+                result = await asyncio.to_thread(responder.approve_dm, dm_cid, user_text)
+            except InstagramError as e:
+                result = ig_error_text(e)
+            await update.message.reply_text(result)
+            return
         cid = responder.find_by_message(replied.message_id)
         if cid:
             try:
@@ -679,6 +689,30 @@ async def send_approval(bot, owner, item):
     responder.set_message_id(item["cid"], msg.message_id)
 
 
+def dm_approval_text(item):
+    lines = [
+        "📩 Direkt xabar tayyor, tasdiqlaysizmi?",
+        f"Mijoz: @{item.get('username', '?')}",
+        f"Komment: «{item.get('comment', '')}»",
+        f"Mahsulot: {item.get('product') or 'aniqlanmadi'} ({item.get('source', '')})",
+    ]
+    if item.get("permalink"):
+        lines.append(f"Post: {item['permalink']}")
+    lines.append(f"\n{item.get('text', '')}")
+    lines.append("\nBoshqa matn yubormoqchi bo'lsangiz, shu xabarga Reply qilib yozing.")
+    return "\n".join(lines)
+
+
+async def send_dm_approval(bot, owner, item):
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("📩 Yuborish", callback_data=f"dm|ok|{item['cid']}"),
+        InlineKeyboardButton("❌ Yubormaslik", callback_data=f"dm|no|{item['cid']}"),
+    ]])
+    msg = await bot.send_message(chat_id=owner, text=dm_approval_text(item), reply_markup=kb,
+                                 disable_web_page_preview=True)
+    responder.set_dm_message_id(item["cid"], msg.message_id)
+
+
 async def send_unsent_approvals(bot, owner):
     for item in responder.get_pending():
         if item.get("msg_id"):
@@ -687,6 +721,13 @@ async def send_unsent_approvals(bot, owner):
             await send_approval(bot, owner, item)
         except Exception:
             logger.exception("Ruxsat so'rovini yuborib bo'lmadi | comment=%s", item["cid"])
+    for item in responder.get_dm_pending():
+        if item.get("msg_id"):
+            continue
+        try:
+            await send_dm_approval(bot, owner, item)
+        except Exception:
+            logger.exception("Direkt tasdig'ini yuborib bo'lmadi | comment=%s", item["cid"])
 
 
 @owner_only
@@ -700,6 +741,54 @@ async def pending_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     for item in items[:20]:
         await send_approval(context.bot, update.effective_chat.id, item)
+
+
+@owner_only
+async def dm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        _, action, cid = query.data.split("|", 2)
+    except ValueError:
+        await query.answer()
+        return
+    await query.answer("Bajarilmoqda...")
+    try:
+        if action == "ok":
+            result = await asyncio.to_thread(responder.approve_dm, cid)
+        else:
+            result = await asyncio.to_thread(responder.reject_dm, cid)
+    except InstagramError as e:
+        result = ig_error_text(e)
+    try:
+        await query.edit_message_text((query.message.text or "") + "\n\n— " + result,
+                                      disable_web_page_preview=True)
+    except Exception:
+        await context.bot.send_message(chat_id=query.message.chat_id, text=result)
+
+
+@owner_only
+async def direkt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if responder is None:
+        await update.message.reply_text("Komentlarga javob tizimi o'chiq (Gemini kerak).")
+        return
+    names = {"tasdiq": "approve", "approve": "approve", "auto": "auto", "avto": "auto", "off": "off", "ochiq": "off"}
+    if context.args:
+        mode = names.get(context.args[0].lower())
+        if not mode:
+            await update.message.reply_text("Rejimlar: /direkt tasdiq | /direkt avto | /direkt off")
+            return
+        responder.set_dm_mode(mode)
+    texts = {
+        "approve": "TASDIQ — narx so'ragan mijozga direkt xabar tayyorlanadi, siz tasdiqlagach yuboriladi",
+        "auto": "AVTO — direkt xabar darhol yuboriladi (narx faqat katalogdan)",
+        "off": "O'CHIQ — direktga yozilmaydi",
+    }
+    n = len(catalog.active_products())
+    await update.message.reply_text(
+        f"Direkt rejimi: {texts[responder.dm_mode]}\nKatalogda {n} ta mahsulot."
+        + ("\n⚠️ Katalog bo'sh: Jarvis HUD → MAHSULOT bo'limida qo'shing." if n == 0 else "")
+        + "\n\nO'zgartirish: /direkt tasdiq | /direkt avto | /direkt off"
+    )
 
 
 @owner_only
@@ -781,8 +870,21 @@ async def notify_event(bot, owner, ev):
         )
     elif ev["type"] == "sent":
         text = f"✅ Avtomatik javob yozildi\n{who}\n→ {ev['reply']}"
+    elif ev["type"] == "dm_approval":
+        return  # send_unsent_approvals() yuboradi
+    elif ev["type"] == "dm_sent":
+        text = (f"📩 Direktga yuborildi: @{ev.get('username')}\n"
+                f"Mahsulot: {ev.get('product') or 'aniqlanmadi'}\n\n{ev['text']}")
+    elif ev["type"] == "dm_error":
+        text = f"⚠️ @{ev.get('username')} ga direkt yuborilmadi: {ev.get('error')}"
+        await bot.send_message(chat_id=owner, text=text, disable_web_page_preview=True)
+        return
     else:
         return
+    if ev["type"] == "test" and ev.get("dm"):
+        d = ev["dm"]
+        text += (f"\n\n📩 Direktga shunday yozardim (mahsulot: {d.get('product') or 'aniqlanmadi'}, "
+                 f"{d.get('source')}):\n{d['text']}")
     await bot.send_message(chat_id=owner, text=text, disable_notification=True,
                            disable_web_page_preview=True)
 
@@ -867,6 +969,8 @@ async def post_init(app):
             BotCommand("stories", "Faol storylar statistikasi"),
             BotCommand("autoreply", "Komentlarga javob rejimi"),
             BotCommand("pending", "Ruxsat kutayotgan komentlar"),
+            BotCommand("direkt", "Direkt xabar rejimi"),
+            BotCommand("checknow", "Komentlarni hozir tekshirish"),
             BotCommand("script", "Video ssenariysi"),
             BotCommand("hook", "Hook variantlari"),
             BotCommand("caption", "Instagram caption"),
@@ -931,6 +1035,8 @@ def build_app(token):
     app.add_handler(CommandHandler("checknow", checknow_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
+    app.add_handler(CallbackQueryHandler(dm_callback, pattern=r"^dm\|"))
+    app.add_handler(CommandHandler("direkt", direkt_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app

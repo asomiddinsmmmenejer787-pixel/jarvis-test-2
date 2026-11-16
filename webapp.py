@@ -27,6 +27,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import analytics
+import catalog
 import config
 import instagram_api as ig
 from instagram_api import InstagramError
@@ -475,7 +476,8 @@ def api_comments(x_init_data: str = Header(default="")):
     from auto_reply import CATEGORY_NAMES
     items = [{**p, "category_name": CATEGORY_NAMES.get(p.get("category"), p.get("category"))}
              for p in responder.get_pending()]
-    return {"enabled": True, "status": responder.status(), "pending": items}
+    return {"enabled": True, "status": responder.status(), "pending": items,
+            "dm_pending": responder.get_dm_pending()}
 
 
 @router.post("/api/comments/mode")
@@ -509,3 +511,92 @@ def api_comments_action(cid: str, body: dict, x_init_data: str = Header(default=
     except InstagramError as e:
         raise HTTPException(status_code=502, detail=_ig_error(e))
     return {"message": msg}
+
+
+# ---------- direkt ----------
+
+@router.post("/api/dm/mode")
+async def api_dm_mode(request: Request, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    responder = _ctx["responder"]
+    mode = str((await request.json()).get("mode", ""))
+    if responder is None or mode not in ("approve", "auto", "off"):
+        raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
+    responder.set_dm_mode(mode)
+    return {"status": responder.status()}
+
+
+@router.post("/api/dm/{cid}")
+def api_dm_action(cid: str, body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    responder = _ctx["responder"]
+    if responder is None:
+        raise HTTPException(status_code=400, detail="Tizim o'chiq")
+    try:
+        if body.get("action") == "send":
+            msg = responder.approve_dm(cid, (body.get("text") or "").strip() or None)
+        elif body.get("action") == "skip":
+            msg = responder.reject_dm(cid)
+        else:
+            raise HTTPException(status_code=400, detail="Noma'lum amal")
+    except InstagramError as e:
+        raise HTTPException(status_code=502, detail=_ig_error(e))
+    return {"message": msg}
+
+
+# ---------- katalog ----------
+
+@router.get("/api/catalog")
+def api_catalog(x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    data = catalog.load()
+    posts = []
+    if ig.is_configured():
+        try:
+            recent = _cached("catalog_posts", 300, lambda: ig.get_recent_posts(20))
+            products = catalog.active_products(data)
+            for p in recent:
+                linked = data["post_links"].get(str(p.get("id")))
+                auto = None if linked else catalog._keyword_match(p.get("caption"), products)
+                dt = analytics._local_time(p.get("timestamp"))
+                posts.append({
+                    "id": p.get("id"), "kind": analytics.kind_name(p),
+                    "date": dt.strftime("%d.%m") if dt else "",
+                    "caption": (p.get("caption") or "")[:140], "permalink": p.get("permalink"),
+                    "linked": linked, "auto": auto["id"] if auto else None,
+                })
+        except InstagramError as e:
+            return {**data, "posts": [], "posts_error": _ig_error(e)}
+    return {**data, "posts": posts}
+
+
+@router.post("/api/catalog/shop")
+def api_catalog_shop(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    return {"shop": catalog.set_shop(body)}
+
+
+@router.post("/api/catalog/product")
+def api_catalog_product(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        return {"product": catalog.upsert_product(body)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/api/catalog/product/{pid}")
+def api_catalog_delete(pid: str, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    catalog.delete_product(pid)
+    return {"ok": True}
+
+
+@router.post("/api/catalog/link")
+def api_catalog_link(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        catalog.link_post(str(body.get("media_id", "")), body.get("product_id") or None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
