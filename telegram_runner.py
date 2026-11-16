@@ -512,6 +512,8 @@ async def diag_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"Model: {d.get('model')} | javob: {d.get('status')} | {d.get('seconds')} s")
         if d.get("error"):
             lines.append(f"Google xabari: {d['error']}")
+        if d.get("alt"):
+            lines.append(f"Zaxira model: {d['alt']}")
         if "model_exists" in d:
             lines.append("Model kalitda mavjud: " + ("ha" if d["model_exists"] else "YO'Q"))
         if d.get("flash_models"):

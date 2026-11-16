@@ -25,7 +25,10 @@ import os
 
 # Yangi Gemini modellari uzoq "o'ylashi" mumkin, katta tahlil uchun 30 soniya kam
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT", "150") or 150)
-PREFERRED_ALIAS = "gemini-flash-latest"
+PREFERRED_ALIAS = "gemini-2.5-flash"
+# Bu nomlar Google'ning o'zgaruvchan taxalluslari; ba'zan juda sekin modelga ulanadi.
+# Shuning uchun ularning o'rniga barqaror modelni ishlatamiz.
+UNSTABLE_ALIASES = {"gemini-flash-latest", "gemini-pro-latest"}
 # Vaqtinchalik xatolar: shu kodlar chiqsa, qayta urinib ko'riladi
 RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
 # Har bir qayta urinishdan oldin kutish (soniya). 3 ta qayta urinish.
@@ -52,6 +55,9 @@ class GeminiProvider(AIProvider):
         if not api_key:
             raise ValueError("GeminiProvider uchun api_key kerak.")
         self.api_key = api_key
+        if model in UNSTABLE_ALIASES:
+            logger.warning(f"'{model}' o'rniga barqaror '{PREFERRED_ALIAS}' ishlatiladi.")
+            model = PREFERRED_ALIAS
         self.model = model
         self._resolved_model = None  # 404 bo'lsa, avtomatik tanlangan model shu yerda saqlanadi
 
@@ -69,6 +75,10 @@ class GeminiProvider(AIProvider):
                     return requests.post(
                         url, json=payload, headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS
                     )
+                except requests.exceptions.ReadTimeout:
+                    # Model javob bermayapti: shu modelga qayta urinish foydasiz
+                    logger.warning(f"'{model}' {REQUEST_TIMEOUT_SECONDS} soniyada javob bermadi.")
+                    raise
                 except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                     logger.warning(f"Gemini ulanish xatosi ({type(e).__name__}), urinish {attempt + 1}/3")
                     if attempt == 2:
@@ -107,6 +117,8 @@ class GeminiProvider(AIProvider):
             names = self._available_models()
         except (requests.exceptions.RequestException, ValueError):
             return None
+        if PREFERRED_ALIAS in names and PREFERRED_ALIAS != exclude:
+            return PREFERRED_ALIAS
         flash = [n for n in names if "flash" in n and n != exclude
                  and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
                  and "preview" not in n and "exp" not in n and "latest" not in n]
@@ -162,6 +174,20 @@ class GeminiProvider(AIProvider):
         except requests.exceptions.RequestException as e:
             info["status"] = type(e).__name__
         info["seconds"] = round(time.time() - start, 1)
+        if info.get("status") != 200:
+            alt = self._alternate_model(exclude=info["model"])
+            if alt:
+                start = time.time()
+                try:
+                    r = requests.post(
+                        f"{API_BASE_URL}/models/{alt}:generateContent",
+                        json=payload, headers=self._headers(), timeout=60,
+                    )
+                    info["alt"] = f"{alt}: {r.status_code}, {round(time.time() - start, 1)} s"
+                    if r.status_code == 200:
+                        self._resolved_model = alt
+                except requests.exceptions.RequestException as e:
+                    info["alt"] = f"{alt}: {type(e).__name__}"
         try:
             names = self._available_models()
             info["flash_models"] = [n for n in names if "flash" in n][:10]
@@ -181,7 +207,8 @@ class GeminiProvider(AIProvider):
 
         flash = [
             n for n in names
-            if "flash" in n and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
+            if "flash" in n and n not in UNSTABLE_ALIASES
+            and not any(k in n for k in EXCLUDED_MODEL_KEYWORDS)
         ]
         stable = [n for n in flash if "preview" not in n and "exp" not in n]
         full_size = [n for n in (stable or flash) if "lite" not in n]
