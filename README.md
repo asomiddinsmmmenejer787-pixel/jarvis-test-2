@@ -118,6 +118,7 @@ Bot `python telegram_runner.py` bilan ishga tushadi (Procfile'da yozilgan).
 | `AI_PROVIDER` | ha | `gemini` |
 | `GEMINI_API_KEY` | ha | Google AI Studio kaliti |
 | `GEMINI_MODEL` | yo'q | masalan `gemini-2.5-flash` |
+| `GROQ_API_KEY` | yo'q | Zaxira AI (Groq). Telegram'da `/groqkey gsk_...` bilan ham ulanadi |
 | `INSTAGRAM_ACCESS_TOKEN` | Instagram uchun | Meta'dan olingan token (Instagram Login) |
 | `OWNER_CHAT_ID` | tavsiya | Botdan faqat shu odam foydalanadi. ID'ni `/myid` ko'rsatadi |
 | `DATA_DIR` | tavsiya | Railway Volume ulangan papka, masalan `/data` |
@@ -191,7 +192,13 @@ python -m tests.test_instagram
 python -m tests.test_webapp
 python -m tests.test_direkt
 python -m tests.test_chat
+python -m tests.test_fallback
 ```
+
+### Zaxira AI
+
+Gemini asosiy AI. Uning limiti tugasa yoki xato bersa, Jarvis avtomatik Groq'ga o'tadi
+(bepul, kalit: console.groq.com). Ishlamagan AI 5 daqiqa chetlab o'tiladi. `/diag` ikkalasini tekshiradi.
 
 ## 10. Future integrations (kelajakdagi rejalar)
 

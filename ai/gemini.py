@@ -19,7 +19,7 @@ import os
 import threading
 import time
 import requests
-from ai.base import AIProvider
+from ai.base import AIError, AIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +52,12 @@ RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
 RETRY_DELAYS_SECONDS = (2, 5)
 
 
-class GeminiError(RuntimeError):
+class GeminiError(AIError):
     """generate_json() xatosi. fatal=True bo'lsa (kalit noto'g'ri va h.k.), qayta urinish foydasiz."""
-
-    def __init__(self, message: str, fatal: bool = False):
-        super().__init__(message)
-        self.fatal = fatal
 
 
 class GeminiProvider(AIProvider):
+    name = "Gemini"
     """Google Gemini API orqali javob generatsiya qiluvchi provider."""
 
     def __init__(self, api_key: str, model: str):
@@ -108,8 +105,8 @@ class GeminiProvider(AIProvider):
 
         response = send()
         for delay in RETRY_DELAYS_SECONDS:
-            if response.status_code not in RETRY_STATUS_CODES:
-                break
+            if response.status_code not in RETRY_STATUS_CODES or response.status_code == 429:
+                break  # 429 = limit tugagan: kutish foydasiz, darhol boshqa model yoki zaxira AI'ga o'tamiz
             logger.warning(
                 f"Gemini vaqtincha band (kod {response.status_code}), "
                 f"{delay} soniyadan keyin qayta uriniladi."

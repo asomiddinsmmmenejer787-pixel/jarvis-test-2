@@ -26,3 +26,16 @@ class AIProvider(ABC):
             AI tomonidan generatsiya qilingan matn.
         """
         raise NotImplementedError
+
+
+class AIError(RuntimeError):
+    """Har qanday AI provayder xatosi. fatal=True: kalit noto'g'ri va h.k. (qayta urinish foydasiz)."""
+
+    def __init__(self, message: str, fatal: bool = False):
+        super().__init__(message)
+        self.fatal = fatal
+
+
+def is_error_text(text) -> bool:
+    """generate_text() xato qaytardimi? (masalan "[Gemini xatosi] ...")"""
+    return isinstance(text, str) and text.startswith("[") and "xatosi]" in text[:30]

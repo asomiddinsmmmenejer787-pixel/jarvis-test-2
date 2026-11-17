@@ -25,7 +25,10 @@ from auto_reply import CATEGORY_NAMES, CommentResponder
 from dm_chat import DirectChat
 from instagram_api import InstagramError
 from core.jarvis import Jarvis
-from ai.gemini import GeminiError, GeminiProvider
+from ai.base import AIError, is_error_text
+from ai.fallback import FallbackProvider
+from ai.gemini import GeminiProvider
+from ai.groq import GroqError, GroqProvider, check_key as check_groq_key, save_api_key as save_groq_key
 from ai.mock import MockProvider
 
 from telegram import (
@@ -57,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 4000
 CHECK_EVERY_SEC = max(30, int(os.environ.get("CHECK_EVERY_SEC", "60") or 60))
+GROQ_KEY_RE = re.compile(r"gsk_[A-Za-z0-9]{30,}")
 IG_TOKEN_RE = re.compile(r"IG[A-Za-z0-9_\-]{40,}")
 JARVIS_COMMANDS = ["script", "hook", "caption", "telegram", "ad", "ideas", "ai_video"]
 
@@ -118,6 +122,9 @@ def start_web_server():
 def build_ai_provider():
     provider_name = getattr(config, "AI_PROVIDER", "mock")
 
+    if provider_name == "groq":
+        return FallbackProvider([GroqProvider()])
+
     if provider_name == "gemini":
         api_key = getattr(config, "GEMINI_API_KEY", "")
         model = getattr(config, "GEMINI_MODEL", "")
@@ -132,10 +139,9 @@ def build_ai_provider():
                 "GEMINI_MODEL topilmadi. Config sozlamalarini tekshiring."
             )
 
-        return GeminiProvider(
-            api_key=api_key,
-            model=model,
-        )
+        # Gemini asosiy, Groq zaxira: Gemini limiti tugasa avtomatik Groq ishlaydi.
+        # Groq kaliti hali bo'lmasa ham qo'shiladi: /groqkey bilan keyin ulanadi.
+        return FallbackProvider([GeminiProvider(api_key=api_key, model=model), GroqProvider()])
 
     logger.info("MockProvider tanlandi.")
     return MockProvider()
@@ -315,7 +321,8 @@ HELP_TEXT = (
     "/eslab <ma'lumot> — mahsulot, narx yoki boshqa ma'lumotni xotiraga saqlash\n"
     "/xotira — xotiradagi yozuvlar, /unut <raqam> — o'chirish\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
-    "/diag — Gemini va Instagram holatini tekshirish\n\n"
+    "/diag — AI va Instagram holatini tekshirish\n"
+    "/groqkey <kalit> — zaxira AI (Groq) kalitini ulash\n\n"
     "Yoki oddiy tilda savolingizni yozing."
 )
 
@@ -393,6 +400,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_text = update.message.text
     if not user_text or not user_text.strip():
+        return
+
+    # Xabarda Groq kaliti bo'lsa - saqlaymiz, AI'ga yubormaymiz
+    groq_match = GROQ_KEY_RE.search(user_text)
+    if groq_match:
+        context.args = [groq_match.group(0)]
+        await groqkey_cmd.__wrapped__(update, context)
         return
 
     # Xabarda Instagram tokeni bo'lsa (qanday formatda bo'lmasin) - ulaymiz, AI'ga yubormaymiz
@@ -562,24 +576,55 @@ async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @owner_only
+async def groqkey_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Groq kalitini Telegram orqali qabul qiladi (Railway'ga kirmasdan)."""
+    msg = update.message
+    if not context.args:
+        await msg.reply_text(
+            "Groq kalitini shunday yuboring:\n/groqkey gsk_...\n\n"
+            "Kalitni console.groq.com → API Keys bo'limidan olasiz. Xabaringiz darhol o'chiriladi."
+        )
+        return
+    key = context.args[0].strip()
+    try:
+        await msg.delete()
+    except Exception:
+        logger.warning("Kalit yozilgan xabarni o'chirib bo'lmadi.")
+    chat_id = update.effective_chat.id
+    try:
+        n = await asyncio.to_thread(check_groq_key, key)
+    except GroqError as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ {e}. console.groq.com'dan kalitni qayta nusxalang.")
+        return
+    await asyncio.to_thread(save_groq_key, key)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Groq ulandi ({n} ta model). Endi Gemini limiti tugasa, Jarvis avtomatik Groq'ga o'tadi.\n/diag bilan tekshiring.",
+    )
+
+
+@owner_only
 async def diag_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gemini va Instagram holatini tekshiradi."""
     await update.message.reply_text("⏳ Tekshirilmoqda (1 daqiqagacha)...")
     lines = ["🔧 Diagnostika"]
     ai = jarvis.ai_provider
     if hasattr(ai, "diagnose"):
-        d = await asyncio.to_thread(ai.diagnose)
-        ok = d.get("status") == 200
-        lines.append(f"\nGemini: {'✅ ishlayapti' if ok else '❌ xato'}")
-        if d.get("working"):
-            lines.append(f"Ishlatilayotgan model: {d['working']}")
-        lines.append("Sinov:\n" + "\n".join("  " + t for t in d.get("tested", [])))
-        if d.get("error"):
-            lines.append(f"Google xabari: {d['error']}")
-        if d.get("flash_models"):
-            lines.append("Kalitda ko'rinadigan modellar: " + ", ".join(d["flash_models"]))
-        if d.get("models_error"):
-            lines.append(f"Modellar ro'yxati: {d['models_error']}")
+        report = await asyncio.to_thread(ai.diagnose)
+        if "status" in report or "tested" in report:
+            report = {getattr(ai, "name", "AI"): report}
+        for name, d in report.items():
+            if name == "Groq" and not d.get("configured"):
+                lines.append("\nGroq (zaxira): ⚪ ulanmagan — /groqkey bilan kalit yuboring")
+                continue
+            ok = d.get("status") == 200
+            lines.append(f"\n{name}: {'✅ ishlayapti' if ok else '❌ xato'}")
+            if d.get("working"):
+                lines.append(f"Model: {d['working']}")
+            if d.get("tested"):
+                lines.append("Sinov:\n" + "\n".join("  " + t for t in d["tested"]))
+            if d.get("error"):
+                lines.append(f"Xabar: {d['error']}")
     else:
         lines.append(f"\nAI provider: {type(ai).__name__} (Gemini emas)")
 
@@ -664,8 +709,8 @@ async def checknow_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except InstagramError as e:
         await update.message.reply_text(ig_error_text(e))
         return
-    except GeminiError as e:
-        await update.message.reply_text(f"Gemini xatosi: {e}")
+    except AIError as e:
+        await update.message.reply_text(f"AI xatosi: {e}")
         return
     finally:
         await send_unsent_approvals(context.bot, chat_id)
@@ -1126,11 +1171,11 @@ async def instagram_tick(app):
             await alert_owner(bot, owner, "ig_fatal", "⚠️ " + ig_error_text(e))
         else:
             logger.warning("Instagram vaqtinchalik xatosi: %s", e)
-    except GeminiError as e:
+    except AIError as e:
         if e.fatal:
             await alert_owner(
                 bot, owner, "gemini_fatal",
-                f"⚠️ Gemini xatosi ({e}). GEMINI_API_KEY va GEMINI_MODEL'ni tekshiring.",
+                f"⚠️ AI ishlamayapti ({e}). /diag bilan tekshiring.",
             )
         else:
             logger.warning("Gemini vaqtinchalik xatosi: %s", e)
@@ -1221,6 +1266,7 @@ def build_app(token):
     app.add_handler(CommandHandler("pending", pending_cmd))
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
     app.add_handler(CommandHandler("diag", diag_cmd))
+    app.add_handler(CommandHandler("groqkey", groqkey_cmd))
     app.add_handler(CommandHandler("app", app_cmd))
     app.add_handler(CommandHandler("checknow", checknow_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))

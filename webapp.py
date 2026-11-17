@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import analytics
 import catalog
+from ai.base import is_error_text
 import config
 import instagram_api as ig
 from instagram_api import InstagramError
@@ -255,8 +256,8 @@ def _ig_error(e):
 
 def _ai_text(text):
     """AI xatosini oddiy matndan ajratadi."""
-    if isinstance(text, str) and text.startswith("[Gemini xatosi]"):
-        return None, text.replace("[Gemini xatosi]", "").strip()
+    if is_error_text(text):
+        return None, text.split("]", 1)[1].strip()
     return text, None
 
 
