@@ -432,18 +432,26 @@ def send_private_reply(comment_id, text):
 # ---------- direkt yozishmalar (Conversations API) ----------
 
 _MSG_FIELDS = "id,created_time,from,to,message"
+# Ulashilgan post/reel va storyga javoblar ham kerak (mijoz ko'pincha reelni ulashib "narxi?" deydi)
+_MSG_FIELDS_RICH = "id,created_time,from,to,message,attachments,shares,story"
+_rich_ok = {"value": True}
 
 
-def get_conversations(limit=15, per_conv=6):
+def get_conversations(limit=15, per_conv=10):
     """Oxirgi yozishmalar, har birida oxirgi xabarlar (yangisi birinchi)."""
+    fields = _MSG_FIELDS_RICH if _rich_ok["value"] else _MSG_FIELDS
     try:
         return _paged("me/conversations", {
             "platform": "instagram", "limit": min(limit, 25),
-            "fields": f"id,updated_time,messages.limit({per_conv}){{{_MSG_FIELDS}}}",
+            "fields": f"id,updated_time,messages.limit({per_conv}){{{fields}}}",
         }, limit)
     except InstagramError as e:
         if e.fatal or e.rate_limited:
             raise
+        if _rich_ok["value"]:
+            _rich_ok["value"] = False  # bu maydonlar qo'llanmasa, oddiy maydonlarga o'tamiz
+            log.warning("Xabarlarning qo'shimcha maydonlari olinmadi (%s), oddiy rejim.", e)
+            return get_conversations(limit, per_conv)
     # Zaxira yo'l: xabarlarni birma-bir olish
     convs = _paged("me/conversations", {"platform": "instagram", "limit": min(limit, 25)}, limit)
     for c in convs:

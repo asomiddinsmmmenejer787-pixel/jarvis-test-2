@@ -322,7 +322,8 @@ HELP_TEXT = (
     "/xotira — xotiradagi yozuvlar, /unut <raqam> — o'chirish\n"
     "/igtoken <token> — yangi Instagram tokenni ulash\n"
     "/diag — AI va Instagram holatini tekshirish\n"
-    "/groqkey <kalit> — zaxira AI (Groq) kalitini ulash\n\n"
+    "/groqkey <kalit> — zaxira AI (Groq) kalitini ulash\n"
+    "/limit <son> — kunlik avtomatik komment javoblari limiti\n\n"
     "Yoki oddiy tilda savolingizni yozing."
 )
 
@@ -573,6 +574,20 @@ async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=chat_id,
         text=f"✅ Instagram ulandi: @{username}\nToken saqlandi va o'zi yangilanib turadi. Endi /insta yozib ko'ring.",
     )
+
+
+@owner_only
+async def limit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if responder is None:
+        await update.message.reply_text("Komentlarga javob tizimi o'chiq.")
+        return
+    if context.args and context.args[0].isdigit():
+        n = responder.set_day_limit(int(context.args[0]))
+        await update.message.reply_text(f"✅ Kunlik avtomatik javoblar limiti: {n}")
+        return
+    st = responder.status()
+    await update.message.reply_text(
+        f"Bugun: {st['sent_today']} / {st['limit_day']}\nO'zgartirish: /limit 300 (10 dan 1000 gacha)")
 
 
 @owner_only
@@ -1267,6 +1282,7 @@ def build_app(token):
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
     app.add_handler(CommandHandler("diag", diag_cmd))
     app.add_handler(CommandHandler("groqkey", groqkey_cmd))
+    app.add_handler(CommandHandler("limit", limit_cmd))
     app.add_handler(CommandHandler("app", app_cmd))
     app.add_handler(CommandHandler("checknow", checknow_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))

@@ -131,11 +131,11 @@ def memory_block():
             + "\n".join(f"- {m}" for m in mem)), "\n".join(mem)
 
 
-def fallback_dm():
+def fallback_dm(greet=True):
     """Narxsiz, xavfsiz xabar: AI matni tekshiruvdan o'tmaganda yuboriladi."""
     shop = load()["shop"]
-    text = ("Assalomu alaykum! Qiziqishingiz uchun rahmat 😊 Qaysi mahsulot qiziqtirganini yozsangiz, "
-            "narxi va ma'lumotini shu yerda aytamiz.")
+    text = ("Assalomu alaykum! Qiziqishingiz uchun rahmat 😊 " if greet else "") + (
+        "Qaysi mahsulot qiziqtirganini yozsangiz (yoki postni ulashsangiz), narxi va ma'lumotini shu yerda aytamiz.")
     if shop.get("phone"):
         text += f"\nTezroq javob uchun: {shop['phone']}"
     return text
@@ -250,6 +250,8 @@ def numbers_ok(text, source_text):
             if n.endswith("000") and n[:-3] == a:      # faktda "250 ming", javobda 250 000
                 return True
             if len(n) >= 7 and a.endswith(n):           # telefon kodsiz yozilgan
+                return True
+            if len(n) >= 2 and a.rstrip("0") == n.rstrip("0"):  # "1,25 mln" = 1 250 000
                 return True
         return False
 

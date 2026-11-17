@@ -264,6 +264,7 @@ class State:
         self.dm_pending = {}
         self.dm_mode = None
         self.auto_v2 = False
+        self.day_limit = None
         self.test_seen = {}
         self.daily = {"date": "", "count": 0}
         self.mode = None
@@ -283,6 +284,7 @@ class State:
             self.dm_pending = dict(raw.get("dm_pending", {}))
             self.dm_mode = raw.get("dm_mode") if raw.get("dm_mode") in DM_MODES else None
             self.auto_v2 = bool(raw.get("auto_v2"))
+            self.day_limit = raw.get("day_limit") if isinstance(raw.get("day_limit"), int) else None
             self.test_seen = dict(raw.get("test_seen", {}))
             self.daily = dict(raw.get("daily", self.daily))
             self.mode = raw.get("mode") if raw.get("mode") in MODES else None
@@ -304,6 +306,7 @@ class State:
                 "mode": self.mode,
                 "dm_mode": self.dm_mode,
                 "auto_v2": self.auto_v2,
+                "day_limit": self.day_limit,
                 "dm_pending": self.dm_pending,
                 "done": dict(list(self.done.items())[-5000:]),
                 "attempts": self.attempts,
@@ -384,7 +387,7 @@ class CommentResponder:
             return {
                 "mode": self.state.mode,
                 "sent_today": self.state.today_count(),
-                "limit_day": _env_int("MAX_PER_DAY", 150),
+                "limit_day": self.day_limit(),
                 "pending": len(self.state.pending),
                 "dm_mode": self.state.dm_mode,
                 "dm_pending": len(self.state.dm_pending),
@@ -421,7 +424,7 @@ class CommentResponder:
             return []
 
         per_run = _env_int("MAX_PER_RUN", 12)
-        per_day = _env_int("MAX_PER_DAY", 150)
+        per_day = self.day_limit()
         max_age = _env_int("MAX_AGE_HOURS", 24)
         posts_to_check = _env_int("RECENT_POSTS", 10)
         delay_min = _env_int("REPLY_DELAY_MIN", 4)
@@ -585,6 +588,15 @@ class CommentResponder:
             stats["known"], stats["already"] + stats["mine"], stats["sent"], stats["approval"],
             stats["test"], stats["skipped"], stats["ai_errors"] + stats["send_errors"],
         )
+
+    def day_limit(self):
+        return self.state.day_limit or _env_int("MAX_PER_DAY", 300)
+
+    def set_day_limit(self, n):
+        with self.lock:
+            self.state.day_limit = max(10, min(1000, int(n)))
+            self.state.save()
+        return self.state.day_limit
 
     # ----- direkt (private reply) -----
 

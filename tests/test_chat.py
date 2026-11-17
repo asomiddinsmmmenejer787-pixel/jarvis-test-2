@@ -120,6 +120,38 @@ def run():
     chat.set_mode("off")
     check(chat.run_once() == [], "O'chiq rejimda ishlamaydi")
 
+    print("\n3b) Ulashilgan post va takrorlanmaslik")
+    chat.set_mode("auto")
+    chat.s["since"] = time.time() - 60
+    chat.s["counts"] = {}
+    share = {"id": "s1", "from": {"id": "U7", "username": "ona"}, "created_time": time.time() - 3,
+             "shares": {"data": [{"link": "https://www.instagram.com/reel/AAA1/?igsh=x"}]}}
+    ask = {"id": "s2", "from": {"id": "U7", "username": "ona"}, "message": "Narxi?", "created_time": time.time() - 1}
+    fake.conversations = [{"id": "t7", "messages": {"data": [ask, share]}}]
+    ai.res = {"text": "Samokat S10 narxi 1 250 000 so'm.", "kind": "answer", "topic": "narx"}
+    chat.run_once()
+    check("MIJOZ SO'RAYOTGAN POST" in ai.last and "bizning postimizni ulashdi" in ai.last
+          and "Samokat S10" in ai.last.split("MIJOZ SO'RAYOTGAN POST")[1],
+          "Mijoz ulashgan reel aniqlandi va o'sha post ma'lumoti AI'ga berildi")
+    check(fake.chat_sent[-1] == ("U7", "Samokat S10 narxi 1 250 000 so'm."), "Ulashilgan post narxi javob qilindi")
+    only_share = dict(share, id="s3", created_time=time.time())
+    fake.conversations = [{"id": "t8", "messages": {"data": [dict(only_share, **{"from": {"id": "U8", "username": "b"}})]}}]
+    n = len(fake.chat_sent)
+    chat.run_once()
+    check(len(fake.chat_sent) == n + 1, "Matnsiz faqat reel ulashgan mijozga ham javob berildi")
+    prev = {"id": "r1", "from": ME, "message": "Qaysi mahsulot qiziqtirdi?", "created_time": time.time() - 5}
+    again = {"id": "r2", "from": {"id": "U9", "username": "c"}, "message": "Hmm", "created_time": time.time() - 1}
+    fake.conversations = [{"id": "t9", "messages": {"data": [again, prev]}}]
+    ai.res = {"text": "Qaysi mahsulot qiziqtirdi?", "kind": "clarify", "topic": "x"}
+    events = chat.run_once()
+    check(events[0]["type"] == "chat_approval" and "takrorla" in events[0]["reason"],
+          "Bir xil gapni takrorlash o'rniga egasiga topshirildi")
+    ai.res = {"text": "Narxi 777 000 so'm", "kind": "answer", "topic": "x"}
+    fake.conversations = [{"id": "t9", "messages": {"data": [dict(again, id="r3", created_time=time.time()), prev]}}]
+    events = chat.run_once()
+    check(not events[0]["text"].startswith("Assalomu"), "Suhbat o'rtasida zaxira xabar salomlashmaydi")
+    check(catalog.numbers_ok("1,25 mln so'm", "Narx: 1 250 000 so'm"), "'1,25 mln' yozuvi to'g'ri narx deb tanildi")
+
     print("\n4) HUD API")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
