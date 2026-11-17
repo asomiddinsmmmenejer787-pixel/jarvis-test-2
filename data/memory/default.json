@@ -58,5 +58,185 @@
     "role": "jarvis",
     "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: menga operator kerak\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
     "timestamp": "2026-09-27T09:43:15.881559"
+  },
+  {
+    "role": "user",
+    "text": "/script samokat uchun reels ssenariysi",
+    "timestamp": "2026-11-17T17:53:47.633108"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.633669"
+  },
+  {
+    "role": "user",
+    "text": "/caption Bolalar Dunyosi uchun Instagram caption",
+    "timestamp": "2026-11-17T17:53:47.634168"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.634687"
+  },
+  {
+    "role": "user",
+    "text": "/telegram yangi mahsulot posti",
+    "timestamp": "2026-11-17T17:53:47.635721"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.636498"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: samokat narxi qancha?",
+    "timestamp": "2026-11-17T17:53:47.637510"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: menga operator kerak\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\n\nFoydalanuvchining yangi xabari:\nmijoz: samokat narxi qancha?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.637930"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: yetkazib berish bormi?",
+    "timestamp": "2026-11-17T17:53:47.638526"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: menga operator kerak\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quy\n\nFoydalanuvchining yangi xabari:\nmijoz: yetkazib berish bormi?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.638946"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: menga operator kerak",
+    "timestamp": "2026-11-17T17:53:47.639645"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"mijoz: menga operator kerak\" mavzusi/mahsuloti bo'yicha 7 ta kontent g'oyasini ro'yxat qilib ber.\nHar biri qisqa sarlavha va 1 jumlali tushuntirish bilan.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quy\nFoydalanuvchi: mijoz: yetkazib berish bormi?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE —\n\nFoydalanuvchining yangi xabari:\nmijoz: menga operator kerak\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:53:47.640013"
+  },
+  {
+    "role": "user",
+    "text": "/script samokat uchun reels ssenariysi",
+    "timestamp": "2026-11-17T17:54:02.653393"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.654324"
+  },
+  {
+    "role": "user",
+    "text": "/caption Bolalar Dunyosi uchun Instagram caption",
+    "timestamp": "2026-11-17T17:54:02.655123"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.655727"
+  },
+  {
+    "role": "user",
+    "text": "/telegram yangi mahsulot posti",
+    "timestamp": "2026-11-17T17:54:02.657013"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.657639"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: samokat narxi qancha?",
+    "timestamp": "2026-11-17T17:54:02.658256"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini \nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\n\nFoydalanuvchining yangi xabari:\nmijoz: samokat narxi qancha?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.658663"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: yetkazib berish bormi?",
+    "timestamp": "2026-11-17T17:54:02.659680"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida\n\nFoydalanuvchining yangi xabari:\nmijoz: yetkazib berish bormi?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.660388"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: menga operator kerak",
+    "timestamp": "2026-11-17T17:54:02.661223"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida\nFoydalanuvchi: mijoz: yetkazib berish bormi?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE —\n\nFoydalanuvchining yangi xabari:\nmijoz: menga operator kerak\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:02.661761"
+  },
+  {
+    "role": "user",
+    "text": "/script samokat uchun reels ssenariysi",
+    "timestamp": "2026-11-17T17:54:27.366701"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.367849"
+  },
+  {
+    "role": "user",
+    "text": "/caption Bolalar Dunyosi uchun Instagram caption",
+    "timestamp": "2026-11-17T17:54:27.369001"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.369920"
+  },
+  {
+    "role": "user",
+    "text": "/telegram yangi mahsulot posti",
+    "timestamp": "2026-11-17T17:54:27.370575"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.371465"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: samokat narxi qancha?",
+    "timestamp": "2026-11-17T17:54:27.372329"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini \nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\n\nFoydalanuvchining yangi xabari:\nmijoz: samokat narxi qancha?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.373025"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: yetkazib berish bormi?",
+    "timestamp": "2026-11-17T17:54:27.373919"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE — mahsulotni xohlash hissini kuchaytirish\n6. CTA — aniq harakatga chaqiruv\n\nHar bir bo'limni sarlavha bilan aniq ajrat. Ortiqcha cho'zma.\n\"\nHaqiqiy javob olish u\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida\n\nFoydalanuvchining yangi xabari:\nmijoz: yetkazib berish bormi?\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.374406"
+  },
+  {
+    "role": "user",
+    "text": "mijoz: menga operator kerak",
+    "timestamp": "2026-11-17T17:54:27.374978"
+  },
+  {
+    "role": "jarvis",
+    "text": "[MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: /telegram yangi mahsulot posti\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"yangi mahsulot posti\" mavzusida Telegram kanal posti yoz.\nInstagram'dan farqli o'laroq, biroz batafsilroq va aniq ma'lumot bilan yoz.\nOxirida aniq CTA (masalan: \"Batafsil: link\" yoki \"Buyurtma uchun yozing\") qo'sh.\n\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.\nFoydalanuvchi: mijoz: samokat narxi qancha?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: mijoz: menga operator kerak\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /caption Bolalar Dunyosi uchun Instagram caption\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\n\"Bolalar Dunyosi uchun Instagram caption\" mavzusida Instagram uchun caption (post matni) yoz.\nQisqa, jonli, emoji bilan (ortiqcha emas), oxirida CTA bo'lsin.\n\"\nHaqiqiy javob olish uchun .env faylida\nFoydalanuvchi: mijoz: yetkazib berish bormi?\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"Oldingi suhbat:\nFoydalanuvchi: /script samokat uchun reels ssenariysi\nJarvis: [MOCK JAVOB]\nAgar bu haqiqiy Gemini bo'lganida, quyidagi so'rovga javob berardi:\n\"\nQuyidagi mavzu uchun qisqa video (Reels) ssenariysini yoz: \"samokat uchun reels ssenariysi\"\n\nSsenariy quyidagi tuzilishda bo'lsin:\n\n1. HOOK — birinchi 2-3 soniyada e'tiborni tortadigan jumla\n2. PROBLEM — mijoz duch keladigan muammo\n3. RETENTION — tomoshabinni ushlab turadigan qism\n4. PRODUCT / SOLUTION — mahsulot yechim sifatida taqdim etiladi\n5. DESIRE —\n\nFoydalanuvchining yangi xabari:\nmijoz: menga operator kerak\"\nHaqiqiy javob olish uchun .env faylida AI_PROVIDER=gemini va GEMINI_API_KEY ni to'g'ri kiriting.",
+    "timestamp": "2026-11-17T17:54:27.375637"
   }
 ]

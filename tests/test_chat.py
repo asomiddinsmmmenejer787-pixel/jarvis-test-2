@@ -152,6 +152,33 @@ def run():
     check(not events[0]["text"].startswith("Assalomu"), "Suhbat o'rtasida zaxira xabar salomlashmaydi")
     check(catalog.numbers_ok("1,25 mln so'm", "Narx: 1 250 000 so'm"), "'1,25 mln' yozuvi to'g'ri narx deb tanildi")
 
+    print("\n3c) Takror va egasi aralashuvi")
+    chat.set_mode("auto")
+    chat.s["counts"] = {}
+    u10 = {"id": "U10", "username": "ona2"}
+    t0 = time.time()
+    chat.s["human_since"] = t0 - 100
+    p1 = {"id": "g1", "from": u10, "message": "Qanaqa shart", "created_time": t0 - 50}
+    b1 = {"id": "g2", "from": ME, "message": "Shartlari postda yozilgan. Qaysi o'lcham kerak bo'ladi?",
+          "created_time": t0 - 40}
+    p2 = {"id": "g3", "from": u10, "message": "Pulimi", "created_time": t0 - 2}
+    ig.record_sent({"message_id": "g2"}, b1["message"])
+    fake.conversations = [{"id": "t10", "messages": {"data": [p2, b1, p1]}}]
+    ai.res = {"text": "Shartlari postda yozilgan, qaysi o'lcham kerak?", "kind": "answer", "topic": "x"}
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_approval" and "takrorla" in events[0]["reason"],
+          "Deyarli bir xil javob mijozga ketmadi, egasiga topshirildi")
+    owner = {"id": "g4", "from": ME, "attachments": {"data": [{"audio_data": {"url": "x"}}]}, "created_time": t0 - 1}
+    p3 = {"id": "g5", "from": u10, "message": "Tushundim, rahmat", "created_time": t0}
+    fake.conversations = [{"id": "t10", "messages": {"data": [p3, owner, p2, b1, p1]}}]
+    n = len(fake.chat_sent)
+    ai.res = {"text": "Arzimaydi!", "kind": "answer", "topic": "x"}
+    events = chat.run_once()
+    check(events == [] and len(fake.chat_sent) == n, "Egasi o'zi yozgan suhbatga Jarvis aralashmadi")
+    check(ig.is_jarvis_message(b1) and not ig.is_jarvis_message(owner), "Jarvis xabari egasinikidan ajratildi")
+    check(dm_chat._similar("Narxi 300 ming. Qaysi o'lcham?", "narxi 300 ming, qaysi o'lcham kerak?") > 0.72
+          and dm_chat._similar("Ha, ishtirok bepul", "Narxi 300 ming") < 0.5, "O'xshashlik o'lchovi")
+
     print("\n4) HUD API")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

@@ -419,7 +419,7 @@ def send_private_reply(comment_id, text):
     Qoidalar: har bir kommentga bitta, komment yozilganidan keyin 7 kun ichida.
     instagram_business_manage_messages ruxsati kerak.
     """
-    return _request(
+    res = _request(
         "POST",
         f"{_my_ig_id()}/messages",
         data={
@@ -427,6 +427,8 @@ def send_private_reply(comment_id, text):
             "message": json.dumps({"text": text}, ensure_ascii=False),
         },
     )
+    record_sent(res, text)
+    return res
 
 
 # ---------- direkt yozishmalar (Conversations API) ----------
@@ -462,7 +464,7 @@ def get_conversations(limit=15, per_conv=10):
 
 def send_message(igsid, text):
     """Direktda mijozga javob (mijoz oxirgi 24 soat ichida yozgan bo'lishi kerak)."""
-    return _request(
+    res = _request(
         "POST",
         f"{_my_ig_id()}/messages",
         data={
@@ -470,3 +472,58 @@ def send_message(igsid, text):
             "message": json.dumps({"text": text}, ensure_ascii=False),
         },
     )
+    record_sent(res, text)
+    return res
+
+
+# ----- Jarvis yuborgan xabarlar ro'yxati -----
+# Yozishmadagi "bizning" xabar Jarvisniki emas bo'lsa (masalan egasi ovozli xabar yozgan),
+# demak suhbatni odam olib ketgan: Jarvis u yerga aralashmaydi.
+
+_sent_lock = threading.Lock()
+
+
+def _sent_path():
+    return os.path.join(config.DATA_DIR, "sent_messages.json")
+
+
+def _norm(text):
+    return hashlib.sha1(" ".join(str(text or "").lower().split()).encode()).hexdigest()[:16]
+
+
+def _load_sent():
+    try:
+        with open(_sent_path(), encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            return {"ids": list(d.get("ids", [])), "texts": list(d.get("texts", []))}
+    except (OSError, ValueError):
+        pass
+    return {"ids": [], "texts": []}
+
+
+def record_sent(res, text):
+    """Jarvis yuborgan xabarni eslab qoladi (id va matn izi)."""
+    with _sent_lock:
+        d = _load_sent()
+        mid = (res or {}).get("message_id") if isinstance(res, dict) else None
+        if mid:
+            d["ids"] = (d["ids"] + [str(mid)])[-3000:]
+        if str(text or "").strip():
+            d["texts"] = (d["texts"] + [_norm(text)])[-3000:]
+        try:
+            os.makedirs(config.DATA_DIR, exist_ok=True)
+            with open(_sent_path() + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(_sent_path() + ".tmp", _sent_path())
+        except OSError as e:
+            log.warning("Yuborilgan xabarni saqlab bo'lmadi: %s", e)
+
+
+def is_jarvis_message(m):
+    """Yozishmadagi bizning xabar Jarvis tomonidan yuborilganmi."""
+    d = _load_sent()
+    if str(m.get("id") or "") in set(d["ids"]):
+        return True
+    text = (m.get("message") or "").strip()
+    return bool(text) and _norm(text) in set(d["texts"])
