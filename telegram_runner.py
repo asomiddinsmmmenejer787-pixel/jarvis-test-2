@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
 import analytics
+import brain
 import catalog
 import instagram_api as ig
 import webapp
@@ -452,7 +453,142 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(result)
             return
 
-    await answer_with_jarvis(update, context, user_text)
+    await smart_answer(update, context, user_text)
+
+
+# ---------- o'rganish: egasining tanbehi va ko'rsatmalari ----------
+
+def _think(user_text):
+    st = []
+    if responder is not None:
+        r = responder.status()
+        st.append(f"Komentga javob: {r['mode']}, bugun {r['sent_today']}/{r['limit_day']}, "
+                  f"ruxsat kutayotgan {r['pending']}, komentdan keyin direkt: {r['dm_mode']}")
+        if r.get("last_run"):
+            st.append("Oxirgi komment tekshiruvi: " + json.dumps(r["last_run"], ensure_ascii=False))
+    if chat is not None:
+        st.append(f"Direkt suhbat: {chat.mode}")
+    last_post = ""
+    try:
+        posts = ig.get_recent_posts(1)
+        if posts:
+            p = posts[0]
+            last_post = (f"{catalog._post_time(p)}, {p.get('comments_count', 0)} komment: "
+                         f"{(p.get('caption') or '').strip()[:200]}")
+    except InstagramError as e:
+        if e.fatal:
+            raise
+    hist = "\n".join(("Egasi: " if h["role"] == "user" else "Jarvis: ") + h["text"][:300]
+                     for h in jarvis.memory.get_recent(6))
+    return brain.think(jarvis.ai_provider, user_text, "\n".join(st), last_post, hist)
+
+
+async def run_recheck(bot, chat_id, n_posts):
+    try:
+        events, stats = await asyncio.to_thread(responder.recheck, n_posts)
+    except InstagramError as e:
+        await bot.send_message(chat_id=chat_id, text="⚠️ Qayta tekshirib bo'lmadi: " + ig_error_text(e))
+        return
+    except AIError as e:
+        await bot.send_message(chat_id=chat_id, text=f"⚠️ Qayta tekshirishda AI xatosi: {e}")
+        return
+    except Exception:
+        logger.exception("Qayta tekshiruvda xato")
+        await bot.send_message(chat_id=chat_id, text="⚠️ Qayta tekshiruvda kutilmagan xato bo'ldi.")
+        return
+    if stats.get("error"):
+        await bot.send_message(chat_id=chat_id, text="⚠️ " + stats["error"])
+        return
+    for ev in events:
+        brain.log_event(ev)
+        try:
+            await notify_event(bot, chat_id, ev)
+        except Exception:
+            logger.exception("Voqeani yuborib bo'lmadi.")
+    await send_unsent_approvals(bot, chat_id)
+    text = (f"✅ Qayta tekshiruv tugadi: {stats.get('comments', 0)} ta komment ko'rildi.\n"
+            f"Javobsiz qolgani: {stats.get('new', 0)}, javob yozildi: {stats.get('sent', 0)}, "
+            f"sizga ruxsatga: {stats.get('approval', 0)}, spam: {stats.get('skipped', 0)}, "
+            f"xato: {stats.get('ai_errors', 0) + stats.get('send_errors', 0)}")
+    if stats.get("new", 0) > stats.get("sent", 0) + stats.get("approval", 0) + stats.get("skipped", 0):
+        text += "\nQolganlarini keyingi tekshiruvlarda yozib boraman (bir martada 40 tagacha)."
+    brain.log_entry(f"Qayta tekshiruv: javob {stats.get('sent', 0)}, ruxsatga {stats.get('approval', 0)}")
+    await bot.send_message(chat_id=chat_id, text=text)
+
+
+async def smart_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text: str):
+    """Egasining xabari ish haqida bo'lsa (tanbeh, qoida, qayta tekshir) - o'zi tuzatadi."""
+    if responder is None or not ig.is_configured():
+        await answer_with_jarvis(update, context, user_text)
+        return
+    try:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        res = await asyncio.to_thread(_think, user_text)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Xabarni tahlil qilib bo'lmadi: %s", e)
+        res = {"kind": "chat"}
+    if res.get("kind") != "work":
+        await answer_with_jarvis(update, context, user_text)
+        return
+    lines = [res["reply"] or "Tushundim."]
+    if res["lesson"]:
+        try:
+            brain.add_lesson(res["lesson"])
+            lines.append(f"\n📌 Doimiy qoida qilib saqladim: {res['lesson']}\n(ro'yxat: /qoidalar)")
+        except ValueError:
+            pass
+    if res["fact"]:
+        try:
+            catalog.add_memory(res["fact"])
+            lines.append(f"🧠 Xotiraga yozdim: {res['fact']}")
+        except ValueError:
+            pass
+    for act in res["actions"]:
+        if act["type"] == "recheck_comments":
+            lines.append(f"🔎 Oxirgi {act['posts']} ta postdagi javobsiz komentlarni hozir qayta ko'rib chiqaman, "
+                         "tugagach xabar beraman.")
+    reply = "\n".join(lines)
+    await send_long(context.bot, update.effective_chat.id, reply)
+    jarvis.memory.add("user", user_text)
+    jarvis.memory.add("jarvis", reply)
+    brain.log_entry(f"Egasi yozdi: «{user_text[:100]}»" + (f" → qoida: {res['lesson'][:120]}" if res["lesson"] else ""))
+    for act in res["actions"]:
+        if act["type"] == "recheck_comments":
+            asyncio.create_task(run_recheck(context.bot, update.effective_chat.id, act["posts"]))
+
+
+@owner_only
+async def qoidalar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    items = brain.get_lessons()
+    if not items:
+        await update.message.reply_text(
+            "Hali qoida yo'q. Menga oddiy so'z bilan tanbeh yozing, masalan: "
+            "\"belgilangan komentlarga ham javob yoz, qisqa bo'lsin\" — o'zim qoida qilib saqlayman.")
+        return
+    await send_long(context.bot, update.effective_chat.id,
+                    "📌 Jarvis qoidalari (har javobda amal qiladi):\n"
+                    + "\n".join(f"{i}. {x}" for i, x in enumerate(items, 1))
+                    + "\n\nO'chirish: /qoidaochir <raqam>")
+
+
+@owner_only
+async def qoidaochir_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Qaysi qoidani? Masalan: /qoidaochir 2 (raqamlarni /qoidalar ko'rsatadi)")
+        return
+    try:
+        removed = brain.delete_lesson(int(context.args[0]) - 1)
+    except IndexError:
+        await update.message.reply_text("Bunday raqamli qoida yo'q.")
+        return
+    await update.message.reply_text(f"O'chirildi: {removed}")
+
+
+@owner_only
+async def jurnal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = brain.journal_text(25)
+    await send_long(context.bot, update.effective_chat.id,
+                    "📒 Jarvis oxirgi ishlari:\n" + (text or "Hali yozuv yo'q."))
 
 
 # ---------- Instagram tahlili ----------
@@ -1155,6 +1291,7 @@ async def instagram_tick(app):
             finally:
                 await send_unsent_approvals(bot, owner)
             for ev in events:
+                brain.log_event(ev)
                 try:
                     await notify_event(bot, owner, ev)
                 except Exception:
@@ -1174,6 +1311,7 @@ async def instagram_tick(app):
             finally:
                 await send_unsent_chat_approvals(bot, owner)
             for ev in chat_events:
+                brain.log_event(ev)
                 try:
                     await notify_chat_event(bot, owner, ev)
                 except Exception:
@@ -1225,6 +1363,8 @@ async def post_init(app):
             BotCommand("hook", "Hook variantlari"),
             BotCommand("caption", "Instagram caption"),
             BotCommand("ideas", "Kontent g'oyalari"),
+            BotCommand("qoidalar", "Jarvis o'rgangan qoidalar"),
+            BotCommand("jurnal", "Jarvis oxirgi ishlari"),
             BotCommand("start", "Yordam"),
         ])
     except Exception:
@@ -1294,6 +1434,9 @@ def build_app(token):
     app.add_handler(CommandHandler("eslab", eslab_cmd))
     app.add_handler(CommandHandler("xotira", xotira_cmd))
     app.add_handler(CommandHandler("unut", unut_cmd))
+    app.add_handler(CommandHandler("qoidalar", qoidalar_cmd))
+    app.add_handler(CommandHandler("qoidaochir", qoidaochir_cmd))
+    app.add_handler(CommandHandler("jurnal", jurnal_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app

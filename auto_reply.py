@@ -29,12 +29,19 @@ from datetime import datetime, timedelta, timezone
 
 import catalog
 import config
+import brain
 import instagram_api as ig
 from instagram_api import InstagramError
 
 log = logging.getLogger("auto_reply")
 
-CATEGORIES = {"price", "question", "positive", "negative", "complaint", "competitor", "spam"}
+CATEGORIES = {"price", "question", "positive", "negative", "complaint", "competitor", "spam", "tag"}
+MENTION_RE = re.compile(r"(?<![\w.])@([A-Za-z0-9._]{1,30})")
+TAG_FALLBACKS = [
+    "Do'stingizni ham chaqirganingiz yaxshi bo'ldi, birga tomosha qiling 😊",
+    "Ikkalangizga ham yoqadi deb o'ylaymiz. Qaysi biri ko'proq yoqdi?",
+    "Do'st do'stni shunday chaqiradi. Fikringizni kutib qolamiz 😊",
+]
 APPROVAL_CATEGORIES = {"negative", "competitor"}
 CATEGORY_NAMES = {
     "price": "Narx so'rovi",
@@ -44,6 +51,7 @@ CATEGORY_NAMES = {
     "complaint": "Shikoyat",
     "competitor": "Raqobatchi",
     "spam": "Spam",
+    "tag": "Do'stini belgilagan",
     "unknown": "Aniqlanmadi",
 }
 MODES = ("on", "off", "test")
@@ -114,6 +122,10 @@ KATEGORIYALAR
 5. complaint: haqiqiy shikoyat (buyurtma kelmadi, nuqsonli, sifatsiz, pul qaytarish). Sarkazm yo'q. Jiddiy, iliq, hurmat bilan direktga yo'nalt.
 6. competitor: boshqa do'kon reklamasi yoki raqobatchi komment. Qattiq, qisqa, xarizmali javob. Raqobatchi nomini yozma, maqtama, reklama qilma.
 7. spam: link, reklama, begona narsa, mazmunsiz. reply bo'sh satr.
+8. tag: odam komentda do'stini @ bilan belgilagan (faqat belgilash yoki belgilash + qisqa gap). Bu spam EMAS.
+   Javob juda qisqa (60-90 belgi), ikkalasiga qaratilgan: "sizlar", "ikkalangiz", "do'stingiz bilan".
+   @ belgisini yozma, ismlarni tizim o'zi qo'shadi. Belgilash bilan birga savol yoki narx so'ralgan bo'lsa,
+   tegishli kategoriyani (price, question) tanla va javobni yana ikkalasiga qarat.
 
 POST HAQIDA FAKTLAR
 Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'lumot) va do'kon haqida.
@@ -253,6 +265,41 @@ def assess(result, comment_text):
     return {"category": cat, "reply": reply, "action": "auto", "reason": ""}
 
 
+def mentions_in(text, me="", author=""):
+    seen, out = set(), []
+    for m in MENTION_RE.findall(text or ""):
+        m = m.rstrip(".")
+        low = m.lower()
+        if low and low not in seen and low not in (me, (author or "").lower()):
+            seen.add(low)
+            out.append(m)
+    return out[:3]
+
+
+def strip_mentions(reply):
+    if not isinstance(reply, str):
+        return reply
+    return re.sub(r"\s+", " ", MENTION_RE.sub("", reply)).strip(" ,")
+
+
+def apply_tags(verdict, author, mentions, comment_text):
+    """Belgilangan komentga javobni ikkala odamga qaratadi (@muallif @do'st ...)."""
+    if not mentions or PROFANITY_RE.search(comment_text):
+        return verdict
+    if re.search(r"https?://|www\.", comment_text, re.I):
+        return verdict if verdict["category"] != "tag" else {**verdict, "action": "skip", "reply": ""}
+    if verdict["category"] in ("spam", "unknown") or (verdict["action"] == "approve" and not verdict["reply"]
+                                                      and verdict["category"] not in APPROVAL_CATEGORIES):
+        rest = MENTION_RE.sub("", comment_text).strip(" .,!?:)(-")
+        if len(rest) <= 40 and not re.search(r"https?://|www\.", comment_text, re.I):
+            verdict = {**verdict, "category": "tag", "action": "auto", "reason": "",
+                       "reply": verdict["reply"] or random.choice(TAG_FALLBACKS)}
+    if verdict["reply"] and verdict["category"] in ("tag", "positive", "question", "price"):
+        prefix = " ".join("@" + x for x in ([author] if author else []) + list(mentions))
+        verdict = {**verdict, "reply": f"{prefix} {verdict['reply']}".strip()}
+    return verdict
+
+
 # ---------- holat ombori ----------
 
 class State:
@@ -352,6 +399,7 @@ class CommentResponder:
         self._me = ""
         self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
         self._recent = deque(maxlen=6)    # oxirgi javoblar (takrorlamaslik uchun)
+        self._run_lock = threading.Lock()  # fon tekshiruvi va qayta tekshiruv bir vaqtda ishlamasin
         if self.state.mode is None:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
@@ -396,14 +444,21 @@ class CommentResponder:
 
     # ----- AI -----
 
-    def _ask(self, comment_text, post):
+    def _ask(self, comment_text, post, author="", mentions=()):
         facts = catalog.post_facts(post)
         message = catalog.facts_block(facts)
+        lessons = brain.lessons_block()
+        if lessons:
+            message += "\n\n" + lessons
         if facts["task"]:
             message += f"\n\nEGASINING VAZIFASI:\n{facts['task']}"
         if self._recent:
             message += "\n\nOXIRGI JAVOBLARIMIZ (bularni takrorlama, boshqacha yoz):\n" + "\n".join(
                 f"- {r}" for r in self._recent)
+        if mentions:
+            message += (f"\n\nBELGILASH: komment egasi @{author} quyidagilarni belgilagan: "
+                        + ", ".join("@" + m for m in mentions)
+                        + ". Javobni ikkala tomonga qarat, qisqa yoz, @ belgisini yozma.")
         message += f"\n\n<komment>{comment_text[:500]}</komment>"
         system = SYSTEM_PROMPT
         if self.dm_mode != "off":
@@ -413,7 +468,19 @@ class CommentResponder:
 
     # ----- bitta tekshiruv sikli -----
 
-    def run_once(self):
+    def run_once(self, **kw):
+        with self._run_lock:
+            return self._run_once(**kw)
+
+    def recheck(self, posts=1):
+        """Oxirgi postlardagi javobsiz komentlarni qayta ko'radi (spam deb o'tkazilganlari ham)."""
+        if self.mode == "off":
+            return [], {"error": "Komentga javob o'chirilgan (/autoreply on)"}
+        events = self.run_once(n_posts=max(1, min(5, int(posts))), force=True, per_run=40,
+                               max_age=24 * 7)
+        return events, dict(self.last_run or {})
+
+    def _run_once(self, n_posts=None, force=False, per_run=None, max_age=None):
         """
         Yangi komentlarni tekshiradi. Voqealar ro'yxatini qaytaradi:
           {"type": "approval", "cid", ...}  - egasining ruxsati kerak
@@ -423,10 +490,10 @@ class CommentResponder:
         if self.mode == "off":
             return []
 
-        per_run = _env_int("MAX_PER_RUN", 12)
+        per_run = per_run or _env_int("MAX_PER_RUN", 12)
         per_day = self.day_limit()
-        max_age = _env_int("MAX_AGE_HOURS", 24)
-        posts_to_check = _env_int("RECENT_POSTS", 10)
+        max_age = max_age or _env_int("MAX_AGE_HOURS", 24)
+        posts_to_check = n_posts or _env_int("RECENT_POSTS", 10)
         delay_min = _env_int("REPLY_DELAY_MIN", 4)
         delay_max = max(delay_min, _env_int("REPLY_DELAY_MAX", 10))
 
@@ -447,7 +514,7 @@ class CommentResponder:
             stats["with_comments"] += 1
             # Tezlik: komentlar soni o'zgarmagan postni qayta o'qimaymiz (tekshiruv arzon bo'ladi)
             pid, count = str(post["id"]), post.get("comments_count")
-            if self._counts.get(pid) == count:
+            if self._counts.get(pid) == count and not force:
                 continue
             clean = True
             comments = ig.get_all_comments(post["id"], limit=200)
@@ -456,6 +523,10 @@ class CommentResponder:
                 cid = c.get("id")
                 text = (c.get("text") or "").strip()
                 with self.lock:
+                    if force and self.state.done.get(cid) in ("skipped", "gave_up"):
+                        # qayta tekshiruv: oldin spam/xato deb o'tkazilgan komentga yana qaraymiz
+                        self.state.done.pop(cid, None)
+                        self.state.attempts.pop(cid, None)
                     known = (cid in self.state.done or cid in self.state.pending
                              or cid in self.state.test_seen)
                 if not cid or not text or known:
@@ -486,8 +557,10 @@ class CommentResponder:
                         self.state.save()
                         continue
 
+                author = c.get("username") or ""
+                mentions = mentions_in(text, me, author)
                 try:
-                    result = self._ask(text, post)
+                    result = self._ask(text, post, author, mentions)
                 except Exception as e:  # GeminiError va boshqalar
                     if getattr(e, "fatal", False):
                         raise
@@ -499,7 +572,9 @@ class CommentResponder:
                         self.state.save()
                     continue
 
-                verdict = assess(result, text)
+                if mentions and isinstance(result, dict):
+                    result = {**result, "reply": strip_mentions(result.get("reply"))}
+                verdict = apply_tags(assess(result, text), author, mentions, text)
                 verdict["dm"] = {
                     "text": result.get("dm") if isinstance(result, dict) else "",
                     "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
@@ -571,7 +646,7 @@ class CommentResponder:
                     events.append(dm)
                     stats["dm"] = stats.get("dm", 0) + 1
                 processed += 1
-                self._recent.append(verdict["reply"])
+                self._recent.append(strip_mentions(verdict["reply"]))
                 time.sleep(random.randint(delay_min, delay_max))
             if clean:
                 self._counts[pid] = count

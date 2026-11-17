@@ -23,6 +23,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+import brain
 import catalog
 import config
 import instagram_api as ig
@@ -269,6 +270,9 @@ class DirectChat:
             f = catalog.post_facts(focus)
             msg += "\n\nMIJOZ SO'RAYOTGAN POST (eng muhim):\n" + "\n".join(f["lines"])
             source += "\n" + f["source_text"]
+        lessons = brain.lessons_block()
+        if lessons:
+            msg += "\n\n" + lessons
         msg += f"\n\nYOZISHMA:\n{history}"
         res = self.ai.generate_json(PROMPT, msg, temperature=0.4)
         out = {"text": "", "kind": "human", "topic": "", "safe": False, "reason": ""}
