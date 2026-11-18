@@ -194,6 +194,58 @@ def ship(status=None, force=False):
         return 0, _state["last_error"]
 
 
+# ---------- maxfiy kuzatuv havolasi ----------
+
+def _key_path():
+    return os.path.join(config.DATA_DIR, "audit_key.txt")
+
+
+def get_key(new=False):
+    """Kuzatuv havolasi kaliti. new=True bo'lsa eskisi bekor qilinadi."""
+    import secrets
+    if not new:
+        try:
+            with open(_key_path()) as f:
+                k = f.read().strip()
+            if len(k) >= 32:
+                return k
+        except OSError:
+            pass
+    k = secrets.token_hex(24)
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    with open(_key_path(), "w") as f:
+        f.write(k)
+    return k
+
+
+def key_ok(key):
+    import hmac
+    try:
+        with open(_key_path()) as f:
+            real = f.read().strip()
+    except OSError:
+        return False
+    return len(real) >= 32 and hmac.compare_digest(real, str(key or ""))
+
+
+def _fmt(it):
+    from catalog import TASHKENT
+    when = datetime.fromtimestamp(it.get("t", 0), TASHKENT).strftime("%d.%m %H:%M:%S")
+    rest = {k: v for k, v in it.items() if k not in ("t", "k")}
+    return f"{when} {it.get('k')} " + json.dumps(rest, ensure_ascii=False, default=str)
+
+
+def text_dump(since=0, limit=300, kinds=None, status=None):
+    """Kuzatuv sahifasi uchun oddiy matn: holat + yozuvlar (eskidan yangiga)."""
+    items = [i for i in recent(5000, kinds) if i.get("t", 0) > since][-limit:]
+    head = ["JARVIS KUZATUV", f"yozuvlar: {len(items)} (since={since}, limit={limit})"]
+    if status:
+        head.append("holat: " + json.dumps(status, ensure_ascii=False, default=str))
+    if items:
+        head.append(f"keyingi sahifa: ?since={items[-1]['t']}")
+    return "\n".join(head) + "\n\n" + "\n".join(_fmt(i) for i in items)
+
+
 def config_tz():
     from catalog import TASHKENT
     return TASHKENT

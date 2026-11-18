@@ -27,6 +27,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import analytics
+import audit
 import brain
 import followers_live
 import catalog
@@ -292,6 +293,23 @@ So'rov 30 kun ichida bajariladi.</p>
 the account's own insights and reply to comments on its posts. Data is not sold or shared with third parties.
 To request deletion of your data, send a direct message to @bolalar_dunyosi.uzb on Instagram.</p>
 </body></html>"""
+
+
+@router.get("/audit/{key}")
+def audit_page(key: str, since: int = 0, limit: int = 300, kinds: str = ""):
+    """Ishlab chiquvchi uchun maxfiy kuzatuv sahifasi (kalit /kuzatuv buyrug'ida)."""
+    from fastapi.responses import PlainTextResponse
+    if not audit.key_ok(key):
+        raise HTTPException(status_code=404, detail="Not Found")
+    status = None
+    responder = _ctx.get("responder")
+    if responder is not None:
+        status = responder.status()
+        status["lessons"] = brain.get_lessons()
+        chat = _ctx.get("chat")
+        status["chat_mode"] = chat.mode if chat is not None else None
+    ks = tuple(k for k in kinds.split(",") if k) or None
+    return PlainTextResponse(audit.text_dump(since, max(1, min(1000, limit)), ks, status))
 
 
 @router.get("/privacy")

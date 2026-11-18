@@ -580,6 +580,21 @@ async def xatolar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @owner_only
+async def kuzatuv_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    base = (webapp.webapp_url() or "").split("/app")[0].rstrip("/")
+    if not base:
+        await update.message.reply_text("Server manzili topilmadi (mini ilova sozlanmagan).")
+        return
+    new = bool(context.args and context.args[0].lower() in ("yangi", "new"))
+    key = audit.get_key(new=new)
+    await update.message.reply_text(
+        "🛰 Kuzatuv havolasi. Uni faqat Claude'ga yuboring: u shu orqali Jarvis qarorlari va xatolarini "
+        "o'qib, tuzatib boradi.\n\n" + f"{base}/audit/{key}" +
+        "\n\nHavola begona qo'lga tushsa: /kuzatuv yangi (eskisi darhol ishlamay qoladi).",
+        disable_web_page_preview=True)
+
+
+@owner_only
 async def jurnal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = brain.journal_text(25)
     await send_long(context.bot, update.effective_chat.id,
@@ -1448,6 +1463,7 @@ def build_app(token):
     app.add_handler(CommandHandler("jurnal", jurnal_cmd))
     app.add_handler(CommandHandler("sozlamalar", sozlamalar_cmd))
     app.add_handler(CommandHandler("xatolar", xatolar_cmd))
+    app.add_handler(CommandHandler("kuzatuv", kuzatuv_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app

@@ -139,6 +139,17 @@ def run():
     check(r["today"]["gained"] == 3 and r["today"]["lost"] == 2, "Bugungi qo'shilgan va chiqqanlar hisoblandi")
     check(r["instagram_today"] == {"follows": 42, "unfollows": 7}, "Instagram'ning o'z hisobi olindi")
 
+    import audit
+    audit.record("comment", action="sent", text="Zo'r ekan", reply="Rahmat!")
+    key = audit.get_key()
+    check(client.get("/audit/" + "x" * 48).status_code == 404, "Noto'g'ri kalit bilan kuzatuv yopiq")
+    page = client.get(f"/audit/{key}?limit=50")
+    check(page.status_code == 200 and "Rahmat!" in page.text and "limit_day" in page.text,
+          "Kuzatuv sahifasi qarorlar va holatni ko'rsatadi")
+    key2 = audit.get_key(new=True)
+    check(client.get(f"/audit/{key}").status_code == 404 and client.get(f"/audit/{key2}").status_code == 200,
+          "Yangi kalitdan keyin eski havola ishlamaydi")
+
     print("\n✅ Mini ilova testlari o'tdi")
 
 
