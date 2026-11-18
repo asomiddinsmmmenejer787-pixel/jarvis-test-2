@@ -123,6 +123,22 @@ def run():
     check(client.post("/api/comments/mode", json={"mode": "xyz"}, headers=H).status_code == 400,
           "Noto'g'ri rejim rad etildi")
 
+    r = client.post("/api/comments/limit", json={"limit": 500}, headers=H).json()
+    check(r["status"]["limit_day"] == 500 and client.get("/api/status", headers=H).json()["autoreply"]["limit_day"] == 500,
+          "Limit 500 ga o'zgardi va HUD holatida ko'rinadi")
+    check(client.post("/api/comments/limit", json={"limit": "abc"}, headers=H).status_code == 400, "Noto'g'ri limit rad etildi")
+
+    import followers_live
+    now = time.time()
+    for i, c in enumerate([1000, 1000, 1003, 1001, 1001]):
+        followers_live.record(c, now - 300 + i * 60)
+    followers_live._last_fetch[0] = time.time()
+    r = client.get("/api/followers", headers=H).json()
+    check(r["count"] == 1001 and [x["delta"] for x in r["changes"]][:2] == [-2, 3],
+          "Obunachilar o'zgarishlari vaqti bilan ko'rinadi")
+    check(r["today"]["gained"] == 3 and r["today"]["lost"] == 2, "Bugungi qo'shilgan va chiqqanlar hisoblandi")
+    check(r["instagram_today"] == {"follows": 42, "unfollows": 7}, "Instagram'ning o'z hisobi olindi")
+
     print("\n✅ Mini ilova testlari o'tdi")
 
 

@@ -89,6 +89,11 @@ def run():
     check("Komentga javob: @ona_1" in brain.journal_text(), "Jurnalga yozildi")
     check(brain.delete_lesson(0) == "Javoblar qisqa bo'lsin." and not brain.get_lessons(), "Qoida o'chirildi")
 
+    lines, rc = brain.apply({"reply": "Xo'p", "actions": [{"type": "set_limit", "value": 500},
+                                                         {"type": "recheck_comments", "posts": 2}]}, r)
+    check(r.day_limit() == 500 and any("500" in x for x in lines) and rc == 2,
+          "Chatda limit so'ralsa haqiqatan o'zgaradi")
+
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 
 

@@ -134,6 +134,10 @@ class FakeInstagram:
                         "gender": [("F", 320), ("M", 80)]}[bd]
                 return FakeResponse({"data": [{"name": "follower_demographics", "total_value": {
                     "breakdowns": [{"results": [{"dimension_values": [d], "value": v} for d, v in rows]}]}}]})
+            if q.get("metric") == "follows_and_unfollows":
+                return FakeResponse({"data": [{"name": "follows_and_unfollows", "total_value": {"breakdowns": [
+                    {"results": [{"dimension_values": ["FOLLOWER"], "value": 42},
+                                 {"dimension_values": ["NON_FOLLOWER"], "value": 7}]}]}}]})
             metrics = q["metric"].split(",")
             return FakeResponse({"data": [{"name": m, "total_value": {"value": 1000}} for m in metrics]})
         if path.endswith("/insights"):

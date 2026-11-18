@@ -141,8 +141,15 @@ TURLAR (kind):
   * actions: kerakli harakatlar ro'yxati, faqat quyidagilardan:
     {"type": "recheck_comments", "posts": 1}  - oxirgi N ta (1-5) postdagi javobsiz qolgan komentlarni
        qayta ko'rib, javob yozish (egasi "javob berilmagan komentlar bor", "qayta tekshir" desa).
+    {"type": "set_limit", "value": 500}  - komentlarga kunlik avtomatik javoblar limiti (10-1000).
+    {"type": "comment_mode", "mode": "on|off|test"}  - komentga avtomatik javobni yoqish/o'chirish/test.
+    {"type": "dm_mode", "mode": "auto|approve|off"}  - direkt suhbatlarga javob rejimi.
   * reply: egasiga qisqa javob: nimani tushunding, nima qilasan. JURNALga tayanib gapir, to'qima.
     Xatoni tan ol, uzr so'rab cho'zma.
+  * HALOLLIK: sozlamani o'zgartirish faqat actions orqali bo'ladi. "Bajardim", "oshirdim" dema; natijani tizim
+    o'zi qo'shadi. So'ralgan ishni yuqoridagi harakatlar bilan qilib bo'lmasa, buni ochiq ayt
+    ("buni hozir o'zim qila olmayman").
+  Sozlama so'rovi (limit, rejim) ham kind="work".
 
 Javob faqat JSON:
 {"kind": "chat|work", "reply": "...", "lesson": "...", "fact": "...", "actions": []}
@@ -165,11 +172,92 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
     out["fact"] = catalog._clean(res.get("fact"), 400) if isinstance(res.get("fact"), str) else ""
     acts = []
     for a in res.get("actions") or []:
-        if isinstance(a, dict) and a.get("type") == "recheck_comments":
-            try:
-                n = int(a.get("posts") or 1)
-            except (TypeError, ValueError):
-                n = 1
-            acts.append({"type": "recheck_comments", "posts": max(1, min(5, n))})
-    out["actions"] = acts[:1]
+        if not isinstance(a, dict):
+            continue
+        t = a.get("type")
+        try:
+            if t == "recheck_comments":
+                acts.append({"type": t, "posts": max(1, min(5, int(a.get("posts") or 1)))})
+            elif t == "set_limit":
+                acts.append({"type": t, "value": max(10, min(1000, int(a.get("value"))))})
+            elif t == "comment_mode" and a.get("mode") in ("on", "off", "test"):
+                acts.append({"type": t, "mode": a["mode"]})
+            elif t == "dm_mode" and a.get("mode") in ("auto", "approve", "off"):
+                acts.append({"type": t, "mode": a["mode"]})
+        except (TypeError, ValueError):
+            continue
+    out["actions"] = acts[:4]
     return out
+
+
+def build_context(responder, chat, memory):
+    """think() uchun holat, oxirgi post va suhbat matnlari."""
+    import instagram_api as ig
+    st = []
+    if responder is not None:
+        r = responder.status()
+        st.append(f"Komentga javob: {r['mode']}, bugun {r['sent_today']}/{r['limit_day']} (kunlik limit "
+                  f"{r['limit_day']}), ruxsat kutayotgan {r['pending']}, komentdan keyin direkt: {r['dm_mode']}")
+        if r.get("last_run"):
+            st.append("Oxirgi komment tekshiruvi: " + json.dumps(r["last_run"], ensure_ascii=False))
+    if chat is not None:
+        st.append(f"Direkt suhbat rejimi: {chat.mode}")
+    last_post = ""
+    try:
+        posts = ig.get_recent_posts(1)
+        if posts:
+            p = posts[0]
+            last_post = (f"{catalog._post_time(p)}, {p.get('comments_count', 0)} komment: "
+                         f"{(p.get('caption') or '').strip()[:200]}")
+    except ig.InstagramError as e:
+        if e.fatal:
+            raise
+    hist = ""
+    if memory is not None:
+        hist = "\n".join(("Egasi: " if h["role"] == "user" else "Jarvis: ") + h["text"][:300]
+                         for h in memory.get_recent(6))
+    return "\n".join(st), last_post, hist
+
+
+def apply(res, responder, chat=None):
+    """think() natijasini bajaradi. (egasiga matn qatorlari, qayta tekshiriladigan postlar soni yoki None)."""
+    lines = [res.get("reply") or "Tushundim."]
+    recheck = None
+    if res.get("lesson"):
+        try:
+            add_lesson(res["lesson"])
+            lines.append(f"\n📌 Doimiy qoida qilib saqladim: {res['lesson']}\n(ro'yxat: /qoidalar)")
+        except ValueError:
+            pass
+    if res.get("fact"):
+        try:
+            catalog.add_memory(res["fact"])
+            lines.append(f"🧠 Xotiraga yozdim: {res['fact']}")
+        except ValueError:
+            pass
+    for act in res.get("actions") or []:
+        t = act["type"]
+        if responder is None and t != "dm_mode":
+            lines.append("⚠️ Komentga javob tizimi o'chiq, bu sozlamani o'zgartira olmadim.")
+            continue
+        if t == "set_limit":
+            n = responder.set_day_limit(act["value"])
+            st = responder.status()
+            lines.append(f"✅ Kunlik limit o'rnatildi: {n} (bugun {st['sent_today']}/{st['limit_day']})")
+            log_entry(f"Kunlik komment limiti {n} ga o'zgartirildi")
+        elif t == "comment_mode":
+            responder.set_mode(act["mode"])
+            lines.append(f"✅ Komentga javob rejimi: {act['mode']}")
+            log_entry(f"Komment rejimi: {act['mode']}")
+        elif t == "dm_mode":
+            if chat is None:
+                lines.append("⚠️ Direkt suhbat tizimi o'chiq.")
+                continue
+            chat.set_mode(act["mode"])
+            lines.append(f"✅ Direkt suhbat rejimi: {act['mode']}")
+            log_entry(f"Direkt rejimi: {act['mode']}")
+        elif t == "recheck_comments":
+            recheck = act["posts"]
+            lines.append(f"🔎 Oxirgi {recheck} ta postdagi javobsiz komentlarni hozir qayta ko'rib chiqaman, "
+                         "tugagach xabar beraman.")
+    return lines, recheck

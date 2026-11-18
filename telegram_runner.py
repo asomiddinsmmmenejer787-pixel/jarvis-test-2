@@ -19,6 +19,7 @@ from fastapi.responses import PlainTextResponse
 
 import analytics
 import brain
+import followers_live
 import catalog
 import instagram_api as ig
 import webapp
@@ -459,28 +460,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------- o'rganish: egasining tanbehi va ko'rsatmalari ----------
 
 def _think(user_text):
-    st = []
-    if responder is not None:
-        r = responder.status()
-        st.append(f"Komentga javob: {r['mode']}, bugun {r['sent_today']}/{r['limit_day']}, "
-                  f"ruxsat kutayotgan {r['pending']}, komentdan keyin direkt: {r['dm_mode']}")
-        if r.get("last_run"):
-            st.append("Oxirgi komment tekshiruvi: " + json.dumps(r["last_run"], ensure_ascii=False))
-    if chat is not None:
-        st.append(f"Direkt suhbat: {chat.mode}")
-    last_post = ""
-    try:
-        posts = ig.get_recent_posts(1)
-        if posts:
-            p = posts[0]
-            last_post = (f"{catalog._post_time(p)}, {p.get('comments_count', 0)} komment: "
-                         f"{(p.get('caption') or '').strip()[:200]}")
-    except InstagramError as e:
-        if e.fatal:
-            raise
-    hist = "\n".join(("Egasi: " if h["role"] == "user" else "Jarvis: ") + h["text"][:300]
-                     for h in jarvis.memory.get_recent(6))
-    return brain.think(jarvis.ai_provider, user_text, "\n".join(st), last_post, hist)
+    status, last_post, hist = brain.build_context(responder, chat, jarvis.memory)
+    return brain.think(jarvis.ai_provider, user_text, status, last_post, hist)
 
 
 async def run_recheck(bot, chat_id, n_posts):
@@ -530,31 +511,14 @@ async def smart_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, user_
     if res.get("kind") != "work":
         await answer_with_jarvis(update, context, user_text)
         return
-    lines = [res["reply"] or "Tushundim."]
-    if res["lesson"]:
-        try:
-            brain.add_lesson(res["lesson"])
-            lines.append(f"\n📌 Doimiy qoida qilib saqladim: {res['lesson']}\n(ro'yxat: /qoidalar)")
-        except ValueError:
-            pass
-    if res["fact"]:
-        try:
-            catalog.add_memory(res["fact"])
-            lines.append(f"🧠 Xotiraga yozdim: {res['fact']}")
-        except ValueError:
-            pass
-    for act in res["actions"]:
-        if act["type"] == "recheck_comments":
-            lines.append(f"🔎 Oxirgi {act['posts']} ta postdagi javobsiz komentlarni hozir qayta ko'rib chiqaman, "
-                         "tugagach xabar beraman.")
+    lines, recheck = brain.apply(res, responder, chat)
     reply = "\n".join(lines)
     await send_long(context.bot, update.effective_chat.id, reply)
     jarvis.memory.add("user", user_text)
     jarvis.memory.add("jarvis", reply)
     brain.log_entry(f"Egasi yozdi: «{user_text[:100]}»" + (f" → qoida: {res['lesson'][:120]}" if res["lesson"] else ""))
-    for act in res["actions"]:
-        if act["type"] == "recheck_comments":
-            asyncio.create_task(run_recheck(context.bot, update.effective_chat.id, act["posts"]))
+    if recheck:
+        asyncio.create_task(run_recheck(context.bot, update.effective_chat.id, recheck))
 
 
 @owner_only
@@ -1284,6 +1248,13 @@ async def instagram_tick(app):
     bot = app.bot
     try:
         await asyncio.to_thread(ig.refresh_token_if_needed)
+
+        try:
+            await asyncio.to_thread(followers_live.sample, 110)
+        except InstagramError as e:
+            if e.fatal:
+                raise
+            logger.warning("Obunachilar sonini o'qib bo'lmadi: %s", e)
 
         if responder is not None and responder.mode != "off":
             try:

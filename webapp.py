@@ -27,6 +27,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import analytics
+import brain
+import followers_live
 import catalog
 from ai.base import is_error_text
 import config
@@ -419,6 +421,30 @@ async def api_chat(request: Request, x_init_data: str = Header(default="")):
         raise HTTPException(status_code=400, detail="Tokenni bu yerga emas, botga /igtoken bilan yuboring")
 
     def work(job):
+        responder, chat = _ctx.get("responder"), _ctx.get("chat")
+        if responder is not None and not text.startswith("/") and ig.is_configured():
+            try:
+                status, last_post, hist = brain.build_context(responder, chat, _ctx["jarvis"].memory)
+                res = brain.think(_ctx["jarvis"].ai_provider, text, status, last_post, hist)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Xabarni tahlil qilib bo'lmadi: %s", e)
+                res = {"kind": "chat"}
+            if res.get("kind") == "work":
+                lines, recheck = brain.apply(res, responder, chat)
+                reply = "\n".join(lines)
+                memory = _ctx["jarvis"].memory
+                memory.add("user", text)
+                memory.add("jarvis", reply)
+                brain.log_entry(f"Egasi (mini ilova): «{text[:100]}»")
+                if recheck:
+                    def bg():
+                        try:
+                            for ev in responder.recheck(recheck)[0]:
+                                brain.log_event(ev)
+                        except Exception:  # noqa: BLE001
+                            log.exception("Qayta tekshiruv xatosi")
+                    threading.Thread(target=bg, daemon=True).start()
+                return {"reply": reply}
         reply = _ctx["jarvis"].handle(text, progress=job.step)
         answer, err = _ai_text(reply)
         if err:
@@ -492,6 +518,37 @@ async def api_comments_mode(request: Request, x_init_data: str = Header(default=
         raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
     responder.set_mode(mode)
     return {"status": responder.status()}
+
+
+@router.post("/api/comments/limit")
+async def api_comments_limit(request: Request, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    responder = _ctx["responder"]
+    if responder is None:
+        raise HTTPException(status_code=400, detail="Komentga javob tizimi o'chiq")
+    try:
+        n = int((await request.json()).get("limit"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Limit raqam bo'lsin")
+    n = responder.set_day_limit(n)
+    brain.log_entry(f"Kunlik komment limiti {n} ga o'zgartirildi (mini ilova)")
+    return {"status": responder.status()}
+
+
+@router.get("/api/followers")
+def api_followers(x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    out = {"connected": ig.is_configured()}
+    if not out["connected"]:
+        return out
+    try:
+        followers_live.sample(40)
+        out["instagram_today"] = followers_live.instagram_today()
+    except InstagramError as e:
+        out["error"] = _ig_error(e)
+    out.update(followers_live.view())
+    out["now"] = int(time.time())
+    return JSONResponse(_jsonable(out))
 
 
 @router.post("/api/comments/{cid}")

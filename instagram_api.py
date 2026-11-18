@@ -360,6 +360,25 @@ def get_account_insights(days=7):
     )
 
 
+def get_follows_unfollows(since, until):
+    """Instagram hisobi bo'yicha davrdagi yangi obunalar va obunadan chiqishlar.
+    {"follows": n, "unfollows": m} yoki ma'lumot bo'lmasa None."""
+    body = _request("GET", "me/insights", {
+        "metric": "follows_and_unfollows", "period": "day", "metric_type": "total_value",
+        "breakdown": "follow_type", "since": int(since), "until": int(until),
+    })
+    out = {}
+    for item in body.get("data", []):
+        for bd in (item.get("total_value") or {}).get("breakdowns", []):
+            for res in bd.get("results", []):
+                dim = ((res.get("dimension_values") or [""])[0] or "").upper()
+                if dim == "FOLLOWER":
+                    out["follows"] = int(res.get("value") or 0)
+                elif dim == "NON_FOLLOWER":
+                    out["unfollows"] = int(res.get("value") or 0)
+    return out or None
+
+
 def get_audience():
     """Obunachilar demografiyasi (shahar, yosh, jins). 100+ obunachi kerak."""
     out = {}

@@ -157,6 +157,28 @@ select{width:100%;background:rgba(14,10,6,.85);border:1px solid var(--line);colo
 .lock.show{display:flex}
 .lock h2{color:var(--cyan);letter-spacing:.2em;text-shadow:var(--glow)}
 a{color:var(--cyan)}
+/* obunachilar - jonli */
+.tile.click{cursor:pointer}
+.tile.click .k::after{content:" ›";color:var(--cyan)}
+.hero .val{pointer-events:auto;cursor:pointer}
+.fol{position:fixed;inset:0;z-index:50;background:rgba(8,5,3,.86);backdrop-filter:blur(10px);display:none;overflow:auto;
+  padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 20px)}
+.fol.show{display:block;animation:in .3s ease}
+.fol .hd{display:flex;justify-content:space-between;align-items:center}
+.fol .x{background:none;border:1px solid var(--line);color:var(--cyan);font-size:18px;width:36px;height:36px}
+.live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:.14em}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.2s infinite}
+.live.stale{color:var(--amber)}.live.stale i{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.bigc{font-family:var(--mono);font-size:46px;text-align:center;color:var(--text);margin:18px 0 2px;text-shadow:0 0 18px rgba(224,168,90,.45);transition:color .4s}
+.bigc.flash-up{color:var(--green);text-shadow:0 0 22px rgba(70,242,160,.6)}
+.bigc.flash-down{color:var(--red);text-shadow:0 0 22px rgba(255,77,94,.6)}
+.bigd{text-align:center;font-family:var(--mono);font-size:13px;color:var(--dim);min-height:18px}
+#folChart{width:100%;height:120px;display:block}
+.feed .it{display:grid;grid-template-columns:62px 1fr auto;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px dashed rgba(224,168,90,.1);font-family:var(--mono);font-size:13px}
+.feed .it.new{animation:slidein .5s ease}
+@keyframes slidein{from{opacity:0;transform:translateX(-12px);background:rgba(224,168,90,.15)}}
+.feed .t{color:var(--dim)}.feed .n{color:var(--dim);text-align:right}
+.feed .d.up{color:var(--green)}.feed .d.down{color:var(--red)}
 </style>
 </head>
 <body>
@@ -247,6 +269,7 @@ a{color:var(--cyan)}
       <div class="seg" id="modeSeg"><button data-m="on">YONIQ</button><button data-m="test">TEST</button><button data-m="off">O'CHIQ</button></div>
       <div class="muted" id="modeText" style="margin-top:8px"></div>
       <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
+      <div class="row" style="margin-top:8px"><div class="muted" style="flex:1">Kunlik limit (10–1000)</div><input id="limitIn" type="number" inputmode="numeric" min="10" max="1000" style="width:96px"><button class="btn sm" onclick="saveLimit()">Saqlash</button></div>
     </div>
     <div class="panel">
       <div class="ptitle">Jarvisga vazifalar</div>
@@ -306,6 +329,25 @@ a{color:var(--cyan)}
   <button data-v="catalog"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>POSTLAR</button>
   <button data-v="comments"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>KOMENT</button>
 </nav>
+
+<div class="fol" id="fol">
+  <div class="hd"><div class="ptitle" style="margin:0">Obunachilar <span class="live" id="folLive"><i></i>JONLI</span></div><button class="x" onclick="closeFollowers()">✕</button></div>
+  <div class="bigc" id="folCount">—</div>
+  <div class="bigd" id="folDelta">yangilanmoqda...</div>
+  <div class="panel">
+    <div class="ptitle">Bugun <span id="folSince"></span></div>
+    <div class="grid" id="folToday"></div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">Oxirgi 24 soat <span id="folHour"></span></div>
+    <canvas id="folChart"></canvas>
+  </div>
+  <div class="panel">
+    <div class="ptitle">O'zgarishlar <span>real vaqtda</span></div>
+    <div class="feed" id="folFeed"><div class="muted">Hali o'zgarish yozilmagan. Jarvis har daqiqada tekshiradi.</div></div>
+  </div>
+  <div class="muted" style="padding:0 4px">Instagram aynan kim obuna bo'lganini ko'rsatmaydi, faqat umumiy sonni beradi. Jarvis sonni har daqiqada tekshirib, har bir o'zgarishni vaqti bilan yozib boradi. Bir daqiqada ham qo'shilgan, ham chiqib ketgan bo'lsa, farqi ko'rinadi.</div>
+</div>
 
 <div class="lock" id="lock"><div><h2>KIRISH YOPIQ</h2><p class="muted" id="lockText">Bu panel faqat Telegram'dagi Jarvis boti orqali ochiladi.</p></div></div>
 
@@ -477,7 +519,7 @@ function typeOut(el, text){
 // ---------- HUD ----------
 let lastStatus=null;
 function restoreOrb(){ const f=lastStatus?.instagram?.followers; $('#orbVal').textContent= f?short(f):'—'; $('#orbLbl').textContent='OBUNACHI'; setArc(0) }
-function tile(k,v,d='',cls=''){ return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d ${cls}">${d}</div></div>` }
+function tile(k,v,d='',cls='',click=''){ return `<div class="tile${click?' click':''}"${click?` onclick="${click}"`:''}><div class="k">${k}</div><div class="v">${v}</div><div class="d ${cls}">${d}</div></div>` }
 function bars(rows, max, fmtNum){ max = max || Math.max(1,...rows.map(r=>r[1]||0));
   return rows.map(([l,v,extra])=>`<div class="bar"><div class="lbl">${esc(l)}</div><div class="track"><div class="fill" data-w="${Math.max(2,(v||0)/max*100)}"></div></div><div class="num">${fmtNum?fmtNum(v):v}${extra?' '+extra:''}</div></div>`).join('') }
 function animateBars(root){ requestAnimationFrame(()=>root.querySelectorAll('.fill').forEach(f=>f.style.width=f.dataset.w+'%')) }
@@ -487,7 +529,7 @@ async function loadStatus(){
     const s = await api('/api/status'); lastStatus=s; const ig=s.instagram||{}; const acc=ig.account||{};
     $('#igUser').textContent = ig.username ? '@'+ig.username : (ig.connected?'':'ulanmagan');
     const ch = ig.change||{}; const ch7 = ch['7']; const ch30 = ch['30'];
-    let tiles = tile('Obunachilar', fmt(ig.followers), ch7!=null?(ch7>=0?'▲ +':'▼ ')+fmt(ch7)+' / 7 kun':ch30!=null?(ch30>=0?'▲ +':'▼ ')+fmt(ch30)+' / 30 kun':'o\'sish kuzatilmoqda', (ch7??ch30??0)>=0?'up':'down')
+    let tiles = tile('Obunachilar', fmt(ig.followers), ch7!=null?(ch7>=0?'▲ +':'▼ ')+fmt(ch7)+' / 7 kun':ch30!=null?(ch30>=0?'▲ +':'▼ ')+fmt(ch30)+' / 30 kun':'o\'sish kuzatilmoqda', (ch7??ch30??0)>=0?'up':'down', 'openFollowers()')
       + tile('Qamrov · 7 kun', short(acc.reach))
       + tile('Ko\'rishlar · 7 kun', short(acc.views))
       + tile('Faol auditoriya', short(acc.accounts_engaged), acc.total_interactions!=null?fmt(acc.total_interactions)+' interaksiya':'')
@@ -514,6 +556,63 @@ function renderHudReport(r){
   if (a.age) h+='<div class="muted" style="margin-top:6px">Yosh</div>'+bars(a.age.slice(0,4),100,v=>v+'%');
   if (a.gender) h+='<div class="muted" style="margin-top:6px">Jins</div>'+bars(a.gender,100,v=>v+'%');
   if (h){ $('#hudAudience').innerHTML=h; $('#hudAudience').classList.remove('muted'); animateBars($('#hudAudience')) }
+}
+
+// ---------- OBUNACHILAR: JONLI ----------
+const fol={timer:null,shown:null,lastKey:null,seen:new Set()};
+document.getElementById('orbVal').onclick=()=>{ if(!state.busy && $('#orbLbl').textContent==='OBUNACHI') openFollowers() };
+function openFollowers(){ haptic(); $('#fol').classList.add('show'); document.body.style.overflow='hidden'; fol.shown=null; fol.seen=new Set(); loadFollowers(); clearInterval(fol.timer); fol.timer=setInterval(loadFollowers,15000) }
+function closeFollowers(){ $('#fol').classList.remove('show'); document.body.style.overflow=''; clearInterval(fol.timer); fol.timer=null }
+const hhmm=t=>new Date(t*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+const sign=n=>n==null?'—':(n>0?'+':n<0?'−':'')+fmt(Math.abs(n));
+function rollTo(el,from,to){ if(from==null||from===to){ el.textContent=fmt(to); return }
+  const t0=performance.now(),dur=900; (function f(t){ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); el.textContent=fmt(Math.round(from+(to-from)*e)); if(k<1) requestAnimationFrame(f) })(t0) }
+async function loadFollowers(){
+  let r; try{ r=await api('/api/followers') }catch(e){ $('#folDelta').textContent=e.message; return }
+  if (!$('#fol').classList.contains('show')) return;
+  if (r.error) $('#folDelta').textContent=r.error;
+  const c=r.count, el=$('#folCount');
+  if (c!=null){
+    if (fol.shown!=null && c!==fol.shown){ const up=c>fol.shown; el.classList.add(up?'flash-up':'flash-down'); haptic(up?'ok':''); Brain.signal(up?'recv':'send',4); setTimeout(()=>el.classList.remove('flash-up','flash-down'),1600) }
+    rollTo(el,fol.shown,c); fol.shown=c;
+    if (lastStatus?.instagram) { lastStatus.instagram.followers=c; if(!state.busy) restoreOrb() }
+  }
+  const age=r.updated?r.now-r.updated:null;
+  $('#folLive').classList.toggle('stale', !r.updated || (r.changes[0]?.t!==r.updated && age>600));
+  const last=r.changes[0];
+  if (!r.error) $('#folDelta').innerHTML = last ? `oxirgi o'zgarish: <span class="${last.delta>0?'up':'down'}">${sign(last.delta)}</span> · ${hhmm(last.t)}` : 'kuzatuv boshlandi';
+  const td=r.today||{}, ins=r.instagram_today;
+  $('#folSince').textContent = td.tracked_from&&td.tracked_from>td.since ? 'kuzatuv '+hhmm(td.tracked_from)+' dan' : '00:00 dan';
+  $('#folToday').innerHTML = tile('Qo\'shildi', '<span class="up">+'+fmt(td.gained||0)+'</span>', 'Jarvis kuzatuvi')
+    + tile('Chiqib ketdi', '<span class="down">−'+fmt(td.lost||0)+'</span>', 'Jarvis kuzatuvi')
+    + tile('Sof o\'zgarish', sign(td.net||0), r.hour!=null?'1 soatda '+sign(r.hour):'', (td.net||0)>=0?'up':'down')
+    + tile('Instagram hisobi', ins?`<span class="up">+${fmt(ins.follows||0)}</span> <span class="down">−${fmt(ins.unfollows||0)}</span>`:'—', ins?'kechikish bilan yangilanadi':'hozircha ma\'lumot yo\'q');
+  $('#folHour').textContent = r.series?.length>1 ? sign(r.series.at(-1)[1]-r.series[0][1])+' / 24 soat' : '';
+  drawFolChart(r.series||[]);
+  const feed=$('#folFeed');
+  if (r.changes?.length){
+    feed.innerHTML = r.changes.map(x=>{ const k=x.t+':'+x.delta, isNew=fol.seen.size&&!fol.seen.has(k); return `<div class="it${isNew?' new':''}"><div class="t">${hhmm(x.t)}</div><div class="d ${x.delta>0?'up':'down'}">${x.delta>0?'▲':'▼'} ${sign(x.delta)} ${x.delta>0?'qo\'shildi':'chiqib ketdi'}</div><div class="n">${fmt(x.count)}</div></div>` }).join('');
+    r.changes.forEach(x=>fol.seen.add(x.t+':'+x.delta));
+  }
+}
+function drawFolChart(pts){
+  const cv=$('#folChart'), dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,w,h);
+  if (pts.length<2){ g.fillStyle='rgba(224,168,90,.5)'; g.font='12px monospace'; g.fillText('Grafik ma\'lumot yig\'ilgach chiqadi',8,h/2); return }
+  const t0=pts[0][0], t1=pts.at(-1)[0]||t0+1, vs=pts.map(p=>p[1]); let lo=Math.min(...vs), hi=Math.max(...vs); if(hi===lo){hi+=1;lo-=1}
+  const X=t=>(t-t0)/(t1-t0||1)*(w-8)+4, Y=v=>h-10-(v-lo)/(hi-lo)*(h-24);
+  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,'rgba(224,168,90,.35)'); grad.addColorStop(1,'rgba(224,168,90,0)');
+  g.beginPath(); pts.forEach((p,i)=>{ const x=X(p[0]),y=Y(p[1]); if(i) g.lineTo(x,pts[i-1]?Y(pts[i-1][1]):y), g.lineTo(x,y); else g.moveTo(x,y) });
+  g.lineTo(X(t1),h); g.lineTo(X(t0),h); g.closePath(); g.fillStyle=grad; g.fill();
+  g.beginPath(); pts.forEach((p,i)=>{ const x=X(p[0]),y=Y(p[1]); if(i){ g.lineTo(x,Y(pts[i-1][1])); g.lineTo(x,y) } else g.moveTo(x,y) });
+  g.strokeStyle='#e0a85a'; g.lineWidth=1.6; g.shadowColor='rgba(224,168,90,.7)'; g.shadowBlur=6; g.stroke(); g.shadowBlur=0;
+  const lp=pts.at(-1); g.beginPath(); g.arc(X(lp[0]),Y(lp[1]),3.5,0,7); g.fillStyle='#f3e2bf'; g.fill();
+  g.fillStyle='rgba(224,168,90,.7)'; g.font='10px monospace'; g.fillText(fmt(hi),4,10); g.fillText(fmt(lo),4,h-1);
+}
+
+async function saveLimit(){
+  const n=+$('#limitIn').value; if(!(n>=10&&n<=1000)){ alert('10 dan 1000 gacha raqam kiriting'); return }
+  try{ await api('/api/comments/limit',{method:'POST',body:{limit:n}}); haptic('ok'); $('#limitIn').blur(); loadComments(); loadStatus() }catch(e){ alert(e.message) }
 }
 
 // ---------- TAHLIL ----------
@@ -591,7 +690,7 @@ async function loadComments(){
     if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
     const st=r.status; renderDm(st, r.dm_pending); renderChat(r.chat); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
     const lr=st.last_run; $('#modeText').textContent=MODE_TEXT[st.mode] + (lr ? `\nOxirgi tekshiruv ${lr.time}: ${lr.posts} post, ${lr.comments} komment, yangi ${lr.new}, yuborildi ${lr.sent}, ruxsatga ${lr.approval}.` : '');
-    $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day;
+    $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day; if(document.activeElement!==$('#limitIn')) $('#limitIn').value=st.limit_day;
     $('#pendCount').textContent=r.pending.length;
     $('#pending').classList.toggle('muted', !r.pending.length);
     $('#pending').innerHTML = r.pending.length ? r.pending.map(p=>`<div class="cm" id="cm-${p.cid}">
@@ -744,6 +843,10 @@ function demoApi(path, opts){
     dm_pending:[{cid:'9',username:'ona_1',comment:'Narxi qancha?',topic:'samokat narxi',post_time:'16.11.2026 19:30',title:'',text:'Assalomu alaykum! Bolalar elektr samokati S10 bilan qiziqqaningiz uchun rahmat 😊\n\nNarxi: 1 250 000 so\'m\n📍 Manzil: Toshkent, Chilonzor 9\n📞 Buyurtma: +998 77 499 47 44'}],pending:[
     {cid:'1',username:'rival_shop',text:'Bizda arzonroq, profilga kiring',category_name:'Raqobatchi',reason:'Raqobatchi komment',reply:'Narx emas, kafolat muhim. Tanlov sizda.'},
     {cid:'2',username:'troll_22',text:'Bu nima o\'zi, ahmoqona narsa',category_name:'Salbiy / haqorat',reason:'Komentda so\'kinish yoki haqorat bor',reply:''}]});
+  if (path==='/api/followers'){ const now=Math.floor(Date.now()/1000); demoApi.fc=(demoApi.fc||105069)+[0,0,1,2,-1,3][Math.floor(Math.random()*6)];
+    const series=[]; let v=104900; for(let i=96;i>=0;i--){ v+=Math.round(Math.random()*4-1); series.push([now-i*900,v]) } series.push([now,demoApi.fc]);
+    return Promise.resolve({connected:true,now,count:demoApi.fc,updated:now,series,hour:+38,today:{gained:214,lost:41,net:173,since:now-60000,tracked_from:now-60000},instagram_today:{follows:231,unfollows:47},
+      changes:[{t:now-60,delta:2,count:demoApi.fc},{t:now-240,delta:-1,count:demoApi.fc-2},{t:now-420,delta:3,count:demoApi.fc-1},{t:now-700,delta:1,count:demoApi.fc-4}]}) }
   if (path.startsWith('/api/memory')) return Promise.resolve({memory:['Rolikli krossovka — 389 000 so\'m']});
   if (path==='/api/posts') return Promise.resolve({memory:['Rolikli krossovka — 389 000 so\'m, 31-38 o\'lcham'],shop:{address:'Toshkent, Chilonzor 9',phone:'+998 77 499 47 44'},posts:[
     {id:'m1',kind:'Reels',time:'16.11.2026 19:30',comments:48,caption:'Bolangiz bu samokatni ko\'rsa uyda qolmaydi 🛴\n3-8 yosh uchun, 3 tezlik\nNarxi: 1 250 000 so\'m\nBuyurtma: direktga',has_price:true,info:{title:'',price:'',info:'',use_caption:true},thumb:''},
