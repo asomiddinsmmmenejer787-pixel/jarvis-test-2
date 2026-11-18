@@ -30,6 +30,7 @@ from datetime import datetime, timedelta, timezone
 import catalog
 import config
 import brain
+import humanizer_uz
 import instagram_api as ig
 from instagram_api import InstagramError
 
@@ -211,7 +212,7 @@ def safe_reply(reply):
     """Javobni tozalaydi. Xavfsiz bo'lmasa bo'sh satr qaytaradi."""
     if not isinstance(reply, str):
         return ""
-    reply = clean(reply)
+    reply = humanizer_uz.humanize(clean(reply), kind="comment")
     if not reply or len(reply) > MAX_REPLY_LEN:
         return ""
     low = reply.lower()
@@ -460,7 +461,7 @@ class CommentResponder:
                         + ", ".join("@" + m for m in mentions)
                         + ". Javobni ikkala tomonga qarat, qisqa yoz, @ belgisini yozma.")
         message += f"\n\n<komment>{comment_text[:500]}</komment>"
-        system = SYSTEM_PROMPT
+        system = SYSTEM_PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK
         if self.dm_mode != "off":
             system += ("\n\nDIREKT YOQILGAN: price javobida mijozga 'narx va batafsil ma'lumotni "
                        "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt, 'direktga yozing' dema.")
@@ -701,6 +702,8 @@ class CommentResponder:
         answered = bool(dm.get("answered")) and bool(dm_text)
         if verdict["category"] == "question" and not answered:
             return None  # faktlarda javob yo'q: ochiq javobda direktga yo'naltirilgan
+        if dm_text:
+            dm_text = humanizer_uz.humanize(dm_text, kind="dm")
         facts = catalog.post_facts(post)
         reason = ""
         if not dm_text:
