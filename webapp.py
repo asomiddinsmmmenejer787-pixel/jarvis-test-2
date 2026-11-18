@@ -309,7 +309,24 @@ def audit_page(key: str, since: int = 0, limit: int = 300, kinds: str = ""):
         chat = _ctx.get("chat")
         status["chat_mode"] = chat.mode if chat is not None else None
     ks = tuple(k for k in kinds.split(",") if k) or None
-    return PlainTextResponse(audit.text_dump(since, max(1, min(1000, limit)), ks, status))
+    text = audit.text_dump(since, max(1, min(1000, limit)), ks, status)
+    if responder is not None and since == 0:
+        def row(it, keys):
+            return json.dumps({k: (it.get(k)[:300] if isinstance(it.get(k), str) else it.get(k)) for k in keys},
+                              ensure_ascii=False, default=str)
+        parts = ["\n\nRUXSAT KUTAYOTGAN KOMENTLAR:"]
+        parts += [row(i, ("cid", "created", "username", "text", "category", "reason", "reply", "permalink"))
+                  for i in responder.get_pending()]
+        parts.append("\nRUXSAT KUTAYOTGAN DIREKT (komentdan keyin):")
+        parts += [row(i, ("cid", "created", "username", "comment", "topic", "reason", "text"))
+                  for i in responder.get_dm_pending()]
+        chat = _ctx.get("chat")
+        if chat is not None:
+            parts.append("\nRUXSAT KUTAYOTGAN DIREKT SUHBATLAR:")
+            parts += [row(i, ("key", "created", "username", "history", "text", "kind", "reason"))
+                      for i in chat.get_pending()]
+        text += "\n".join(parts)
+    return PlainTextResponse(text)
 
 
 @router.get("/privacy")
