@@ -123,6 +123,25 @@ def run():
     check(auto_reply.is_short("zo'r 🔥") and not auto_reply.is_short("Narxi qancha?")
           and not auto_reply.is_short("Narxi qancha") and not auto_reply.is_short("bormi"), "Qisqa komment aniqlandi, savol emas")
 
+    print("\n4) Kuzatuvda topilgan xatolar (19.11)")
+    v = auto_reply.assess({"category": "price", "confidence": 0.9, "reply": "Narxi 300 ming so'm"}, "Krasofka")
+    check(v["action"] == "auto" and "300" not in v["reply"] and "direkt" in v["reply"].lower(),
+          "Narx yozilgan javob ruxsatga emas, xavfsiz javob bilan avtomatik ketadi")
+    import time as _t
+    r.state.flags.pop("fix_v3", None)
+    r.state.pending = {
+        "x1": {"text": "Krasofka", "category": "price", "reason": "Tayyor javob tekshiruvdan o'tmadi", "created": _t.time()},
+        "x2": {"text": "Tekinga berin oka 😂", "category": "negative", "reason": "Salbiy komment", "created": _t.time()},
+        "x3": {"text": "Bu bekorchi, ahmoq do'kon", "category": "negative", "reason": "x", "created": _t.time()},
+        "x4": {"text": "Bizda arzon", "category": "competitor", "reason": "x", "created": _t.time() - 3 * 86400},
+    }
+    r.state.dm_pending = {"d1": {"created": _t.time() - 2 * 86400}, "d2": {"created": _t.time()}}
+    check(r._housekeeping() is True, "Bir martalik tuzatish ishga tushdi")
+    check(set(r.state.pending) == {"x3"} and r.state.done.get("x4") == "expired",
+          "Noto'g'ri ruxsatga ketganlar qayta ko'rishga qaytdi, haqorat qoldi, eskisi eskirdi")
+    check(set(r.state.dm_pending) == {"d2"}, "Eski direkt so'rovlari tozalandi")
+    check(r._housekeeping() is False, "Tuzatish faqat bir marta")
+
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 
 

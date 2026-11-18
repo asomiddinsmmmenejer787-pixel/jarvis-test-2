@@ -409,8 +409,27 @@ def get_audience():
 
 # ---------- komentlar ----------
 
-def get_all_comments(media_id, fields=COMMENT_FIELDS, limit=500):
-    return _paged(f"{media_id}/comments", {"fields": fields, "limit": 50}, limit)
+COMMENT_FIELDS_FROM = "id,text,username,from{id,username},timestamp,like_count,replies{id,username,text,timestamp}"
+_from_ok = {"value": True}
+
+
+def get_all_comments(media_id, fields=None, limit=500):
+    """Komentlar. username bo'sh kelsa, from.username dan olinadi."""
+    if fields is None and _from_ok["value"]:
+        try:
+            items = _paged(f"{media_id}/comments", {"fields": COMMENT_FIELDS_FROM, "limit": 50}, limit)
+        except InstagramError as e:
+            if e.fatal or e.rate_limited:
+                raise
+            _from_ok["value"] = False
+            log.warning("Komment 'from' maydoni qabul qilinmadi (%s), oddiy maydonlar ishlatiladi", e)
+            items = _paged(f"{media_id}/comments", {"fields": COMMENT_FIELDS, "limit": 50}, limit)
+    else:
+        items = _paged(f"{media_id}/comments", {"fields": fields or COMMENT_FIELDS, "limit": 50}, limit)
+    for c in items:
+        if not c.get("username"):
+            c["username"] = (c.get("from") or {}).get("username") or ""
+    return items
 
 
 def reply_to_comment(comment_id, message):

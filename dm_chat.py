@@ -297,6 +297,12 @@ class DirectChat:
 
     def run_once(self):
         """Voqealar: chat_approval (tasdiq kerak), chat_sent, chat_error."""
+        with self.lock:
+            now_ = time.time()
+            for k, v in list(self.s["pending"].items()):
+                if now_ - (v.get("created") or now_) > 24 * 3600:
+                    self.s["pending"].pop(k, None)
+
         if self.mode == "off":
             return []
         if not self._me:
