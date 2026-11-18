@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 import brain
 import catalog
 import config
+import humanizer_uz
 import instagram_api as ig
 from instagram_api import InstagramError
 
@@ -274,12 +275,12 @@ class DirectChat:
         if lessons:
             msg += "\n\n" + lessons
         msg += f"\n\nYOZISHMA:\n{history}"
-        res = self.ai.generate_json(PROMPT, msg, temperature=0.4)
+        res = self.ai.generate_json(PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK, msg, temperature=0.4)
         out = {"text": "", "kind": "human", "topic": "", "safe": False, "reason": ""}
         if not isinstance(res, dict) or not isinstance(res.get("text"), str) or not res["text"].strip():
             out["reason"] = "Jarvis javob tayyorlay olmadi"
             return out
-        out["text"] = res["text"].strip()[:900]
+        out["text"] = humanizer_uz.humanize(res["text"].strip()[:900], kind="dm", already_greeted=greeted)
         out["kind"] = res.get("kind") if res.get("kind") in ("answer", "clarify", "order", "human") else "human"
         out["topic"] = catalog._clean(res.get("topic"), 60)
         if not catalog.numbers_ok(out["text"], source):
