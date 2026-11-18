@@ -144,6 +144,15 @@ TURLAR (kind):
     {"type": "set_limit", "value": 500}  - komentlarga kunlik avtomatik javoblar limiti (10-1000).
     {"type": "comment_mode", "mode": "on|off|test"}  - komentga avtomatik javobni yoqish/o'chirish/test.
     {"type": "dm_mode", "mode": "auto|approve|off"}  - direkt suhbatlarga javob rejimi.
+    {"type": "set_policy", ...}  - limitni tejash qoidalari, faqat o'zgarayotgan kalitlarni yoz:
+       "low_limit": belgilash (@) va maqtov komentlariga kunlik javob soni (0-1000; 0 = umuman yozma),
+       "per_user_day": bir odamga kuniga nechta shunday javob (1-10),
+       "short_ratio": faqat emoji yoki 1-2 so'zli komentlarning necha foiziga javob (0-100),
+       "reserve_pct": asosiy limitning necha foizi faqat savol/narx/shikoyatga saqlanadi (0-90),
+       "skip": javob yozilmaydigan turlar ro'yxati, to'liq yangi ro'yxat
+               (tag=belgilash, positive=maqtov, question=savol, price=narx, complaint=shikoyat).
+       Masalan "maqtovlarga yozma" -> {"type":"set_policy","skip":["positive"]};
+       "belgilashga 50 ta yetadi" -> {"type":"set_policy","low_limit":50}.
   * reply: egasiga qisqa javob: nimani tushunding, nima qilasan. JURNALga tayanib gapir, to'qima.
     Xatoni tan ol, uzr so'rab cho'zma.
   * HALOLLIK: sozlamani o'zgartirish faqat actions orqali bo'ladi. "Bajardim", "oshirdim" dema; natijani tizim
@@ -184,10 +193,39 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                 acts.append({"type": t, "mode": a["mode"]})
             elif t == "dm_mode" and a.get("mode") in ("auto", "approve", "off"):
                 acts.append({"type": t, "mode": a["mode"]})
+            elif t == "set_policy":
+                ch = {k: int(a[k]) for k in ("low_limit", "per_user_day", "short_ratio", "reserve_pct")
+                      if a.get(k) is not None and str(a[k]).lstrip("-").isdigit()}
+                if isinstance(a.get("skip"), list):
+                    ch["skip"] = [str(x) for x in a["skip"]]
+                if ch:
+                    acts.append({"type": t, "changes": ch})
         except (TypeError, ValueError):
             continue
     out["actions"] = acts[:4]
     return out
+
+
+CAT_UZ = {"tag": "belgilash", "positive": "maqtov", "question": "savol", "price": "narx",
+          "complaint": "shikoyat", "negative": "salbiy", "competitor": "raqobatchi"}
+
+
+def policy_text(st):
+    """Tejash qoidalari va bugungi sarf, oddiy tilda."""
+    p = st.get("policy") or {}
+    cats = st.get("today_cats") or {}
+    lim = st["limit_day"]
+    reserve = round(lim * p.get("reserve_pct", 0) / 100)
+    skip = ", ".join(CAT_UZ.get(x, x) for x in p.get("skip") or []) or "yo'q"
+    used = ", ".join(f"{CAT_UZ.get(k, k)} {v}" for k, v in sorted(cats.items(), key=lambda x: -x[1])) or "hali yo'q"
+    return (f"Kunlik limit: {st['sent_today']}/{lim}\n"
+            f"Bugun: {used}\n"
+            f"Belgilash va maqtovlarga: {st.get('low_today', 0)}/{p.get('low_limit')} (alohida limit)\n"
+            f"Faqat savol/narx/shikoyatga zaxira: {reserve} ta ({p.get('reserve_pct')}%)\n"
+            f"Bir odamga kuniga: {p.get('per_user_day')} ta (belgilash/maqtov)\n"
+            f"Faqat emoji yoki 1-2 so'zli komentlarning {p.get('short_ratio')}% iga javob\n"
+            f"Umuman javob yozilmaydi: {skip}\n"
+            f"Bugun tejaldi (AI'ga yuborilmadi): {st.get('saved_today', 0)} ta")
 
 
 def build_context(responder, chat, memory):
@@ -198,6 +236,8 @@ def build_context(responder, chat, memory):
         r = responder.status()
         st.append(f"Komentga javob: {r['mode']}, bugun {r['sent_today']}/{r['limit_day']} (kunlik limit "
                   f"{r['limit_day']}), ruxsat kutayotgan {r['pending']}, komentdan keyin direkt: {r['dm_mode']}")
+        if r.get("policy"):
+            st.append("TEJASH QOIDALARI:\n" + policy_text(r))
         if r.get("last_run"):
             st.append("Oxirgi komment tekshiruvi: " + json.dumps(r["last_run"], ensure_ascii=False))
     if chat is not None:
@@ -256,6 +296,10 @@ def apply(res, responder, chat=None):
             chat.set_mode(act["mode"])
             lines.append(f"✅ Direkt suhbat rejimi: {act['mode']}")
             log_entry(f"Direkt rejimi: {act['mode']}")
+        elif t == "set_policy":
+            responder.set_policy(**act["changes"])
+            lines.append("✅ Tejash qoidalari yangilandi:\n" + policy_text(responder.status()))
+            log_entry("Tejash qoidalari o'zgardi: " + json.dumps(act["changes"], ensure_ascii=False))
         elif t == "recheck_comments":
             recheck = act["posts"]
             lines.append(f"🔎 Oxirgi {recheck} ta postdagi javobsiz komentlarni hozir qayta ko'rib chiqaman, "

@@ -39,6 +39,8 @@ class TagAI:
             return {"category": "spam", "confidence": 0.9, "reply": ""}
         if "@" in text:
             return {"category": "tag", "confidence": 0.9, "reply": "@lola Ikkalangizga ham yoqadi!"}
+        if "?" in text:
+            return {"category": "price", "confidence": 0.9, "reply": "Narxini direktga yozdik."}
         return {"category": "positive", "confidence": 0.9, "reply": "Rahmat, qaysi biri yoqdi?"}
 
 
@@ -76,6 +78,7 @@ def run():
     check(res["kind"] == "work" and res["lesson"] and res["actions"] == [{"type": "recheck_comments", "posts": 5}],
           "Egasining tanbehi qoida va harakatga aylandi (5 postdan oshmaydi)")
     r.state.done["t3"] = "skipped"
+    r.set_policy(short_ratio=100, low_limit=1000, per_user_day=10)
     ai.spam = True
     fake.comments["m1"].append({"id": "t5", "text": "Juda chiroyli", "username": "x5", "timestamp": ts(60)})
     n = len(fake.replies)
@@ -93,6 +96,32 @@ def run():
                                                          {"type": "recheck_comments", "posts": 2}]}, r)
     check(r.day_limit() == 500 and any("500" in x for x in lines) and rc == 2,
           "Chatda limit so'ralsa haqiqatan o'zgaradi")
+
+    print("\n3) Limitni tejash")
+    r.state.done.clear()
+    r.state.daily = {"date": "", "count": 0}
+    r.set_policy(low_limit=1, short_ratio=100)
+    fake.comments["m1"] = [
+        {"id": "p1", "text": "@dugona1 qara", "username": "aa", "timestamp": ts(1)},
+        {"id": "p2", "text": "@dugona2 qara", "username": "bb", "timestamp": ts(1)},
+        {"id": "p3", "text": "Narxi qancha bu mashinani?", "username": "bb", "timestamp": ts(1)},
+    ]
+    fake.comments["m2"] = []
+    asked = len(ai.messages)
+    n = len(fake.replies)
+    r._counts.clear()
+    r.run_once()
+    sent = [c for c, _ in fake.replies[n:]]
+    check("p1" in sent and "p2" not in sent and r.state.done.get("p2") == "budget",
+          "Belgilashlarga alohida limit ishladi (1 ta)")
+    check("p3" in sent, "Limit tugasa ham savolga javob yozildi")
+    check(len(ai.messages) - asked == 2, "Limitdan oshgan belgilash AI'ga yuborilmadi (tejaldi)")
+    r.set_policy(skip=["positive", "xato"], per_user_day=99)
+    check(r.policy["skip"] == ["positive"] and r.policy["per_user_day"] == 10, "Qoidalar tekshirilib saqlandi")
+    lines, _ = brain.apply({"reply": "Xo'p", "actions": [{"type": "set_policy", "changes": {"low_limit": 50}}]}, r)
+    check(r.policy["low_limit"] == 50 and "50" in lines[-1], "Chat orqali tejash qoidasi o'zgardi")
+    check(auto_reply.is_short("zo'r 🔥") and not auto_reply.is_short("Narxi qancha?")
+          and not auto_reply.is_short("Narxi qancha") and not auto_reply.is_short("bormi"), "Qisqa komment aniqlandi, savol emas")
 
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 

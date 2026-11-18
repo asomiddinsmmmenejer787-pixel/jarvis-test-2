@@ -146,7 +146,7 @@ def run():
     r.set_dm_mode("off")
     catalog.set_task("m1", "Layk bosishni eslat")
     catalog.set_task(None, "Obuna bo'lishni eslat")
-    fake.comments["m1"].append({"id": "c30", "text": "Zo'r", "username": "u30", "timestamp": ts(1)})
+    fake.comments["m1"].append({"id": "c30", "text": "Juda zo'r narsa ekan bolalarga", "username": "u30", "timestamp": ts(1)})
     r.run_once()
     check("EGASINING VAZIFASI" in ai.last_reply_msg and "Shu post uchun: Layk bosishni eslat" in ai.last_reply_msg
           and "Hamma postlar uchun: Obuna" in ai.last_reply_msg, "Post va umumiy vazifa AI'ga uzatildi")
@@ -158,7 +158,7 @@ def run():
     r.run_once()
     extra = [c[1] for c in fake.calls[before:]]
     check(all(p == "me/media" for p in extra), f"Komentlar o'zgarmasa faqat postlar ro'yxati so'raladi ({len(extra)} so'rov)")
-    fake.comments["m1"].append({"id": "c31", "text": "Rahmat", "username": "u31", "timestamp": ts(1)})
+    fake.comments["m1"].append({"id": "c31", "text": "Rahmat sizlarga katta, bolam xursand", "username": "u31", "timestamp": ts(1)})
     check(any(e["cid"] == "c31" for e in r.run_once()), "Yangi komment darhol ilg'andi")
     catalog.set_task("m1", "")
     catalog.set_task(None, "")

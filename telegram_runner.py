@@ -549,6 +549,21 @@ async def qoidaochir_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @owner_only
+async def sozlamalar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if responder is None:
+        await update.message.reply_text("Komentga javob tizimi o'chiq.")
+        return
+    await update.message.reply_text(
+        "⚙️ Limitni tejash qoidalari\n\n" + brain.policy_text(responder.status())
+        + "\n\nO'zgartirish uchun oddiy so'z bilan yozing, masalan:\n"
+        "• belgilashlarga kuniga 50 ta javob yetadi\n"
+        "• maqtovlarga javob yozma\n"
+        "• bir odamga kuniga 2 ta javob yozsang bo'ladi\n"
+        "• emoji komentlarning yarmiga javob yoz\n"
+        "• limitni 600 qil")
+
+
+@owner_only
 async def jurnal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = brain.journal_text(25)
     await send_long(context.bot, update.effective_chat.id,
@@ -1336,6 +1351,7 @@ async def post_init(app):
             BotCommand("ideas", "Kontent g'oyalari"),
             BotCommand("qoidalar", "Jarvis o'rgangan qoidalar"),
             BotCommand("jurnal", "Jarvis oxirgi ishlari"),
+            BotCommand("sozlamalar", "Limitni tejash qoidalari"),
             BotCommand("start", "Yordam"),
         ])
     except Exception:
@@ -1408,6 +1424,7 @@ def build_app(token):
     app.add_handler(CommandHandler("qoidalar", qoidalar_cmd))
     app.add_handler(CommandHandler("qoidaochir", qoidaochir_cmd))
     app.add_handler(CommandHandler("jurnal", jurnal_cmd))
+    app.add_handler(CommandHandler("sozlamalar", sozlamalar_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app

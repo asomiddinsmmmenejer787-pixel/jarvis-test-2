@@ -17,6 +17,7 @@ Bu modul Telegram'ni bilmaydi: run_once() voqealar ro'yxatini qaytaradi,
 telegram_runner.py ularni egasiga yuboradi.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -301,6 +302,64 @@ def apply_tags(verdict, author, mentions, comment_text):
     return verdict
 
 
+# ---------- limitni tejash siyosati ----------
+# Muhim (savol, narx, shikoyat) komentlarga doim javob. Past ustuvorlikdagi (belgilash, maqtov)
+# komentlar alohida kichik limitdan foydalanadi va asosiy limitning zaxirasiga tegmaydi.
+LOW_PRIORITY = {"tag", "positive"}
+SKIPPABLE = {"tag", "positive", "question", "price", "complaint"}
+DEFAULT_POLICY = {
+    "low_limit": 100,     # belgilash + maqtovlarga kunlik javob
+    "per_user_day": 1,    # bir odamga kuniga nechta (belgilash/maqtov) javob
+    "short_ratio": 30,    # faqat emoji / 1-2 so'zli komentlarning necha foiziga javob (%)
+    "reserve_pct": 20,    # asosiy limitning shuncha foizi faqat muhim komentlarga qoladi
+    "skip": [],           # umuman javob yozilmaydigan turlar
+}
+POLICY_RANGES = {"low_limit": (0, 1000), "per_user_day": (1, 10), "short_ratio": (0, 100), "reserve_pct": (0, 90)}
+
+
+def clean_policy(raw):
+    out = dict(DEFAULT_POLICY)
+    if isinstance(raw, dict):
+        for k, (lo, hi) in POLICY_RANGES.items():
+            if k in raw:
+                try:
+                    out[k] = max(lo, min(hi, int(raw[k])))
+                except (TypeError, ValueError):
+                    pass
+        if isinstance(raw.get("skip"), list):
+            out["skip"] = sorted({x for x in raw["skip"] if x in SKIPPABLE})
+    return out
+
+
+QUESTION_HINT = re.compile(
+    r"narx|qancha|nech|pul|sum\b|so'?m\b|qayer|qachon|qanday|qanaqa|nima|kim\b|sotib|olsa|olaman|buyurtma|zakaz|"
+    r"razmer|o'?lcham|rang|dostavka|yetkaz|manzil|tel|nomer|aksiya|skidka|chegirma|bor\s*mi|mi\b|"
+    r"цен|сколько|где|есть|размер|доставк|заказ|как|почем", re.I)
+
+
+def is_short(text):
+    """Faqat emoji yoki 1-2 so'z, savolsiz ("zo'r", "👍🔥", "super")."""
+    rest = MENTION_RE.sub("", text or "")
+    if "?" in rest or QUESTION_HINT.search(rest):
+        return False
+    words = re.findall(r"[^\W\d_]{2,}", rest)
+    return len(words) <= 2
+
+
+def guess_low(text, mentions):
+    """AI'siz taxmin: belgilash yoki qisqa maqtov bo'lsa uning turi, aks holda None."""
+    if PROFANITY_RE.search(text or "") or re.search(r"https?://|www\.", text or "", re.I):
+        return None
+    if not is_short(text):
+        return None
+    return "tag" if mentions else "short"
+
+
+def _pick(cid, ratio):
+    """Komentning id'siga qarab barqaror tanlov (bir xil komment har safar bir xil natija)."""
+    return int(hashlib.sha1(str(cid).encode()).hexdigest()[:4], 16) % 100 < ratio
+
+
 # ---------- holat ombori ----------
 
 class State:
@@ -315,6 +374,7 @@ class State:
         self.day_limit = None
         self.test_seen = {}
         self.daily = {"date": "", "count": 0}
+        self.policy = dict(DEFAULT_POLICY)
         self.mode = None
         self._load()
 
@@ -335,6 +395,7 @@ class State:
             self.day_limit = raw.get("day_limit") if isinstance(raw.get("day_limit"), int) else None
             self.test_seen = dict(raw.get("test_seen", {}))
             self.daily = dict(raw.get("daily", self.daily))
+            self.policy = clean_policy(raw.get("policy"))
             self.mode = raw.get("mode") if raw.get("mode") in MODES else None
         except Exception as e:
             bak = f"{self.path}.broken-{int(time.time())}"
@@ -361,6 +422,7 @@ class State:
                 "pending": self.pending,
                 "test_seen": dict(list(self.test_seen.items())[-2000:]),
                 "daily": self.daily,
+                "policy": self.policy,
             }
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
@@ -380,12 +442,29 @@ class State:
     def today_count(self):
         today = datetime.now(TASHKENT).strftime("%Y-%m-%d")
         if self.daily.get("date") != today:
-            self.daily = {"date": today, "count": 0}
+            self.daily = {"date": today, "count": 0, "cats": {}, "users": {}, "saved": 0}
+        for k, v in (("cats", {}), ("users", {}), ("saved", 0)):
+            self.daily.setdefault(k, v)
         return self.daily["count"]
 
-    def add_sent(self):
+    def add_sent(self, category="", user=""):
         self.today_count()
         self.daily["count"] += 1
+        if category:
+            self.daily["cats"][category] = self.daily["cats"].get(category, 0) + 1
+        if user:
+            u = user.lower()
+            self.daily["users"][u] = self.daily["users"].get(u, 0) + 1
+            if len(self.daily["users"]) > 3000:
+                self.daily["users"] = dict(list(self.daily["users"].items())[-2000:])
+
+    def low_today(self):
+        self.today_count()
+        return sum(self.daily["cats"].get(c, 0) for c in LOW_PRIORITY)
+
+    def user_today(self, user):
+        self.today_count()
+        return self.daily["users"].get((user or "").lower(), 0)
 
 
 # ---------- asosiy klass ----------
@@ -441,6 +520,10 @@ class CommentResponder:
                 "dm_mode": self.state.dm_mode,
                 "dm_pending": len(self.state.dm_pending),
                 "last_run": self.last_run,
+                "policy": dict(self.state.policy),
+                "today_cats": dict(self.state.daily.get("cats", {})),
+                "low_today": self.state.low_today(),
+                "saved_today": self.state.daily.get("saved", 0),
             }
 
     # ----- AI -----
@@ -524,7 +607,7 @@ class CommentResponder:
                 cid = c.get("id")
                 text = (c.get("text") or "").strip()
                 with self.lock:
-                    if force and self.state.done.get(cid) in ("skipped", "gave_up"):
+                    if force and self.state.done.get(cid) in ("skipped", "gave_up", "budget"):
                         # qayta tekshiruv: oldin spam/xato deb o'tkazilgan komentga yana qaraymiz
                         self.state.done.pop(cid, None)
                         self.state.attempts.pop(cid, None)
@@ -560,6 +643,20 @@ class CommentResponder:
 
                 author = c.get("username") or ""
                 mentions = mentions_in(text, me, author)
+                # Tejash: belgilash va qisqa maqtovlarni AI'ga yubormasdan oldin limit bo'yicha saralaymiz
+                guess = guess_low(text, mentions)
+                if guess and self.mode != "test":
+                    with self.lock:
+                        why = self._low_block(guess, author)
+                        if not why and guess == "short" and not _pick(cid, self.state.policy["short_ratio"]):
+                            why = "short"
+                        if why:
+                            self.state.mark(cid, "budget")
+                            self.state.daily["saved"] = self.state.daily.get("saved", 0) + 1
+                            self.state.save()
+                    if why:
+                        stats["budget"] = stats.get("budget", 0) + 1
+                        continue
                 try:
                     result = self._ask(text, post, author, mentions)
                 except Exception as e:  # GeminiError va boshqalar
@@ -590,6 +687,16 @@ class CommentResponder:
                     "reply": verdict["reply"],
                     "reason": verdict["reason"],
                 }
+
+                if verdict["action"] == "auto" and self.mode != "test":
+                    with self.lock:
+                        why = self._low_block(verdict["category"], author)
+                    if why:
+                        stats["budget"] = stats.get("budget", 0) + 1
+                        with self.lock:
+                            self.state.mark(cid, "budget")
+                            self.state.save()
+                        continue
 
                 if verdict["action"] == "skip":
                     stats["skipped"] += 1
@@ -637,7 +744,7 @@ class CommentResponder:
 
                 with self.lock:
                     self.state.mark(cid, "sent")
-                    self.state.add_sent()
+                    self.state.add_sent(verdict["category"], author)
                     self.state.save()
                 stats["sent"] += 1
                 log.info("[SENT] %s | comment=%s", verdict["category"], cid)
@@ -667,6 +774,35 @@ class CommentResponder:
 
     def day_limit(self):
         return self.state.day_limit or _env_int("MAX_PER_DAY", 300)
+
+    # ----- tejash siyosati -----
+
+    @property
+    def policy(self):
+        return self.state.policy
+
+    def set_policy(self, **changes):
+        """Siyosatni o'zgartiradi (faqat berilgan kalitlar). Yangi siyosatni qaytaradi."""
+        with self.lock:
+            merged = {**self.state.policy, **{k: v for k, v in changes.items() if v is not None}}
+            self.state.policy = clean_policy(merged)
+            self.state.save()
+            return dict(self.state.policy)
+
+    def _low_block(self, category, author):
+        """Past ustuvorlikdagi komentga javob yozilmasligi sababi yoki None (yozish mumkin)."""
+        p = self.state.policy
+        if category in p["skip"]:
+            return "skip"
+        if category not in LOW_PRIORITY and category != "short":
+            return None
+        if self.state.low_today() >= p["low_limit"]:
+            return "low_limit"
+        if self.state.today_count() >= self.day_limit() * (100 - p["reserve_pct"]) / 100:
+            return "reserve"
+        if author and self.state.user_today(author) >= p["per_user_day"]:
+            return "per_user"
+        return None
 
     def set_day_limit(self, n):
         with self.lock:
