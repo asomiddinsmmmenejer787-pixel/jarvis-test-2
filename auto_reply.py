@@ -237,7 +237,8 @@ def safe_reply(reply):
 
 SAFE_FALLBACK = {
     "price": ["Narxi va batafsil ma'lumotni direktga yozdik 😊", "Direktga qarang, hammasini yozib qo'ydik 😊",
-              "Ma'lumotni direktingizga yubordik, ko'rib chiqing 😊"],
+              "Ma'lumotni direktingizga yubordik, ko'rib chiqing 😊", "Direktingizni tekshiring, javob yozdik 😊",
+              "Sizga direktda batafsil yozdik 😊", "Narxini shaxsiy xabarda aytdik, direktga qarang 😊"],
     "question": ["Direktga yozing, batafsil javob beramiz 😊", "Yaxshi savol, direktga yozing, aniqlab aytamiz 😊"],
     "positive": ["Rahmat, bizga ham yoqdi 😊", "Iliq so'zlaringiz uchun rahmat 😊", "Kayfiyatimizni ko'tardingiz, rahmat 😊"],
     "tag": TAG_FALLBACKS,
@@ -286,6 +287,25 @@ def assess(result, comment_text):
         return {"category": cat, "reply": reply, "action": "approve",
                 "reason": "Jarvis o'z javobiga ishonchi past"}
     return {"category": cat, "reply": reply, "action": "auto", "reason": ""}
+
+
+def _norm_reply(t):
+    return " ".join(re.sub(r"[^\w\s]", " ", strip_mentions(t or "").lower()).split())
+
+
+def too_similar(reply, recent, ratio=0.72):
+    """Javob oxirgi javoblardan biriga juda o'xshashmi (bot kabi takrorlanish)."""
+    import difflib
+    a = _norm_reply(reply)
+    if not a:
+        return False
+    for r in recent:
+        b = _norm_reply(r)
+        if b and (a == b or difflib.SequenceMatcher(None, a, b).ratio() >= ratio):
+            return True
+    # bir xil jumla bilan boshlanish ham takror hisoblanadi
+    first = _norm_reply(re.split(r"[.!?]", strip_mentions(reply or ""))[0])
+    return len(first) > 20 and any(_norm_reply(r).startswith(first) for r in recent)
 
 
 def mentions_in(text, me="", author=""):
@@ -502,7 +522,7 @@ class CommentResponder:
         self.last_run = None
         self._me = ""
         self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
-        self._recent = deque(maxlen=6)    # oxirgi javoblar (takrorlamaslik uchun)
+        self._recent = deque(maxlen=20)   # oxirgi javoblar (takrorlamaslik uchun)
         self._run_lock = threading.Lock()  # fon tekshiruvi va qayta tekshiruv bir vaqtda ishlamasin
         if self.state.mode is None:
             env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
@@ -562,7 +582,7 @@ class CommentResponder:
             message += f"\n\nEGASINING VAZIFASI:\n{facts['task']}"
         if self._recent:
             message += "\n\nOXIRGI JAVOBLARIMIZ (bularni takrorlama, boshqacha yoz):\n" + "\n".join(
-                f"- {r}" for r in self._recent)
+                f"- {r}" for r in list(self._recent)[-8:])
         if mentions:
             message += (f"\n\nBELGILASH: komment egasi @{author} quyidagilarni belgilagan: "
                         + ", ".join("@" + m for m in mentions)
@@ -733,6 +753,21 @@ class CommentResponder:
                 if mentions and isinstance(result, dict):
                     result = {**result, "reply": strip_mentions(result.get("reply"))}
                 verdict = apply_tags(assess(result, text), author, mentions, text)
+                if verdict["action"] == "auto" and too_similar(verdict["reply"], self._recent):
+                    # Takror: boshqa xavfsiz javob tanlaymiz, bo'lmasa (maqtov/belgilash) javobsiz qoldiramiz
+                    alts = [x for x in SAFE_FALLBACK.get(verdict["category"], [])
+                            if not too_similar(x, self._recent)]
+                    if verdict["category"] in ("price", "question", "complaint"):
+                        # muhim komment javobsiz qolmaydi: muqobil bo'lmasa ham yuboriladi
+                        if alts:
+                            verdict["reply"] = random.choice(alts)
+                    else:
+                        A("duplicate", category=verdict["category"], reply=verdict["reply"])
+                        stats["budget"] = stats.get("budget", 0) + 1
+                        with self.lock:
+                            self.state.mark(cid, "budget")
+                            self.state.save()
+                        continue
                 if self.dm_mode == "off" and verdict["reply"] in SAFE_FALLBACK["price"]:
                     verdict["reply"] = "Narxini direktga yozing, shaxsan aytamiz 😊"
                 verdict["dm"] = {

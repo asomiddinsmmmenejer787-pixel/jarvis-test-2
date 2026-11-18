@@ -100,6 +100,7 @@ def run():
     print("\n3) Limitni tejash")
     r.state.done.clear()
     r.state.daily = {"date": "", "count": 0}
+    r._recent.clear()
     r.set_policy(low_limit=1, short_ratio=100)
     fake.comments["m1"] = [
         {"id": "p1", "text": "@dugona1 qara", "username": "aa", "timestamp": ts(1)},
@@ -127,6 +128,9 @@ def run():
     v = auto_reply.assess({"category": "price", "confidence": 0.9, "reply": "Narxi 300 ming so'm"}, "Krasofka")
     check(v["action"] == "auto" and "300" not in v["reply"] and "direkt" in v["reply"].lower(),
           "Narx yozilgan javob ruxsatga emas, xavfsiz javob bilan avtomatik ketadi")
+    rec = ["Yuragingizni quvonchga to'ldirdingiz! Obuna bo'lib, tanishlaringizni belgilang."]
+    check(auto_reply.too_similar("Yuragingizni quvonchga to'ldirdingiz! Layk bosing", rec)
+          and not auto_reply.too_similar("Rahmat, bizga ham yoqdi 😊", rec), "Takroriy javob aniqlanadi")
     import time as _t
     r.state.flags.pop("fix_v3", None)
     r.state.pending = {

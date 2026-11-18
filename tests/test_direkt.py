@@ -158,6 +158,7 @@ def run():
     r.run_once()
     extra = [c[1] for c in fake.calls[before:]]
     check(all(p == "me/media" for p in extra), f"Komentlar o'zgarmasa faqat postlar ro'yxati so'raladi ({len(extra)} so'rov)")
+    r._recent.clear()
     fake.comments["m1"].append({"id": "c31", "text": "Rahmat sizlarga katta, bolam xursand", "username": "u31", "timestamp": ts(1)})
     check(any(e["cid"] == "c31" for e in r.run_once()), "Yangi komment darhol ilg'andi")
     catalog.set_task("m1", "")
