@@ -30,6 +30,7 @@ from datetime import datetime, timedelta, timezone
 
 import catalog
 import config
+import audit
 import brain
 import humanizer_uz
 import instagram_api as ig
@@ -643,6 +644,10 @@ class CommentResponder:
 
                 author = c.get("username") or ""
                 mentions = mentions_in(text, me, author)
+
+                def A(action, _c=c, _post=post, _text=text, _author=author, **kw):
+                    audit.record("comment", action=action, cid=_c.get("id"), post=str(_post.get("id")),
+                                 link=_post.get("permalink") or "", user=_author, text=_text, **kw)
                 # Tejash: belgilash va qisqa maqtovlarni AI'ga yubormasdan oldin limit bo'yicha saralaymiz
                 guess = guess_low(text, mentions)
                 if guess and self.mode != "test":
@@ -656,6 +661,7 @@ class CommentResponder:
                             self.state.save()
                     if why:
                         stats["budget"] = stats.get("budget", 0) + 1
+                        A("budget_pre", guess=guess, why=why)
                         continue
                 try:
                     result = self._ask(text, post, author, mentions)
@@ -665,6 +671,7 @@ class CommentResponder:
                     stats["ai_errors"] += 1
                     clean = False
                     log.warning("AI xatosi (%s), comment=%s", e, cid)
+                    A("ai_error", error=str(e)[:300])
                     with self.lock:
                         self.state.attempts[cid] = self.state.attempts.get(cid, 0) + 1
                         self.state.save()
@@ -693,12 +700,15 @@ class CommentResponder:
                         why = self._low_block(verdict["category"], author)
                     if why:
                         stats["budget"] = stats.get("budget", 0) + 1
+                        A("budget", category=verdict["category"], why=why, reply=verdict["reply"])
                         with self.lock:
                             self.state.mark(cid, "budget")
                             self.state.save()
                         continue
 
+                ai_raw = result if isinstance(result, dict) else str(result)[:300]
                 if verdict["action"] == "skip":
+                    A("skip", category=verdict["category"], reason=verdict["reason"], ai=ai_raw)
                     stats["skipped"] += 1
                     with self.lock:
                         self.state.mark(cid, "skipped")
@@ -706,6 +716,7 @@ class CommentResponder:
                     continue
 
                 if verdict["action"] == "approve":
+                    A("approval", category=verdict["category"], reason=verdict["reason"], reply=verdict["reply"], ai=ai_raw)
                     with self.lock:
                         self.state.pending[cid] = {**info, "created": int(time.time()), "msg_id": None}
                         self.state.save()
@@ -720,6 +731,7 @@ class CommentResponder:
                         self.state.test_seen[cid] = int(time.time())
                         self.state.save()
                     stats["test"] += 1
+                    A("test", category=verdict["category"], reply=verdict["reply"])
                     dm = self._plan_dm(post, c, verdict, preview=True)
                     events.append({"type": "test", **info, "dm": dm})
                     processed += 1
@@ -740,6 +752,7 @@ class CommentResponder:
                     stats["send_errors"] += 1
                     clean = False
                     log.warning("Yuborishda xato (%s), comment=%s", e, cid)
+                    A("send_error", category=verdict["category"], reply=verdict["reply"], error=str(e)[:300])
                     continue
 
                 with self.lock:
@@ -747,6 +760,7 @@ class CommentResponder:
                     self.state.add_sent(verdict["category"], author)
                     self.state.save()
                 stats["sent"] += 1
+                A("sent", category=verdict["category"], reply=verdict["reply"])
                 log.info("[SENT] %s | comment=%s", verdict["category"], cid)
                 events.append({"type": "sent", **info})
                 dm = self._plan_dm(post, c, verdict)
@@ -764,6 +778,7 @@ class CommentResponder:
         return events
 
     def _log_stats(self, stats):
+        audit.record("run", **stats)
         log.info(
             "Komentlar tekshirildi: %s post (%s tasida komment), %s komment | yangi %s, eski %s, "
             "ko'rilgan %s, javob berilgan %s | yuborildi %s, ruxsatga %s, test %s, spam %s, xato %s",

@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
 import analytics
+import audit
 import brain
 import followers_live
 import catalog
@@ -59,6 +60,7 @@ logging.basicConfig(
 # httpx har bir so'rov URL'ini (bot tokeni bilan) logga yozmasin
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+audit.install()
 
 TELEGRAM_LIMIT = 4000
 CHECK_EVERY_SEC = max(30, int(os.environ.get("CHECK_EVERY_SEC", "60") or 60))
@@ -561,6 +563,20 @@ async def sozlamalar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• bir odamga kuniga 2 ta javob yozsang bo'ladi\n"
         "• emoji komentlarning yarmiga javob yoz\n"
         "• limitni 600 qil")
+
+
+@owner_only
+async def xatolar_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    items = audit.recent(15, kinds=("log",))
+    inf = audit.info()
+    head = ("🛰 Kuzatuv: " + (f"{inf['repo']} ga yuborilyapti" if inf["configured"] else "GitHub'ga ulanmagan")
+            + (f"\n⚠️ {inf['error']}" if inf["error"] else "") + "\n\n")
+    if not items:
+        await update.message.reply_text(head + "Oxirgi paytda xato yozilmagan ✅")
+        return
+    rows = [f"{datetime.fromtimestamp(i['t'], catalog.TASHKENT):%d.%m %H:%M} [{i.get('src')}] {i.get('msg', '')[:250]}"
+            for i in items]
+    await send_long(context.bot, update.effective_chat.id, head + "Oxirgi xatolar:\n\n" + "\n\n".join(rows))
 
 
 @owner_only
@@ -1263,6 +1279,11 @@ async def instagram_tick(app):
     bot = app.bot
     try:
         await asyncio.to_thread(ig.refresh_token_if_needed)
+        if responder is not None:
+            st = responder.status()
+            st["chat_mode"] = chat.mode if chat is not None else None
+            st["lessons"] = brain.get_lessons()
+            await asyncio.to_thread(audit.ship, st)
 
         try:
             await asyncio.to_thread(followers_live.sample, 110)
@@ -1352,6 +1373,7 @@ async def post_init(app):
             BotCommand("qoidalar", "Jarvis o'rgangan qoidalar"),
             BotCommand("jurnal", "Jarvis oxirgi ishlari"),
             BotCommand("sozlamalar", "Limitni tejash qoidalari"),
+            BotCommand("xatolar", "Oxirgi xatolar va kuzatuv holati"),
             BotCommand("start", "Yordam"),
         ])
     except Exception:
@@ -1425,6 +1447,7 @@ def build_app(token):
     app.add_handler(CommandHandler("qoidaochir", qoidaochir_cmd))
     app.add_handler(CommandHandler("jurnal", jurnal_cmd))
     app.add_handler(CommandHandler("sozlamalar", sozlamalar_cmd))
+    app.add_handler(CommandHandler("xatolar", xatolar_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app

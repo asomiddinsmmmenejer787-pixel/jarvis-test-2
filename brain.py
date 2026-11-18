@@ -82,6 +82,11 @@ def _jload():
 
 
 def log_entry(text):
+    try:
+        import audit
+        audit.record("journal", x=str(text)[:300])
+    except Exception:  # noqa: BLE001
+        pass
     with _lock:
         items = _jload()
         items.append({"t": int(time.time()), "x": str(text)[:300]})
@@ -98,6 +103,11 @@ def log_entry(text):
 def log_event(ev):
     """auto_reply / dm_chat voqeasini jurnalga qisqa yozadi."""
     t = ev.get("type")
+    if t in ("dm_sent", "dm_error", "dm_approval", "chat_sent", "chat_approval", "chat_error"):
+        import audit
+        audit.record("dm", **{k: v for k, v in ev.items() if k in (
+            "type", "cid", "key", "username", "comment", "message", "history", "text", "kind", "reason",
+            "error", "topic", "safe")})
     who = "@" + (ev.get("username") or "?")
     if t == "sent":
         log_entry(f"Komentga javob: {who} «{ev.get('text', '')[:80]}» → {ev.get('reply', '')[:120]}")
