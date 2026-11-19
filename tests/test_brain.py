@@ -66,6 +66,9 @@ def run():
     check("t3" not in sent, "Linkli belgilash baribir spam")
     check("@bolalar_dunyosi.uzb" not in sent.get("t2", ""), "O'z akkauntimiz belgilansa, javobda tilga olinmaydi")
     ai.spam = False
+    # t1 ga tasodifiy zaxira javob tanlanadi; u "Ikkalangizga ham yoqadi..." bo'lsa,
+    # t4 takror deb o'tkazib yuboriladi. Test barqaror bo'lishi uchun takror tarixini tozalaymiz.
+    r._recent.clear()
     fake.comments["m1"].append({"id": "t4", "text": "@lola bu senga", "username": "ona_2", "timestamp": ts(1)})
     r.run_once()
     check(dict(fake.replies)["t4"] == "@ona_2 @lola Ikkalangizga ham yoqadi!",
