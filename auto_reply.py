@@ -152,6 +152,13 @@ SOVG'A SO'RASH ("menga bering", "menga ham beringlar", "iltimos bering", "yutama
   o'yinlarni o'tkazib yubormaslik uchun sahifani kuzatib borishni so'ra. Va'da berma.
 - Har safar boshqacha so'z bilan yoz, qisqa (1 jumla).
 
+SO'ROVNOMA POSTI (FAKTLARda "BU POST SO'ROVNOMA" bo'lsa)
+- Biz obunachilardan "qaysi mahsulot kerak?" deb so'raganmiz. Komentdagi mahsulot nomi ("Kukirin g2",
+  "samokat", "krasofka 32") bu savolimizga JAVOB, narx so'rovi EMAS: category "positive", dm bo'sh satr.
+- Javob: istagini yozib olganimizni ayt va rahmat de (masalan "Yozib oldik, rahmat! Yana nimalar kerak?").
+  Narx, "direktga yozdik", skidka foizi yoki "albatta bo'ladi" kabi va'da yo'q.
+- Faqat mijoz aniq narx so'rasa ("narxi qancha") price deb ol.
+
 POST HAQIDA FAKTLAR
 Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'lumot) va do'kon haqida.
 - Avval mijoz aynan nimani so'raganini tushun va javobni shu postga moslab yoz.
@@ -254,6 +261,21 @@ def safe_reply(reply):
     if FIXED_CLAIM_RE.search(reply):
         return ""  # Jarvis hech narsani tuzata olmaydi: bunday va'da yolg'on bo'ladi
     return reply
+
+
+SURVEY_REPLIES = ["Yozib oldik, rahmat! Yana nimalar kerak? 😊", "Istagingizni yozib qo'ydik, rahmat 😊",
+                  "Rahmat, ro'yxatga qo'shdik! Yana qaysi narsa kerak? 😊", "Qayd qildik, fikringiz uchun rahmat 😊"]
+EXPLICIT_PRICE_RE = re.compile(r"narx|qancha|nech|pul\b|necha\s*pul|цен|сколько|почем|нарх|қанча", re.I)
+
+
+def survey_answer(verdict, comment_text, survey, recent=()):
+    """So'rovnoma postida mahsulot nomi yozilgan komment narx so'rovi emas: positive, narxsiz, direktsiz."""
+    if not survey or verdict.get("category") != "price" or EXPLICIT_PRICE_RE.search(comment_text or ""):
+        return verdict
+    reply = verdict.get("reply") or ""
+    if not reply or DM_CLAIM_RE.search(reply) or EXPLICIT_PRICE_RE.search(reply) or re.search(r"direkt|директ", reply, re.I):
+        reply = random.choice([x for x in SURVEY_REPLIES if not too_similar(x, recent)] or SURVEY_REPLIES)
+    return {**verdict, "category": "positive", "reply": reply}
 
 
 # Direktga umumiy (narxsiz) xabar ketadigan bo'lsa, komentda "narxini direktga yozdik" deyish yolg'on
@@ -861,6 +883,8 @@ class CommentResponder:
                 if mentions and isinstance(result, dict):
                     result = {**result, "reply": strip_mentions(result.get("reply"))}
                 verdict = apply_tags(assess(result, text), author, mentions, text)
+                if verdict["action"] == "auto":
+                    verdict = survey_answer(verdict, text, catalog.post_facts(post).get("survey"), self._recent)
                 if verdict["action"] == "auto" and too_similar(verdict["reply"], self._recent):
                     # Takror: boshqa xavfsiz javob tanlaymiz, bo'lmasa (maqtov/belgilash) javobsiz qoldiramiz
                     alts = [x for x in SAFE_FALLBACK.get(verdict["category"], [])

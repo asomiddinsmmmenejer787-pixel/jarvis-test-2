@@ -146,6 +146,13 @@ GIVEAWAY_RE = re.compile(r"o['ʻ`’]?yin|tanlov|konkurs|yutib|yutuq|sovg['ʻ`�
                          r"розыгрыш|конкурс|подар|ўйин|танлов|совға", re.I)
 
 
+# Obunachilardan "qaysi tovar kerak?" deb so'ralgan post (masalan katta skidka oldidan so'rovnoma)
+SURVEY_RE = re.compile(
+    r"qaysi\s+(?:tovar|mahsulot|o['ʻ`’]?yinchoq|narsa|model)\w*|nima(?:lar)?\w*\s+(?:kerak|xohlaysiz|olmoqchi)|"
+    r"(?:komment|koment|izoh)\w*\s+(?:yozing|qoldiring|yozib)|so['ʻ`’]?rovnoma|"
+    r"какие\s+товар|что\s+(?:вам\s+)?(?:нужно|хотите)|напишите\s+в\s+коммент|қайси\s+товар", re.I)
+
+
 # ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------
 
 def get_memory():
@@ -273,10 +280,14 @@ def post_facts(post):
         lines.append("BU POST O'YIN/TANLOV POSTI: shartlari yuqoridagi opisaniya yoki ma'lumotda.")
     else:
         lines.append("BU POSTDA O'YIN/TANLOV YO'Q (oldingi postlarda o'yin bo'lgan).")
+    survey = bool(SURVEY_RE.search(gtext))
+    if survey:
+        lines.append("BU POST SO'ROVNOMA: obunachilardan qaysi mahsulot kerakligi so'ralgan. Komentdagi mahsulot "
+                     "nomi narx so'rovi emas, savolga javob (istak).")
     has_price = bool(info["price"]) or bool(info["use_caption"] and PRICE_HINT_RE.search(caption))
     return {"lines": lines, "has_price": has_price, "source_text": "\n".join(sources),
             "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"]),
-            "task": get_tasks(post.get("id"))}
+            "task": get_tasks(post.get("id")), "survey": survey}
 
 
 def facts_block(facts):

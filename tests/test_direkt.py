@@ -162,6 +162,41 @@ def run():
     check(auto_reply.honest_price_claim("Direktga qarang 😊") == "Direktga qarang 😊",
           "Narx haqida da'vosiz javob o'zgarmaydi")
 
+    print("\n4b3) So'rovnoma posti: 'qaysi tovar kerak?' ostidagi mahsulot nomi narx so'rovi emas")
+    check(catalog.SURVEY_RE.search("Katta skidka oldidan qaysi tovarlar kerak? Kommentga yozing")
+          and catalog.SURVEY_RE.search("Какие товары вам нужны? Напишите в комментариях")
+          and not catalog.SURVEY_RE.search("Samokat 3-8 yosh uchun. Direktga yozing"),
+          "So'rovnoma posti tanildi, oddiy reklama posti emas")
+    sp = {"id": "s1", "caption": "Katta skidka oldidan qaysi tovarlar kerak? Komentga yozing"}
+    check(catalog.post_facts(sp)["survey"] and any("SO'ROVNOMA" in x for x in catalog.post_facts(sp)["lines"]),
+          "AI'ga 'bu post so'rovnoma' deb aytiladi")
+    v = auto_reply.survey_answer({"category": "price", "reply": "Narxini direktga yozdik 😊", "action": "auto"},
+                                 "Kukirin g2", True)
+    check(v["category"] == "positive" and v["reply"] in auto_reply.SURVEY_REPLIES,
+          "'Kukirin g2' istak deb olinadi: narx va direkt haqida gap yo'q")
+    check(auto_reply.survey_answer({"category": "price", "reply": "x", "action": "auto"}, "Kukirin narxi qancha?",
+                                   True)["category"] == "price", "Aniq narx so'ralsa, narx so'rovi bo'lib qoladi")
+    check(auto_reply.survey_answer({"category": "price", "reply": "x"}, "Kukirin g2", False)["category"] == "price",
+          "Oddiy postda o'zgarmaydi")
+    catalog.set_task("m1", "Bu so'rovnoma: katta skidka oldidan qaysi tovarlar kerakligini so'radik")
+    orig = ai.generate_json
+
+    def kukirin_ai(system, message, temperature=0.9):
+        if "<komment>Kukirin g2</komment>" in message:
+            check("SO'ROVNOMA" in message and "SO'ROVNOMA POSTI" in system, "AI so'rovnoma haqida biladi")
+            return {"category": "price", "confidence": 0.9, "reply": "Narxi va ma'lumotni direktga yozdik 😊",
+                    "dm": "Kukirin G2 narxi 300 000", "dm_answered": True}
+        return orig(system, message, temperature)
+    ai.generate_json = kukirin_ai
+    dms_before = len(fake.dms)
+    fake.comments["m1"].append({"id": "c29k", "text": "Kukirin g2", "username": "u29k", "timestamp": ts(1)})
+    events = r.run_once()
+    sent = next(e for e in events if e["type"] == "sent" and e["cid"] == "c29k")
+    check(sent["category"] == "positive" and sent["reply"] in auto_reply.SURVEY_REPLIES
+          and len(fake.dms) == dms_before, "So'rovnomadagi 'Kukirin g2' ga: 'yozib oldik', direktga narx ketmadi")
+    ai.generate_json = orig
+    catalog.set_task("m1", "")
+
     print("\n4c) Egasi: 'Krasofka haqidagi komentlarga faqat komentda javob, direktga o'tkazma'")
     import brain
     lesson = "Krasofka haqidagi komentlarga faqat kommentda javob ber, direktga o'tkazma."
