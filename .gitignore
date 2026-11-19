@@ -8,3 +8,5 @@ data/owner.json
 data/scheduler.json
 data/ig_history.json
 data/*.tmp
+data/youtube.json
+data/youtube_pending.json
