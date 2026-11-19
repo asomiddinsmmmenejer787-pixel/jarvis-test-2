@@ -463,7 +463,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(result)
             return
 
-    await smart_answer(update, context, user_text)
+    ctx_text = user_text
+    if replied is not None and (replied.text or replied.caption):
+        # Egasi Jarvisning xabariga (masalan komentga javob haqidagi xabarga) Reply qilib ko'rsatma yozdi
+        ctx_text += ("\n\n(Egasi Jarvisning shu xabariga Reply qilib yozdi: «"
+                     + (replied.text or replied.caption)[:700] + "»)")
+    await smart_answer(update, context, user_text, ctx_text)
 
 
 # ---------- o'rganish: egasining tanbehi va ko'rsatmalari ----------
@@ -506,14 +511,14 @@ async def run_recheck(bot, chat_id, n_posts):
     await bot.send_message(chat_id=chat_id, text=text)
 
 
-async def smart_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text: str):
+async def smart_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text: str, ctx_text=None):
     """Egasining xabari ish haqida bo'lsa (tanbeh, qoida, qayta tekshir) - o'zi tuzatadi."""
     if responder is None or not ig.is_configured():
         await answer_with_jarvis(update, context, user_text)
         return
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        res = await asyncio.to_thread(_think, user_text)
+        res = await asyncio.to_thread(_think, ctx_text or user_text)
     except Exception as e:  # noqa: BLE001
         logger.warning("Xabarni tahlil qilib bo'lmadi: %s", e)
         res = {"kind": "chat"}
@@ -1250,7 +1255,7 @@ async def notify_event(bot, owner, ev):
             f"{who}\n→ {ev['reply']}\n\n{ev.get('permalink', '')}"
         )
     elif ev["type"] == "sent":
-        text = f"✅ Avtomatik javob yozildi\n{who}\n→ {ev['reply']}"
+        text = f"✅ Avtomatik javob yozildi\n{who}\n→ {ev['reply']}\n{ev.get('permalink', '')}".rstrip()
     elif ev["type"] == "dm_approval":
         return  # send_unsent_approvals() yuboradi
     elif ev["type"] == "dm_sent":

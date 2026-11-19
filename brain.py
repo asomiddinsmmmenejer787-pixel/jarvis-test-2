@@ -13,6 +13,7 @@ Jarvis'ning o'rganish xotirasi.
 """
 
 import json
+import re
 import logging
 import os
 import threading
@@ -21,6 +22,7 @@ from datetime import datetime
 
 import catalog
 import config
+import instagram_api as ig
 
 log = logging.getLogger("brain")
 _lock = threading.Lock()
@@ -159,7 +161,18 @@ TURLAR (kind):
        "blogerlar videosiga koment yozishni to'xtat" desa, ro'yxatdan mos postni tanla. Aniq bo'lmasa,
        harakat qilma, reply'da qaysi post ekanini so'ra.
     {"type": "post_dm", "post": 2, "on": false}  - bitta post komentlaridan keyin direktga yozishni
-       o'chirish/yoqish (komentga javob davom etadi). Egasi "shu postga direktga yozma" desa.
+       o'chirish/yoqish (komentga javob davom etadi). Egasi "shu postga direktga yozma",
+       "bu videoga lichkaga yozma" desa.
+    {"type": "post_task", "post": 2, "task": "..."}  - FAQAT shu post komentlariga qanday javob yozish
+       bo'yicha egasining ko'rsatmasi. Egasi "shu postga/videoga komentga shunday javob ber", "bu postda
+       ... deb yoz", "tanlov postida ... eslat" desa, task'ga uning ko'rsatmasini aniq, o'z so'zlari bilan
+       yoz (masalan "Komentga: g'olib 1-dekabr kuni aniqlanadi deb javob ber"). Bu holatda lesson BO'SH
+       qoladi (lesson hamma postlarga tegishli). "task": "" = shu postdagi ko'rsatmani o'chirish.
+       Postda oldingi ko'rsatma bo'lsa va egasi uni bekor qilmagan bo'lsa, ikkalasini bitta task'ga birlashtir.
+    POST QAYSI: "post" = OXIRGI POSTLAR ro'yxatidagi raqam (1 = eng yangi). "EGASI KO'RSATGAN POST" bo'lsa,
+       aynan o'shani ishlat. Egasi "oxirgi post", "tanlov posti", "krasovka videosi" desa, ro'yxatdagi
+       sana va opisaniyaga qarab tanla. Umuman aniq bo'lmasa, harakat qilma, reply'da qaysi post ekanini
+       so'ra (havolasini yuborishni so'ra).
     {"type": "set_policy", ...}  - limitni tejash qoidalari, faqat o'zgarayotgan kalitlarni yoz:
        "low_limit": belgilash (@) va maqtov komentlariga kunlik javob soni (0-1000; 0 = umuman yozma),
        "per_user_day": bir odamga kuniga nechta shunday javob (1-10),
@@ -181,11 +194,38 @@ Javob faqat JSON:
 """.strip()
 
 
+_LINK_RE = re.compile(r"instagram\.com/(?:[\w.]+/)?(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)")
+
+
+def find_linked_post(text):
+    """Egasi yuborgan havola bizning so'nggi postlarimizdan biriga tegishli bo'lsa, o'sha post."""
+    codes = set(_LINK_RE.findall(text or ""))
+    if not codes:
+        return None
+    try:
+        posts = ig.get_recent_posts(50)
+    except ig.InstagramError as e:
+        if e.fatal:
+            raise
+        return None
+    for p in posts:
+        m = _LINK_RE.search(p.get("permalink") or "")
+        if m and m.group(1) in codes:
+            return p
+    return None
+
+
 def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
     lessons = get_lessons()
+    linked = find_linked_post(owner_text)
+    hint = ""
+    if linked is not None:
+        cap = " ".join((linked.get("caption") or "").split())[:110]
+        hint = (f"\n\nEGASI KO'RSATGAN POST (havola orqali): {catalog._post_time(linked)}: {cap}\n"
+                "post_* harakatlarida \"post\": 1 yoz, tizim aynan shu postni ishlatadi.")
     msg = (f"HOLAT:\n{status_text or '-'}\n\nJURNAL:\n{journal_text(30) or '-'}\n\n"
            f"KO'RSATMALAR:\n" + ("\n".join(f"- {x}" for x in lessons) or "-")
-           + f"\n\nPOSTLAR:\n{last_post_text or '-'}\n\nSUHBAT:\n{history_text or '-'}"
+           + f"\n\nPOSTLAR:\n{last_post_text or '-'}{hint}\n\nSUHBAT:\n{history_text or '-'}"
            + f"\n\nEGASINING XABARI:\n{owner_text[:1500]}")
     res = ai.generate_json(THINK_PROMPT, msg, temperature=0.2)
     out = {"kind": "chat", "reply": "", "lesson": "", "fact": "", "actions": []}
@@ -211,6 +251,9 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                 acts.append({"type": t, "mode": a["mode"]})
             elif t in ("post_reply", "post_dm"):
                 acts.append({"type": t, "post": max(1, min(15, int(a.get("post") or 1))), "on": bool(a.get("on"))})
+            elif t == "post_task" and isinstance(a.get("task"), str):
+                acts.append({"type": t, "post": max(1, min(15, int(a.get("post") or 1))),
+                             "task": catalog._clean(a["task"], 500)})
             elif t == "set_policy":
                 ch = {k: int(a[k]) for k in ("low_limit", "per_user_day", "short_ratio", "reserve_pct")
                       if a.get(k) is not None and str(a[k]).lstrip("-").isdigit()}
@@ -220,6 +263,10 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                     acts.append({"type": t, "changes": ch})
         except (TypeError, ValueError):
             continue
+    if linked is not None:
+        for a in acts:
+            if a["type"].startswith("post_"):
+                a["media"] = linked  # havola berilgan bo'lsa, raqamga emas, aynan shu postga
     out["actions"] = acts[:4]
     return out
 
@@ -269,6 +316,8 @@ def build_context(responder, chat, memory):
                 cap = " ".join((p.get("caption") or "").split())[:110]
                 off = " [KOMMENTGA JAVOB O'CHIQ]" if catalog.is_reply_off(p.get("id")) else ""
                 off += " [DIREKTGA YOZILMAYDI]" if catalog.is_dm_off(p.get("id")) else ""
+                task = catalog.get_post_info(p.get("id"))["task"]
+                off += f" [SHU POST KO'RSATMASI: {task[:150]}]" if task else ""
                 rows.append(f"{i}. {catalog._post_time(p)}, {p.get('comments_count', 0)} komment{off}: {cap}")
             last_post = "OXIRGI POSTLAR (1 = eng yangi):\n" + "\n".join(rows)
     except ig.InstagramError as e:
@@ -318,31 +367,31 @@ def apply(res, responder, chat=None):
             chat.set_mode(act["mode"])
             lines.append(f"✅ Direkt suhbat rejimi: {act['mode']}")
             log_entry(f"Direkt rejimi: {act['mode']}")
-        elif t == "post_reply":
-            import instagram_api as ig
-            posts = ig.get_recent_posts(15)
-            if act["post"] > len(posts):
-                lines.append("⚠️ Bunday post topilmadi.")
-                continue
-            p = posts[act["post"] - 1]
-            catalog.set_reply_off(p["id"], not act["on"])
+        elif t.startswith("post_"):
+            p = act.get("media")
+            if p is None:
+                posts = ig.get_recent_posts(15)
+                if act["post"] > len(posts):
+                    lines.append("⚠️ Bunday post topilmadi. Post havolasini yuboring.")
+                    continue
+                p = posts[act["post"] - 1]
             cap = " ".join((p.get("caption") or "").split())[:60]
-            lines.append(("✅ Komentlarga javob yoqildi: " if act["on"] else "⛔ Bu postga komment yozilmaydi: ")
-                         + f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}")
-            log_entry(f"Post {p['id']} komment javobi: {'yoqildi' if act['on'] else 'ochirildi'}")
-        elif t == "post_dm":
-            import instagram_api as ig
-            posts = ig.get_recent_posts(15)
-            if act["post"] > len(posts):
-                lines.append("⚠️ Bunday post topilmadi.")
-                continue
-            p = posts[act["post"] - 1]
-            catalog.set_dm_off(p["id"], not act["on"])
-            cap = " ".join((p.get("caption") or "").split())[:60]
-            lines.append(("✅ Bu post komentlaridan keyin direktga yana yoziladi: " if act["on"]
-                          else "⛔ Bu postga faqat komentda javob, direktga yozilmaydi: ")
-                         + f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}")
-            log_entry(f"Post {p['id']} direkt: {'yoqildi' if act['on'] else 'ochirildi'}")
+            where = f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}"
+            if t == "post_reply":
+                catalog.set_reply_off(p["id"], not act["on"])
+                lines.append(("✅ Komentlarga javob yoqildi: " if act["on"] else "⛔ Bu postga komment yozilmaydi: ")
+                             + where)
+                log_entry(f"Post {p['id']} komment javobi: {'yoqildi' if act['on'] else 'ochirildi'}")
+            elif t == "post_dm":
+                catalog.set_dm_off(p["id"], not act["on"])
+                lines.append(("✅ Bu post komentlaridan keyin direktga yana yoziladi: " if act["on"]
+                              else "⛔ Bu postga faqat komentda javob, direktga yozilmaydi: ") + where)
+                log_entry(f"Post {p['id']} direkt: {'yoqildi' if act['on'] else 'ochirildi'}")
+            elif t == "post_task":
+                catalog.set_task(p["id"], act["task"])
+                lines.append((f"📝 Shu post komentlariga endi shunday javob beraman: {act['task']}\n"
+                              if act["task"] else "🗑 Shu postdagi alohida ko'rsatma o'chirildi: ") + where)
+                log_entry(f"Post {p['id']} ko'rsatmasi: {act['task'][:150] or 'ochirildi'}")
         elif t == "set_policy":
             responder.set_policy(**act["changes"])
             lines.append("✅ Tejash qoidalari yangilandi:\n" + policy_text(responder.status()))

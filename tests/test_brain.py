@@ -173,6 +173,35 @@ def run():
     check(catalog.is_dm_off(off_id) and not catalog.is_reply_off(off_id) and "direktga yozilmaydi" in lines[-1],
           "Chat orqali postga direkt yozish o'chirildi, komentga javob qoldi")
     catalog.set_dm_off(off_id, False)
+
+    class OwnerAI:
+        """Egasining 'shu postga ...' ko'rsatmasini tushungan AI javobi (post raqamini adashtiradi)."""
+        def __init__(self):
+            self.msg = ""
+
+        def generate_json(self, system, message, temperature=0.2):
+            self.msg = message
+            return {"kind": "work", "reply": "Xo'p", "lesson": "", "actions": [
+                {"type": "post_dm", "post": 1, "on": False},
+                {"type": "post_task", "post": 1, "task": "Komentga: g'olib 1-dekabr aniqlanadi deb javob ber"}]}
+
+    oai = OwnerAI()
+    res = brain.think(oai, "Shu postga direktga yozma, komentga g'olib 1-dekabr aniqlanadi deb javob ber "
+                           "https://www.instagram.com/p/BBB2/?igsh=abc")
+    check("EGASI KO'RSATGAN POST" in oai.msg and all(a["media"]["id"] == "m2" for a in res["actions"]),
+          "Havola yuborilsa, aynan o'sha post tanlandi (raqam emas)")
+    lines, _ = brain.apply(res, r)
+    check(catalog.is_dm_off("m2") and not catalog.is_dm_off("m1"), "Havoladagi postga direkt o'chirildi")
+    check("1-dekabr" in catalog.get_post_info("m2")["task"] and not catalog.get_post_info("m1")["task"]
+          and "📝" in lines[-1], "Shu post komentlari uchun ko'rsatma saqlandi, boshqa postga tegmadi")
+    ctx = brain.build_context(r, None, None)[1]
+    check("SHU POST KO'RSATMASI" in ctx and "DIREKTGA YOZILMAYDI" in ctx, "Jarvis post sozlamalarini ko'radi")
+    check("1-dekabr" in catalog.post_facts({"id": "m2", "caption": ""})["task"],
+          "Ko'rsatma shu post komentiga javob yozishda AI'ga beriladi")
+    res = brain.think(oai, "Shu postga direktga yozma")
+    check(all("media" not in a for a in res["actions"]), "Havola bo'lmasa ro'yxatdagi raqam ishlatiladi")
+    catalog.set_dm_off("m2", False)
+    catalog.set_task("m2", "")
     v = auto_reply.assess({"category": "positive", "confidence": 0.9,
                            "reply": "Xato uchun uzr, endi hammasi joyida. Postni tekshirib ko'ring-a?"},
                           "Aka layk ochrb qoybszkuu🗿")
