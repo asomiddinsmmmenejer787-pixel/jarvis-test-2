@@ -146,6 +146,25 @@ def run():
     check(set(r.state.dm_pending) == {"d2"}, "Eski direkt so'rovlari tozalandi")
     check(r._housekeeping() is False, "Tuzatish faqat bir marta")
 
+    print("\n5) Postga javobni o'chirish va sovg'a so'rash")
+    import catalog
+    fake.comments["m1"] = [{"id": "q1", "text": "Juda chiroyli ekan bu narsa", "username": "q1", "timestamp": ts(1)}]
+    fake.comments["m2"] = []
+    r._counts.clear()
+    lines, _ = brain.apply({"reply": "Xo'p", "actions": [{"type": "post_reply", "post": 1, "on": False}]}, r)
+    off_id = ig.get_recent_posts(1)[0]["id"]
+    check(catalog.is_reply_off(off_id) and "⛔" in lines[-1], "Chat orqali postga javob o'chirildi")
+    n = len(fake.replies)
+    r.run_once()
+    check(all(c != "q1" for c, _ in fake.replies[n:]) or off_id != "m1", "O'chirilgan postga komment yozilmadi")
+    catalog.set_reply_off(off_id, False)
+    f = catalog.post_facts({"id": "zz", "caption": "Tanlov! Obuna bo'ling va yutib oling"})
+    check(any("O'YIN/TANLOV POSTI" in x for x in f["lines"]), "O'yin posti aniqlandi")
+    f = catalog.post_facts({"id": "zz2", "caption": "Yangi dron keldi"})
+    check(any("O'YIN/TANLOV YO'Q" in x for x in f["lines"]), "O'yinsiz post aniqlandi")
+    check(not auto_reply.is_short("Qayirda joylashgan") and not auto_reply.is_short("34 rasmer"),
+          "Manzil va o'lcham savollari o'tkazib yuborilmaydi")
+
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 
 

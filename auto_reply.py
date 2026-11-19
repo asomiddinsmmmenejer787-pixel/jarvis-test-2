@@ -137,6 +137,14 @@ KATEGORIYALAR
    @ belgisini yozma, ismlarni tizim o'zi qo'shadi. Belgilash bilan birga savol yoki narx so'ralgan bo'lsa,
    tegishli kategoriyani (price, question) tanla va javobni yana ikkalasiga qarat.
 
+SOVG'A SO'RASH ("menga bering", "menga ham beringlar", "iltimos bering", "yutaman", "orzuyim")
+- Bu narx so'rovi EMAS, category "positive". "Direktga yozdik", narx yoki DM haqida gapirma.
+- FAKTLARda "BU POST O'YIN/TANLOV POSTI" bo'lsa: istagini iliq qabul qil, omad tila, shartlarni bajarishni
+  eslat (shartlarni o'zingdan to'qima, "shartlar postda" de).
+- "BU POSTDA O'YIN/TANLOV YO'Q" bo'lsa: hozir bu postda o'yin yo'qligini muloyim ayt va keyingi
+  o'yinlarni o'tkazib yubormaslik uchun sahifani kuzatib borishni so'ra. Va'da berma.
+- Har safar boshqacha so'z bilan yoz, qisqa (1 jumla).
+
 POST HAQIDA FAKTLAR
 Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'lumot) va do'kon haqida.
 - Avval mijoz aynan nimani so'raganini tushun va javobni shu postga moslab yoz.
@@ -157,6 +165,8 @@ AQL
 
 QOIDALAR
 - FAKTLARda yo'q narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
+- Boshqa mahsulot so'ralsa (FAKTLARda yo'q), "bizda yo'q", "mavjud emas" DEMA: do'konda bo'lishi mumkin,
+  "direktga yozing, aniqlab aytamiz" de.
 - Tanqid haqiqiy shikoyatmi yoki trollmi aniq bo'lmasa, complaint deb ol. Hazilmi yoki haqoratmi aniq
   bo'lmasa, hazil deb ol (positive).
 - Ikkilansang, sarkazm o'rniga iliq javob ber va confidence ni past qo'y.
@@ -374,8 +384,9 @@ def clean_policy(raw):
 
 QUESTION_HINT = re.compile(
     r"narx|qancha|nech|pul|sum\b|so'?m\b|qayer|qachon|qanday|qanaqa|nima|kim\b|sotib|olsa|olaman|buyurtma|zakaz|"
-    r"razmer|o'?lcham|rang|dostavka|yetkaz|manzil|tel|nomer|aksiya|skidka|chegirma|bor\s*mi|mi\b|"
-    r"цен|сколько|где|есть|размер|доставк|заказ|как|почем", re.I)
+    r"r[ae][zs]m[ae]r|razmer|o'?lcham|rang|dostavka|dastavka|yetkaz|manzil|joylash|qay[ie]r|tel|nomer|aksiya|"
+    r"skidka|chegirma|bor\s*mi|mi\b|\d{2}|"
+    r"цен|сколько|где|есть|размер|доставк|заказ|как|почем|кайер|қаер|манзил", re.I)
 
 
 def is_short(text):
@@ -626,6 +637,10 @@ class CommentResponder:
                         self.state.attempts.pop(cid, None)
                         recheck = True
                 self.state.flags["fix_v3"] = int(now)
+            if not self.state.flags.get("off_blogger_video"):
+                need_off = True
+            else:
+                need_off = False
             for cid, it in list(self.state.pending.items()):
                 if now - (it.get("created") or now) > self.PENDING_TTL:
                     self.state.mark(cid, "expired")
@@ -633,6 +648,19 @@ class CommentResponder:
                 if now - (it.get("created") or now) > self.DM_PENDING_TTL:
                     self.state.dm_pending.pop(cid, None)
             self.state.save()
+        if need_off:
+            # 19.11 egasining buyrug'i: blogerlarni belgilash videosiga komment yozilmasin
+            try:
+                for p in ig.get_recent_posts(15):
+                    if "Df2B1TzNBeZ" in (p.get("permalink") or ""):
+                        catalog.set_reply_off(p["id"], True)
+                        log.info("Blogerlar videosiga (%s) komment javobi o'chirildi", p["id"])
+                with self.lock:
+                    self.state.flags["off_blogger_video"] = int(now)
+                    self.state.save()
+            except InstagramError as e:
+                if e.fatal:
+                    raise
         return recheck
 
     def _run_once(self, n_posts=None, force=False, per_run=None, max_age=None):
@@ -668,6 +696,9 @@ class CommentResponder:
         for post in ig.get_recent_posts(posts_to_check):
             stats["posts"] += 1
             if not post.get("comments_count"):
+                continue
+            if catalog.is_reply_off(post.get("id")):
+                stats["off_posts"] = stats.get("off_posts", 0) + 1
                 continue
             stats["with_comments"] += 1
             # Tezlik: komentlar soni o'zgarmagan postni qayta o'qimaymiz (tekshiruv arzon bo'ladi)

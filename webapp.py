@@ -664,8 +664,18 @@ def api_posts(x_init_data: str = Header(default="")):
             "comments": p.get("comments_count"),
             "info": catalog.get_post_info(p.get("id")),
             "has_price": facts["has_price"],
+            "reply_off": catalog.is_reply_off(p.get("id")),
         })
     return out
+
+
+@router.post("/api/posts/{media_id}/reply")
+def api_post_reply(media_id: str, body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    off = bool(body.get("off"))
+    catalog.set_reply_off(media_id, off)
+    brain.log_entry(f"Post {media_id} komment javobi: {'ochirildi' if off else 'yoqildi'} (mini ilova)")
+    return {"reply_off": off}
 
 
 @router.post("/api/posts/{media_id}/info")

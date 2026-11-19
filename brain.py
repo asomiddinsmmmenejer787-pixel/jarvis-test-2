@@ -138,7 +138,7 @@ Sen Jarvissan: Instagram sahifasini boshqaradigan yordamchi (komentlarga va dire
 Do'kon egasi senga Telegram'da yozdi. Uning xabarini tushun va nima qilish kerakligini hal qil.
 
 Senga beriladi: HOLAT (hozirgi sozlamalar), JURNAL (oxirgi qilgan ishlaring), KO'RSATMALAR (egasi oldin
-bergan qoidalar), OXIRGI POST, SUHBAT (oxirgi gaplashuv) va EGASINING XABARI.
+bergan qoidalar), POSTLAR, SUHBAT (oxirgi gaplashuv) va EGASINING XABARI.
 
 TURLAR (kind):
 - "chat": kontent so'rovi (ssenariy, g'oya, caption, tahlil), umumiy savol yoki suhbat. Boshqa hech narsa qilma.
@@ -154,6 +154,10 @@ TURLAR (kind):
     {"type": "set_limit", "value": 500}  - komentlarga kunlik avtomatik javoblar limiti (10-1000).
     {"type": "comment_mode", "mode": "on|off|test"}  - komentga avtomatik javobni yoqish/o'chirish/test.
     {"type": "dm_mode", "mode": "auto|approve|off"}  - direkt suhbatlarga javob rejimi.
+    {"type": "post_reply", "post": 2, "on": false}  - bitta postga komment javobini o'chirish/yoqish.
+       "post" = OXIRGI POSTLAR ro'yxatidagi raqam (1 = eng yangi). Egasi "shu videoga yozma",
+       "blogerlar videosiga koment yozishni to'xtat" desa, ro'yxatdan mos postni tanla. Aniq bo'lmasa,
+       harakat qilma, reply'da qaysi post ekanini so'ra.
     {"type": "set_policy", ...}  - limitni tejash qoidalari, faqat o'zgarayotgan kalitlarni yoz:
        "low_limit": belgilash (@) va maqtov komentlariga kunlik javob soni (0-1000; 0 = umuman yozma),
        "per_user_day": bir odamga kuniga nechta shunday javob (1-10),
@@ -179,7 +183,7 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
     lessons = get_lessons()
     msg = (f"HOLAT:\n{status_text or '-'}\n\nJURNAL:\n{journal_text(30) or '-'}\n\n"
            f"KO'RSATMALAR:\n" + ("\n".join(f"- {x}" for x in lessons) or "-")
-           + f"\n\nOXIRGI POST:\n{last_post_text or '-'}\n\nSUHBAT:\n{history_text or '-'}"
+           + f"\n\nPOSTLAR:\n{last_post_text or '-'}\n\nSUHBAT:\n{history_text or '-'}"
            + f"\n\nEGASINING XABARI:\n{owner_text[:1500]}")
     res = ai.generate_json(THINK_PROMPT, msg, temperature=0.2)
     out = {"kind": "chat", "reply": "", "lesson": "", "fact": "", "actions": []}
@@ -203,6 +207,8 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                 acts.append({"type": t, "mode": a["mode"]})
             elif t == "dm_mode" and a.get("mode") in ("auto", "approve", "off"):
                 acts.append({"type": t, "mode": a["mode"]})
+            elif t == "post_reply":
+                acts.append({"type": t, "post": max(1, min(15, int(a.get("post") or 1))), "on": bool(a.get("on"))})
             elif t == "set_policy":
                 ch = {k: int(a[k]) for k in ("low_limit", "per_user_day", "short_ratio", "reserve_pct")
                       if a.get(k) is not None and str(a[k]).lstrip("-").isdigit()}
@@ -254,11 +260,14 @@ def build_context(responder, chat, memory):
         st.append(f"Direkt suhbat rejimi: {chat.mode}")
     last_post = ""
     try:
-        posts = ig.get_recent_posts(1)
+        posts = ig.get_recent_posts(10)
         if posts:
-            p = posts[0]
-            last_post = (f"{catalog._post_time(p)}, {p.get('comments_count', 0)} komment: "
-                         f"{(p.get('caption') or '').strip()[:200]}")
+            rows = []
+            for i, p in enumerate(posts, 1):
+                cap = " ".join((p.get("caption") or "").split())[:110]
+                off = " [KOMMENTGA JAVOB O'CHIQ]" if catalog.is_reply_off(p.get("id")) else ""
+                rows.append(f"{i}. {catalog._post_time(p)}, {p.get('comments_count', 0)} komment{off}: {cap}")
+            last_post = "OXIRGI POSTLAR (1 = eng yangi):\n" + "\n".join(rows)
     except ig.InstagramError as e:
         if e.fatal:
             raise
@@ -306,6 +315,18 @@ def apply(res, responder, chat=None):
             chat.set_mode(act["mode"])
             lines.append(f"✅ Direkt suhbat rejimi: {act['mode']}")
             log_entry(f"Direkt rejimi: {act['mode']}")
+        elif t == "post_reply":
+            import instagram_api as ig
+            posts = ig.get_recent_posts(15)
+            if act["post"] > len(posts):
+                lines.append("⚠️ Bunday post topilmadi.")
+                continue
+            p = posts[act["post"] - 1]
+            catalog.set_reply_off(p["id"], not act["on"])
+            cap = " ".join((p.get("caption") or "").split())[:60]
+            lines.append(("✅ Komentlarga javob yoqildi: " if act["on"] else "⛔ Bu postga komment yozilmaydi: ")
+                         + f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}")
+            log_entry(f"Post {p['id']} komment javobi: {'yoqildi' if act['on'] else 'ochirildi'}")
         elif t == "set_policy":
             responder.set_policy(**act["changes"])
             lines.append("✅ Tejash qoidalari yangilandi:\n" + policy_text(responder.status()))

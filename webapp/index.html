@@ -801,6 +801,7 @@ function renderPosts(){
     if (i.title) badges.push(`<span class="badge b-dim">${esc(i.title)}</span>`);
     if (i.info) badges.push('<span class="badge b-dim">+ MA\'LUMOT</span>');
     if (i.use_caption===false) badges.push('<span class="badge b-warn">OPISANIYA O\'CHIQ</span>');
+    if (p.reply_off) badges.push('<span class="badge b-warn">⛔ KOMMENT JAVOBI O\'CHIQ</span>');
     return `<div class="pc" id="pc-${p.id}">
       <div class="top" onclick="this.parentElement.classList.toggle('open')">
         ${p.thumb?`<img src="${esc(p.thumb)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=noimg></div>'">`:'<div class="noimg"></div>'}
@@ -812,8 +813,14 @@ function renderPosts(){
         <label class="f">Narx</label><input id="pp-${p.id}" value="${esc(i.price||'')}" placeholder="1 250 000 so'm">
         <label class="f">Qo'shimcha ma'lumot</label><textarea id="pi-${p.id}" rows="3" placeholder="Yosh: 3-8. Ranglar: qizil, ko'k. Kafolat 6 oy. Bo'lib to'lash bor.">${esc(i.info||'')}</textarea>
         <label class="row" style="margin-top:8px;font-size:14px"><input type="checkbox" id="pu-${p.id}" style="width:auto" ${i.use_caption===false?'':'checked'}> Opisaniyadan ham foydalansin</label>
+        <label class="row" style="margin-top:8px;font-size:14px"><input type="checkbox" style="width:auto" ${p.reply_off?'':'checked'} onchange="setPostReply('${p.id}',!this.checked)"> Jarvis bu postdagi komentlarga javob yozsin</label>
         <div class="row" style="margin-top:8px"><button class="btn sm green" onclick="savePostInfo('${p.id}')">Saqlash</button>${p.permalink?`<button class="btn sm" onclick="openLink('${esc(p.permalink)}')">Postni ochish</button>`:''}</div>
       </div></div>` }).join('') || '<div class="muted">Postlar topilmadi.</div>';
+}
+async function setPostReply(id, off){
+  try{ await api('/api/posts/'+id+'/reply',{method:'POST',body:{off}}); haptic('ok');
+    const p=(POSTS.posts||[]).find(x=>x.id===id); if(p) p.reply_off=off; renderPosts(); const el=$('#pc-'+id); if(el) el.classList.add('open') }
+  catch(e){ haptic('err'); alert(e.message) }
 }
 async function savePostInfo(id){
   const body={title:$('#pt-'+id).value,price:$('#pp-'+id).value,info:$('#pi-'+id).value,use_caption:$('#pu-'+id).checked};

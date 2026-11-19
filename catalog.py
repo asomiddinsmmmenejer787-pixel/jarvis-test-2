@@ -47,6 +47,7 @@ def load():
         data.setdefault("shop", {})
         data.setdefault("posts", {})
         data.setdefault("memory", [])
+        data.setdefault("reply_off", [])
         return data
 
 
@@ -91,6 +92,27 @@ def set_post_info(media_id, fields):
             data["posts"].pop(str(media_id), None)
         save(data)
         return get_post_info(media_id)
+
+
+# ---------- postga komment javobini o'chirish ----------
+
+def is_reply_off(media_id):
+    return str(media_id) in load()["reply_off"]
+
+
+def set_reply_off(media_id, off=True):
+    with _lock:
+        data = load()
+        ids = [x for x in data["reply_off"] if x != str(media_id)]
+        if off:
+            ids.append(str(media_id))
+        data["reply_off"] = ids[-200:]
+        save(data)
+    return off
+
+
+GIVEAWAY_RE = re.compile(r"o['ʻ`’]?yin|tanlov|konkurs|yutib|yutuq|sovg['ʻ`’]?a|g['ʻ`’]?olib|giveaway|"
+                         r"розыгрыш|конкурс|подар|ўйин|танлов|совға", re.I)
 
 
 # ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------
@@ -215,6 +237,11 @@ def post_facts(post):
     if mem_text:
         lines.append(mem_text)
         sources.append(mem_src)
+    gtext = " ".join([caption if info["use_caption"] else "", info["info"], info["title"], get_tasks(post.get("id")) or ""])
+    if GIVEAWAY_RE.search(gtext):
+        lines.append("BU POST O'YIN/TANLOV POSTI: shartlari yuqoridagi opisaniya yoki ma'lumotda.")
+    else:
+        lines.append("BU POSTDA O'YIN/TANLOV YO'Q (oldingi postlarda o'yin bo'lgan).")
     has_price = bool(info["price"]) or bool(info["use_caption"] and PRICE_HINT_RE.search(caption))
     return {"lines": lines, "has_price": has_price, "source_text": "\n".join(sources),
             "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"]),
