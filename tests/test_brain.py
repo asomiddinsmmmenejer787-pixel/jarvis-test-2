@@ -160,7 +160,21 @@ def run():
     n = len(fake.replies)
     r.run_once()
     check(all(c != "q1" for c, _ in fake.replies[n:]) or off_id != "m1", "O'chirilgan postga komment yozilmadi")
+    r.state.pending = {
+        "p1": {"post": off_id, "text": "Bermayman deb qoyin e😂", "category": "negative", "created": _t.time()},
+        "p2": {"post": "boshqa", "text": "Bizda arzon", "category": "competitor", "created": _t.time()},
+        "p3": {"permalink": "https://www.instagram.com/reel/Df2B1TzNBeZ/", "text": "x", "created": _t.time()},
+    }
+    r._housekeeping()
+    check(set(r.state.pending) == {"p2"} and r.state.done.get("p1") == "reply_off",
+          "Javobi o'chirilgan post komentlari ruxsat ro'yxatidan olindi")
     catalog.set_reply_off(off_id, False)
+    v = auto_reply.assess({"category": "positive", "confidence": 0.9,
+                           "reply": "Xato uchun uzr, endi hammasi joyida. Postni tekshirib ko'ring-a?"},
+                          "Aka layk ochrb qoybszkuu🗿")
+    check("joyida" not in v["reply"], "Qilinmagan ishni 'hammasi joyida' deb yozish to'xtatildi")
+    check(auto_reply.safe_reply("Kamchilikni tuzatdik, rahmat") == ""
+          and auto_reply.safe_reply("Rahmat, bizga ham yoqdi 😊"), "Yolg'on 'tuzatdik' javobi o'tmaydi")
     f = catalog.post_facts({"id": "zz", "caption": "Tanlov! Obuna bo'ling va yutib oling"})
     check(any("O'YIN/TANLOV POSTI" in x for x in f["lines"]), "O'yin posti aniqlandi")
     f = catalog.post_facts({"id": "zz2", "caption": "Yangi dron keldi"})

@@ -60,6 +60,12 @@ def run():
     check(audit.ship(force=True)[0] == 0, "Bir yozuv ikki marta yuborilmaydi")
     audit.record("comment", action="skip")
     check(audit.ship(force=True)[0] == 1, "Faqat yangi yozuvlar yuboriladi")
+    # 19.11: direkt ruxsat voqeasida "kind" maydoni bor edi -> TypeError, Instagram jarayoni to'xtardi
+    import brain
+    brain.log_event({"type": "chat_approval", "key": "k1", "username": "ona", "kind": "human",
+                     "reason": "takror", "text": "Salom"})
+    last = (audit.recent(50, kinds={"dm"}) or [{}])[-1]
+    check(last["k"] == "dm" and last.get("kind") == "human", "Direkt ruxsat voqeasi xatosiz yozildi")
     print("\n✅ Kuzatuv testlari o'tdi")
 
 

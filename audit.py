@@ -39,8 +39,9 @@ def _offset_path():
     return os.path.join(config.DATA_DIR, "audit.shipped")
 
 
-def record(kind, **fields):
-    """Bitta yozuv qo'shadi. Hech qachon xato tashlamaydi."""
+def record(kind, /, **fields):
+    """Bitta yozuv qo'shadi. Hech qachon xato tashlamaydi.
+    kind faqat o'rni bilan beriladi: maydonlar orasida "kind" bo'lsa ham xato bo'lmaydi."""
     try:
         item = {"t": int(time.time()), "k": kind}
         for k, v in fields.items():

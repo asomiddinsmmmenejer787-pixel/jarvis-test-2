@@ -89,6 +89,13 @@ PROFANITY_RE = re.compile(
     rf")(?![{_W}])",
     re.IGNORECASE,
 )
+# Qilinmagan ishni "tuzatdik", "hammasi joyida" deb aytish (19.11: "Xato uchun uzr, endi hammasi joyida")
+FIXED_CLAIM_RE = re.compile(
+    r"tuzatdik|tuzatildi|tuzatib qo['’`ʻ]?ydik|to['’`ʻ]?g['’`ʻ]?riladik|to['’`ʻ]?g['’`ʻ]?rilandi|"
+    r"to['’`ʻ]?g['’`ʻ]?irladik|hal qildik|hal qilindi|endi hammasi joyida|"
+    r"исправили|исправлено|тузатдик|тузатилди",
+    re.IGNORECASE,
+)
 EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF☀-➿⭐]")
 
 BRAND = os.environ.get(
@@ -242,6 +249,8 @@ def safe_reply(reply):
         return ""
     if PROFANITY_RE.search(reply):
         return ""
+    if FIXED_CLAIM_RE.search(reply):
+        return ""  # Jarvis hech narsani tuzata olmaydi: bunday va'da yolg'on bo'ladi
     return reply
 
 
@@ -644,6 +653,10 @@ class CommentResponder:
             for cid, it in list(self.state.pending.items()):
                 if now - (it.get("created") or now) > self.PENDING_TTL:
                     self.state.mark(cid, "expired")
+                elif catalog.is_reply_off(it["post"]) if it.get("post") else \
+                        "Df2B1TzNBeZ" in (it.get("permalink") or ""):
+                    # egasi bu postga javobni o'chirgan: ruxsat so'rovi ham kerak emas
+                    self.state.mark(cid, "reply_off")
             for cid, it in list(self.state.dm_pending.items()):
                 if now - (it.get("created") or now) > self.DM_PENDING_TTL:
                     self.state.dm_pending.pop(cid, None)
@@ -808,6 +821,7 @@ class CommentResponder:
                 }
                 info = {
                     "cid": cid,
+                    "post": str(post.get("id") or ""),
                     "username": c.get("username") or "",
                     "text": text[:500],
                     "permalink": post.get("permalink") or "",
