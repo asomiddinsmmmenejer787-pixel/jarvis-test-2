@@ -139,7 +139,7 @@ def run():
     rep = [t for c, t in fake.replies if c == "c26"]
     check(len(fake.dms) == n and not any(e["type"].startswith("dm") for e in events),
           "Direkt o'chirilgan postdagi narx komentiga direkt yuborilmadi")
-    check(rep and "direktga yozing" in rep[0].lower() and not auto_reply.DM_CLAIM_RE.search(rep[0]),
+    check(rep and "direktga" in rep[0].lower() and not auto_reply.DM_CLAIM_RE.search(rep[0]),
           "Komentga javob yozildi: 'direktga yozdik' emas, direktga yozishga taklif")
     check("DIREKT O'CHIQ" in ai.last_system and "yozdik" in ai.last_system, "AI'ga 'direktga yozdik dema' deyildi")
     check(auto_reply.DM_CLAIM_RE.search("Narxini direktga yozdik 😊")
@@ -148,6 +148,29 @@ def run():
           "'Direktga yozdik' degan yolg'on javob aniqlanadi")
     catalog.set_dm_off("m1", False)
     catalog.set_dm_off("m2", False)
+
+    print("\n4c) Egasi: 'Krasofka haqidagi komentlarga faqat komentda javob, direktga o'tkazma'")
+    import brain
+    lesson = "Krasofka haqidagi komentlarga faqat kommentda javob ber, direktga o'tkazma."
+    check(auto_reply.lesson_blocks_dm("Kirasofka", [lesson]) and auto_reply.lesson_blocks_dm("Krasovka 😍", [lesson])
+          and not auto_reply.lesson_blocks_dm("Samokat narxi?", [lesson])
+          and not auto_reply.lesson_blocks_dm("Krasofka", ["Krasofka narxi 300 000 so'm"])
+          and not auto_reply.lesson_blocks_dm("Krasofka", ["19-noyabr oxirgi postga direktga yozishni to'xtat"]),
+          "Ko'rsatma faqat aytilgan mahsulotga va faqat direkt taqiqi bo'lsa qo'llanadi")
+    brain.add_lesson(lesson)
+    ai.dm = {"text": "Krasofka narxi 300 000 so'm.", "answered": True, "topic": "narx"}
+    fake.comments["m1"].append({"id": "c27", "text": "Krasofka narxi qancha?", "username": "u27", "timestamp": ts(1)})
+    n = len(fake.dms)
+    events = r.run_once()
+    rep = [t for c, t in fake.replies if c == "c27"]
+    check(len(fake.dms) == n and not any(e["type"].startswith("dm") for e in events),
+          "Krasofka komentiga direkt yuborilmadi (egasining ko'rsatmasi)")
+    check(rep and not auto_reply.DM_CLAIM_RE.search(rep[0]), "Komentda 'direktga yozdik' degan yolg'on yo'q")
+    ai.dm = {"text": "Samokat narxi 1 250 000 so'm.", "answered": True, "topic": "narx"}
+    fake.comments["m1"].append({"id": "c28", "text": "Samokat narxi qancha?", "username": "u28", "timestamp": ts(1)})
+    events = r.run_once()
+    check(any(e["type"] == "dm_sent" and e["cid"] == "c28" for e in events), "Boshqa mahsulotga direkt yozilaveradi")
+    catalog.save({**catalog.load(), "lessons": []})
 
     fake.dm_forbidden = True
     ai.dm = {"text": "Samokat narxi 1 250 000 so'm.", "answered": True, "topic": "narx"}

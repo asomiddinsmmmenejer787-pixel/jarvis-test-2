@@ -412,6 +412,29 @@ PRODUCT_HINT = re.compile(
     r"samokat|самокат|velosiped|велосипед", re.I)
 
 
+# Egasining ko'rsatmasi: "Krasofka haqidagi komentlarga faqat komentda javob ber, direktga o'tkazma"
+PRODUCT_FAMILIES = [
+    re.compile(r"[kq][aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к", re.I),
+    re.compile(r"(?<![a-z])rolik|ролик", re.I),
+    re.compile(r"(?<![a-z])dron|дрон", re.I),
+    re.compile(r"samokat|самокат", re.I),
+    re.compile(r"velosiped|велосипед", re.I),
+]
+LESSON_DM_RE = re.compile(r"direkt|директ|lichk|shaxsiy", re.I)
+LESSON_NO_RE = re.compile(r"o.?tkazma|yozma|yuborma|to.?xtat|kerak\s+emas|faqat\s+kom+en|не\s+пиш", re.I)
+
+
+def lesson_blocks_dm(comment_text, lessons):
+    """Egasi biror mahsulot haqidagi komentlarga direktga yozmaslikni aytgan bo'lsa, True."""
+    for lesson in lessons or []:
+        if not (LESSON_DM_RE.search(lesson) and LESSON_NO_RE.search(lesson)):
+            continue
+        for fam in PRODUCT_FAMILIES:
+            if fam.search(lesson) and fam.search(comment_text or ""):
+                return True
+    return False
+
+
 def is_short(text):
     """Faqat emoji yoki 1-2 so'z, savolsiz ("zo'r", "👍🔥", "super")."""
     rest = MENTION_RE.sub("", text or "")
@@ -623,7 +646,7 @@ class CommentResponder:
                         + ". Javobni ikkala tomonga qarat, qisqa yoz, @ belgisini yozma.")
         message += f"\n\n<komment>{comment_text[:500]}</komment>"
         system = SYSTEM_PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK
-        if self.dm_on(post):
+        if self.dm_on(post, comment_text):
             system += ("\n\nDIREKT YOQILGAN: price javobida mijozga 'narx va batafsil ma'lumotni "
                        "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt, 'direktga yozing' dema.")
         else:
@@ -831,7 +854,7 @@ class CommentResponder:
                             self.state.mark(cid, "budget")
                             self.state.save()
                         continue
-                if (not self.dm_on(post) and verdict["reply"]
+                if (not self.dm_on(post, text) and verdict["reply"]
                         and (verdict["reply"] in SAFE_FALLBACK["price"]
                              or (verdict["category"] in DM_CATEGORIES and DM_CLAIM_RE.search(verdict["reply"])))):
                     # direkt yuborilmaydi: "direktga yozdik" degan yolg'on o'rniga direktga taklif
@@ -996,9 +1019,11 @@ class CommentResponder:
             self.state.dm_mode = mode
             self.state.save()
 
-    def dm_on(self, post):
-        """Shu post komentiga direkt yoziladimi (umumiy rejim va egasining post bo'yicha taqiqi)."""
-        return self.dm_mode != "off" and not catalog.is_dm_off((post or {}).get("id"))
+    def dm_on(self, post, comment_text=None):
+        """Shu post komentiga direkt yoziladimi (umumiy rejim, egasining post va mahsulot bo'yicha taqiqi)."""
+        if self.dm_mode == "off" or catalog.is_dm_off((post or {}).get("id")):
+            return False
+        return not (comment_text and lesson_blocks_dm(comment_text, brain.get_lessons()))
 
     def apply_owner_setup(self):
         """Egasining bir martalik ko'rsatmalari (Railway'da bir marta bajariladi)."""
@@ -1023,7 +1048,7 @@ class CommentResponder:
           xavfsiz xabar ishlatiladi.
         auto: darhol yuboriladi (egasi faqat xabardor qilinadi). approve: tasdiqqa. preview: ko'rsatadi.
         """
-        if not self.dm_on(post) or verdict["category"] not in DM_CATEGORIES:
+        if not self.dm_on(post, (comment or {}).get("text")) or verdict["category"] not in DM_CATEGORIES:
             return None
         dm = verdict.get("dm") or {}
         dm_text = (dm.get("text") or "").strip()[:1000] if isinstance(dm.get("text"), str) else ""
