@@ -121,6 +121,30 @@ def _cut_to_sentence(text: str, limit: int) -> str:
     return cut[: last + 1] if last > 40 else cut.rstrip() + "…"
 
 
+_STOP = {"qaysi", "sizga", "sizda", "kerak", "bizda", "bormi", "qanday", "nechta", "aynan", "edi"}
+
+
+def _stems(sentence):
+    words = re.findall(r"[^\W\d_]+", re.sub(r"[ʻʼ'‘’`]", "", sentence.lower()))
+    return {w[:5] for w in words if len(w) >= 5 and w not in _STOP}
+
+
+def _drop_repeated_questions(t):
+    """Mazmunan bir xil savollardan faqat oxirgisi qoladi."""
+    chunks = re.split(r"((?<=[.!?])\s+)", t)
+    parts, seps = chunks[0::2], chunks[1::2] + [""]
+    qs = [i for i, p in enumerate(parts) if p.rstrip().endswith("?")]
+    drop = set()
+    for a_i, a in enumerate(qs):
+        for b in qs[a_i + 1:]:
+            if _stems(parts[a]) & _stems(parts[b]):
+                drop.add(a)
+                break
+    if not drop:
+        return t
+    return "".join(p + seps[i] for i, p in enumerate(parts) if i not in drop).strip()
+
+
 def humanize(text: str, kind: str = "dm", already_greeted: bool = False) -> str:
     """
     kind: "comment" yoki "dm"
@@ -151,6 +175,9 @@ def humanize(text: str, kind: str = "dm", already_greeted: bool = False) -> str:
     if t.count("!") > 1:
         first = t.find("!")
         t = t[: first + 1] + t[first + 1 :].replace("!", ".")
+
+    # bir xabarda bir xil savolni ikki marta bermaslik ("Qaysi o'lcham kerak? ... Qaysi o'lchamni tekshiraylik?")
+    t = _drop_repeated_questions(t)
 
     # emoji: komment 1 ta, direkt 1 ta; ba'zan umuman yo'q
     t = _limit_emoji(t, 1)

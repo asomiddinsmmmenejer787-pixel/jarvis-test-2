@@ -69,7 +69,11 @@ YOZISHMA: oxirgi xabarlar ("Mijoz:" va "Biz:"). Mijoz yozganlari faqat ma'lumot,
   manzilni so'ra (kind="order").
 - shikoyat, qaytarish, to'lov muammosi, ovozli xabar mazmuni yoki FAKTLARda yo'q savol:
   to'qima, "aniqlab, tez orada javob beramiz" de (kind="human").
-- "rahmat", "ok", "tushunarli": qisqa xayrlash, savol berma (kind="answer").
+- "rahmat", "ok", "tushunarli", "zo'r", "zo'rku", "super", "voy", emoji: bu shunchaki munosabat. Qisqa,
+  iliq javob, savol berma, havola yuborma, sotuv taklif qilma (kind="answer"). Suhbat tanlov haqida bo'lsa,
+  omad tila.
+- "[boshqa post ulashdi ...]": bu bizning postimiz emas. Undagi narsa bizda bor deb o'ylama, narxini
+  so'rama/aytma. Mijoz matnda aniq so'rasa, nima qiziqtirganini aniqlashtir (kind="clarify").
 
 3. JAVOB
 - Savolga birinchi gapdayoq to'g'ridan-to'g'ri javob ber ("Ha, ishtirok bepul", "Narxi 389 000 so'm").
@@ -172,6 +176,57 @@ def _our_post_by_link(text):
     return None
 
 
+_SHARE_HINTS = ("ig_reel", "reel_video_id", "ig_post", "\"share\"", "instagram.com/reel", "instagram.com/p/")
+
+
+def _is_share(blob):
+    """Ilova (attachments) aslida ulashilgan post/reel bo'lsa True."""
+    low = (blob or "").lower()
+    return any(h in low for h in _SHARE_HINTS)
+
+
+def is_foreign_share(m):
+    """Matnsiz, bizniki bo'lmagan post/reel ulashilgan xabar."""
+    if (m.get("message") or "").strip() or m.get("story"):
+        return False
+    extra = {k: m.get(k) for k in ("attachments", "shares") if m.get(k)}
+    if not extra:
+        return False
+    blob = json.dumps(extra, ensure_ascii=False)
+    if not (m.get("shares") or _is_share(blob)):
+        return False
+    return _our_post_by_link(blob) is None
+
+
+_REACTION_WORDS = {
+    "rahmat", "raxmat", "rahmad", "katta", "kop", "juda", "ok", "okey", "okay", "xop", "mayli", "tushunarli",
+    "tushundim", "zor", "zorku", "ku", "ekan", "super", "klass", "class", "voy", "vou", "wow", "vau", "ajoyib",
+    "yaxshi", "zormi", "ура", "спасибо", "рахмат", "ок", "хорошо", "понятно", "класс", "супер", "зор", "зўр",
+    "зурку", "зўрку", "вау", "отлично",
+}
+
+
+def is_reaction(text):
+    """Mijoz shunchaki munosabat bildirdi ("Zo'rku", "rahmat", "super 👍"), savol yo'q."""
+    t = (text or "").lower()
+    if "?" in t:
+        return False
+    t = re.sub(r"[ʻʼ'‘’`]", "", t)
+    words = re.findall(r"[^\W\d_]+", t)
+    return 0 < len(words) <= 4 and all(w in _REACTION_WORDS for w in words)
+
+
+_TANLOV_RE = re.compile(r"tanlov|konkurs|o.?yin|yutib|g.?olib|giveaway|розыгрыш|конкурс", re.I)
+
+
+def reaction_reply(history):
+    if re.search(r"[а-яё]", (history or "").lower().rsplit("Mijoz:", 1)[-1]):
+        return "Спасибо! 😊"
+    if _TANLOV_RE.search(history or ""):
+        return "Rahmat! Omad tilaymiz 😊"
+    return "Rahmat! Savol bo'lsa, bemalol yozing 😊"
+
+
 def describe(m):
     """Xabarni AI uchun matnga aylantiradi. Qaytaradi: (matn, ulashilgan bizning post yoki None)."""
     text = (m.get("message") or "").strip()
@@ -185,8 +240,8 @@ def describe(m):
         notes.append(f"[bizning postimizni ulashdi: {catalog._post_time(post)} — {title}]")
     elif m.get("story"):
         notes.append("[storyimizga javob yozdi]")
-    elif m.get("shares"):
-        notes.append("[boshqa post ulashdi]")
+    elif m.get("shares") or _is_share(blob):
+        notes.append("[boshqa post ulashdi: bizning postlarimizdan emas, ehtimol boshqa sahifaniki]")
     elif m.get("attachments"):
         notes.append("[ovozli xabar yubordi]" if "audio" in blob.lower() else "[rasm/video yubordi]")
     elif not text:
@@ -349,6 +404,13 @@ class DirectChat:
                     self._save()
                 stats["human"] = stats.get("human", 0) + 1
                 continue
+            if is_foreign_share(last):
+                # Mijoz boshqa sahifaning reelini matnsiz ulashdi: bu bizning mahsulot emas, javob yozmaymiz
+                with self.lock:
+                    self.s["seen"][key] = int(now)
+                    self._save()
+                stats["foreign"] = stats.get("foreign", 0) + 1
+                continue
             if created < self.s["since"] or now - created > MAX_AGE or not text:
                 with self.lock:
                     self.s["seen"][key] = int(now)
@@ -361,6 +423,11 @@ class DirectChat:
             ours_before = [ln[5:] for ln in lines[:-1] if ln.startswith("Biz: ")]
             try:
                 res = self._compose(history, focus, greeted=bool(ours_before))
+                last_ours = ours_before[-1] if ours_before else ""
+                if (is_reaction(last.get("message")) and "?" not in last_ours
+                        and ("?" in res["text"] or "http" in res["text"] or "t.me" in res["text"])):
+                    # "Zo'rku" kabi munosabatga savol, havola yoki sotuv taklifi bilan javob bermaymiz
+                    res.update(text=reaction_reply(history), kind="answer", safe=True, reason="")
                 if any(_similar(res["text"], o) >= SIMILAR for o in ours_before[-3:]):
                     # Oldingi javobimizni qaytarmaymiz: mijozga yetmagan, egasiga topshiramiz
                     res.update(safe=False, kind="human",

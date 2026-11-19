@@ -179,6 +179,50 @@ def run():
     check(dm_chat._similar("Narxi 300 ming. Qaysi o'lcham?", "narxi 300 ming, qaysi o'lcham kerak?") > 0.72
           and dm_chat._similar("Ha, ishtirok bepul", "Narxi 300 ming") < 0.5, "O'xshashlik o'lchovi")
 
+    print("\n3d) Kuzatuvdagi xatolar: begona reel va 'Zo'rku'")
+    chat.set_mode("auto")
+    chat.s["counts"] = {}
+    u11 = {"id": "U11", "username": "gul"}
+    foreign = {"id": "h1", "from": u11, "created_time": time.time() - 1,
+               "shares": {"data": [{"link": "https://www.instagram.com/reel/ZZZ9/?igsh=y"}]}}
+    fake.conversations = [{"id": "t11", "messages": {"data": [foreign]}}]
+    ai.res = {"text": "Buning narxini bilmoqchimisiz yoki boshqa ma'lumot kerakmi?", "kind": "clarify", "topic": "x"}
+    n = len(fake.chat_sent)
+    events = chat.run_once()
+    check(events == [] and len(fake.chat_sent) == n,
+          "Boshqa sahifaning reelini matnsiz ulashgan mijozga 'narxini bilmoqchimisiz' yozilmadi")
+    att = {"id": "h2", "from": u11, "created_time": time.time(),
+           "attachments": {"data": [{"type": "ig_reel", "payload": {"reel_video_id": "77", "title": "ONAM"}}]}}
+    check(dm_chat.is_foreign_share(att) and "boshqa post ulashdi" in dm_chat.describe(att)[0],
+          "Ilova ko'rinishidagi begona reel ham aniqlandi")
+    check(not dm_chat.is_foreign_share(only_share), "Bizning reelimiz begona deb hisoblanmadi")
+    check(not dm_chat.is_foreign_share({"id": "h3", "message": "Bu bormi?", "shares": foreign["shares"]}),
+          "Matn bilan ulashilgan postga javob berish to'xtatilmadi")
+
+    u12 = {"id": "U12", "username": "b"}
+    gw = {"id": "k1", "from": ME, "created_time": time.time() - 30,
+          "message": "Rolikli krasofkalarimizni yutib olish uchun obuna bo'lib, shartlarni bajarishingiz kerak. "
+                     "Tabriklaymiz, siz bizning o'yinimizda ishtirokchi bo'ldingiz!"}
+    ig.record_sent({"message_id": "k1"}, gw["message"])
+    zor = {"id": "k2", "from": u12, "message": "Zorku", "created_time": time.time() - 1}
+    fake.conversations = [{"id": "t12", "messages": {"data": [zor, gw]}}]
+    ai.res = {"text": "Rahmat, sizga qaysi biri kerak? Telegram guruhimizda barcha modellar: "
+                      "https://t.me/bolalar_dunyosiuzb", "kind": "answer", "topic": "x"}
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_sent" and "?" not in fake.chat_sent[-1][1]
+          and "t.me" not in fake.chat_sent[-1][1] and "Omad" in fake.chat_sent[-1][1],
+          "'Zo'rku' ga sotuv savoli/havola emas, tanlov uchun omad tilandi")
+    check(dm_chat.is_reaction("Zo'rku") and dm_chat.is_reaction("Katta rahmat 👍") and dm_chat.is_reaction("Спасибо")
+          and not dm_chat.is_reaction("Narxi qancha") and not dm_chat.is_reaction("zor?")
+          and not dm_chat.is_reaction("Ha"), "Munosabat va savol farqlandi")
+    ask_prev = {"id": "k3", "from": ME, "message": "Katalog havolasini yuboraymi?", "created_time": time.time() - 5}
+    ig.record_sent({"message_id": "k3"}, ask_prev["message"])
+    okm = {"id": "k4", "from": {"id": "U13", "username": "d"}, "message": "ok", "created_time": time.time()}
+    fake.conversations = [{"id": "t13", "messages": {"data": [okm, ask_prev]}}]
+    ai.res = {"text": "Mana: https://t.me/bolalar_dunyosiuzb", "kind": "answer", "topic": "x"}
+    chat.run_once()
+    check("t.me" in fake.chat_sent[-1][1], "Savolimizga 'ok' deb javob bersa, so'ralgan havola yuborildi")
+
     print("\n4) HUD API")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
