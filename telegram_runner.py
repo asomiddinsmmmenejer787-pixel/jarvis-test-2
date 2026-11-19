@@ -24,6 +24,7 @@ import followers_live
 import catalog
 import instagram_api as ig
 import webapp
+import youtube_bot
 from auto_reply import CATEGORY_NAMES, CommentResponder
 from dm_chat import DirectChat
 from instagram_api import InstagramError
@@ -172,6 +173,7 @@ chat = DirectChat(jarvis.ai_provider) if responder is not None else None
 # ---------- mini ilova (Jarvis HUD) ----------
 
 web.include_router(webapp.router)
+web.include_router(youtube_bot.router)
 
 
 # ---------- bot egasi ----------
@@ -328,6 +330,11 @@ HELP_TEXT = (
     "/diag — AI va Instagram holatini tekshirish\n"
     "/groqkey <kalit> — zaxira AI (Groq) kalitini ulash\n"
     "/limit <son> — kunlik avtomatik komment javoblari limiti\n\n"
+    "YouTube:\n"
+    "/yt <havola> [izoh] — sarlavha, tavsif, hashtag va teglar (havolani o'zini tashlasangiz ham bo'ladi)\n"
+    "/ytkey <kalit> — YouTube API kalitini ulash\n"
+    "/ytulash — kanalni ulash (Jarvis taklifni videoga o'zi yozadi)\n"
+    "/ytholat — YouTube holati va bugungi kvota\n\n"
     "Yoki oddiy tilda savolingizni yozing."
 )
 
@@ -1375,6 +1382,8 @@ async def post_init(app):
             BotCommand("insta", "Instagram to'liq tahlili"),
             BotCommand("post", "Bitta postni chuqur tahlil"),
             BotCommand("stories", "Faol storylar statistikasi"),
+            BotCommand("yt", "YouTube video SEO (sarlavha, teglar)"),
+            BotCommand("ytholat", "YouTube holati"),
             BotCommand("autoreply", "Komentlarga javob rejimi"),
             BotCommand("pending", "Ruxsat kutayotgan komentlar"),
             BotCommand("direkt", "Komentdan keyingi direkt"),
@@ -1464,6 +1473,8 @@ def build_app(token):
     app.add_handler(CommandHandler("sozlamalar", sozlamalar_cmd))
     app.add_handler(CommandHandler("xatolar", xatolar_cmd))
     app.add_handler(CommandHandler("kuzatuv", kuzatuv_cmd))
+    # YouTube buyruqlari (kalit va video havolalari umumiy matn handleridan oldin ushlanadi)
+    youtube_bot.setup(app, owner_only, lambda: jarvis.ai_provider, send_long, get_owner_id)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(telegram_error_handler)
     return app
