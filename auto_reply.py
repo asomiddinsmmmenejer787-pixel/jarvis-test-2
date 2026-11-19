@@ -400,7 +400,7 @@ QUESTION_HINT = re.compile(
 
 # Faqat mahsulot nomi ("Krasofka", "Kirosofka😍", "Красовка") - bu xarid qiziqishi, qisqa maqtov emas
 PRODUCT_HINT = re.compile(
-    r"k[aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к|(?<![a-z])rolik|ролик|(?<![a-z])dron|дрон|"
+    r"[kq][aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к|(?<![a-z])rolik|ролик|(?<![a-z])dron|дрон|"
     r"samokat|самокат|velosiped|велосипед", re.I)
 
 

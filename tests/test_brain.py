@@ -181,7 +181,7 @@ def run():
     check(any("O'YIN/TANLOV YO'Q" in x for x in f["lines"]), "O'yinsiz post aniqlandi")
     check(not auto_reply.is_short("Qayirda joylashgan") and not auto_reply.is_short("34 rasmer"),
           "Manzil va o'lcham savollari o'tkazib yuborilmaydi")
-    check(not any(auto_reply.is_short(t) for t in ("Krasofka", "Kirosofka😍", "Krasovka", "Красовка", "Dron"))
+    check(not any(auto_reply.is_short(t) for t in ("Krasofka", "Kirosofka😍", "Qrasopka❤️👏", "Krasovka", "Красовка", "Dron"))
           and auto_reply.is_short("Krasivo") and auto_reply.is_short("Zo'r 👍"),
           "Faqat mahsulot nomi yozilgan komment qisqa maqtov deb tejalmaydi")
 
