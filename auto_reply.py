@@ -398,10 +398,16 @@ QUESTION_HINT = re.compile(
     r"цен|сколько|где|есть|размер|доставк|заказ|как|почем|кайер|қаер|манзил", re.I)
 
 
+# Faqat mahsulot nomi ("Krasofka", "Kirosofka😍", "Красовка") - bu xarid qiziqishi, qisqa maqtov emas
+PRODUCT_HINT = re.compile(
+    r"k[aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к|(?<![a-z])rolik|ролик|(?<![a-z])dron|дрон|"
+    r"samokat|самокат|velosiped|велосипед", re.I)
+
+
 def is_short(text):
     """Faqat emoji yoki 1-2 so'z, savolsiz ("zo'r", "👍🔥", "super")."""
     rest = MENTION_RE.sub("", text or "")
-    if "?" in rest or QUESTION_HINT.search(rest):
+    if "?" in rest or QUESTION_HINT.search(rest) or PRODUCT_HINT.search(rest):
         return False
     words = re.findall(r"[^\W\d_]{2,}", rest)
     return len(words) <= 2
