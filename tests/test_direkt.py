@@ -36,6 +36,7 @@ class DmAI(FakeAI):
             self.last_dm_msg = message
             return self.dm
         self.last_reply_msg = message
+        self.last_system = system
         res = super().generate_json(system, message, temperature)
         if self.dm and res.get("category") in ("price", "question"):  # endi direkt matni shu javob ichida keladi
             res.update(dm=self.dm.get("text", ""), dm_answered=self.dm.get("answered", False),
@@ -126,6 +127,28 @@ def run():
     check(any(e["type"] == "dm_sent" and e["cid"] == "c25" and not e["reason"] for e in events)
           and "DO'KON XOTIRASI" in ai.last_reply_msg, "Xotiradagi narx AI'ga uzatildi va tekshiruvdan o'tdi")
     check(catalog.delete_memory(0).startswith("Rolikli") and not catalog.get_memory(), "Xotiradan o'chirish ishlaydi")
+    print("\n4b) Egasi: oxirgi ikkita postga direktga yozilmasin, faqat komentga javob")
+    done = r.apply_owner_setup()
+    check([p["id"] for p in done] == ["m1", "m2"] and catalog.is_dm_off("m1") and catalog.is_dm_off("m2")
+          and not catalog.is_dm_off("m3"), "Oxirgi ikkita post uchun direkt o'chirildi")
+    check(r.apply_owner_setup() == [], "Bu sozlama faqat bir marta qo'llanadi (keyingi postlarga tegmaydi)")
+    ai.dm = {"text": "Samokat narxi 1 250 000 so'm.", "answered": True, "topic": "narx"}
+    fake.comments["m1"].append({"id": "c26", "text": "Narxi qancha?", "username": "u26", "timestamp": ts(1)})
+    n = len(fake.dms)
+    events = r.run_once()
+    rep = [t for c, t in fake.replies if c == "c26"]
+    check(len(fake.dms) == n and not any(e["type"].startswith("dm") for e in events),
+          "Direkt o'chirilgan postdagi narx komentiga direkt yuborilmadi")
+    check(rep and "direktga yozing" in rep[0].lower() and not auto_reply.DM_CLAIM_RE.search(rep[0]),
+          "Komentga javob yozildi: 'direktga yozdik' emas, direktga yozishga taklif")
+    check("DIREKT O'CHIQ" in ai.last_system and "yozdik" in ai.last_system, "AI'ga 'direktga yozdik dema' deyildi")
+    check(auto_reply.DM_CLAIM_RE.search("Narxini direktga yozdik 😊")
+          and auto_reply.DM_CLAIM_RE.search("Direktingizga yuboramiz")
+          and not auto_reply.DM_CLAIM_RE.search("Narxini direktga yozing, shaxsan aytamiz"),
+          "'Direktga yozdik' degan yolg'on javob aniqlanadi")
+    catalog.set_dm_off("m1", False)
+    catalog.set_dm_off("m2", False)
+
     fake.dm_forbidden = True
     ai.dm = {"text": "Samokat narxi 1 250 000 so'm.", "answered": True, "topic": "narx"}
     fake.comments["m1"].append({"id": "c22", "text": "Narxi?", "username": "u22", "timestamp": ts(1)})

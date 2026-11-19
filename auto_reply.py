@@ -254,6 +254,12 @@ def safe_reply(reply):
     return reply
 
 
+DM_OFF_REPLIES = ["Narxini direktga yozing, shaxsan aytamiz 😊", "Direktga yozing, narxini aytib beramiz 😊",
+                  "Batafsil bilish uchun direktga yozing 😊", "Direktga bir xabar tashlang, hammasini aytamiz 😊"]
+# "direktga yozdik/yubordik/yuboramiz" kabi, biz yubormaydigan xabar haqidagi da'vo
+DM_CLAIM_RE = re.compile(r"(yozdik|yubordik|yozib\s+qo.?ydik|aytdik|yuboramiz|yuborib\s+qo.?ydik|"
+                         r"direktingiz|direktni\s+tekshir|direktga\s+qarang|написали|отправили)", re.I)
+
 SAFE_FALLBACK = {
     "price": ["Narxi va batafsil ma'lumotni direktga yozdik 😊", "Direktga qarang, hammasini yozib qo'ydik 😊",
               "Ma'lumotni direktingizga yubordik, ko'rib chiqing 😊", "Direktingizni tekshiring, javob yozdik 😊",
@@ -615,9 +621,14 @@ class CommentResponder:
                         + ". Javobni ikkala tomonga qarat, qisqa yoz, @ belgisini yozma.")
         message += f"\n\n<komment>{comment_text[:500]}</komment>"
         system = SYSTEM_PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK
-        if self.dm_mode != "off":
+        if self.dm_on(post):
             system += ("\n\nDIREKT YOQILGAN: price javobida mijozga 'narx va batafsil ma'lumotni "
                        "direktingizga yuboramiz' mazmunini o'z so'zing bilan ayt, 'direktga yozing' dema.")
+        else:
+            system += ("\n\nDIREKT O'CHIQ: bu postdagi komentlarga direktga biz o'zimiz yozmaymiz. "
+                       "'Direktga yozdik', 'direktingizga yubordik/yuboramiz' DEMA, bu yolg'on bo'ladi. "
+                       "Narx yoki batafsil ma'lumot so'ralsa, 'direktga yozing, shaxsan aytamiz' mazmunida yo'nalt. "
+                       "dm bo'sh satr.")
         return self.ai.generate_json(system, message, temperature=0.9)
 
     # ----- bitta tekshiruv sikli -----
@@ -818,8 +829,12 @@ class CommentResponder:
                             self.state.mark(cid, "budget")
                             self.state.save()
                         continue
-                if self.dm_mode == "off" and verdict["reply"] in SAFE_FALLBACK["price"]:
-                    verdict["reply"] = "Narxini direktga yozing, shaxsan aytamiz 😊"
+                if (not self.dm_on(post) and verdict["reply"]
+                        and (verdict["reply"] in SAFE_FALLBACK["price"]
+                             or (verdict["category"] in DM_CATEGORIES and DM_CLAIM_RE.search(verdict["reply"])))):
+                    # direkt yuborilmaydi: "direktga yozdik" degan yolg'on o'rniga direktga taklif
+                    alts = [x for x in DM_OFF_REPLIES if not too_similar(x, self._recent)] or DM_OFF_REPLIES
+                    verdict["reply"] = random.choice(alts)
                 verdict["dm"] = {
                     "text": result.get("dm") if isinstance(result, dict) else "",
                     "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
@@ -979,6 +994,25 @@ class CommentResponder:
             self.state.dm_mode = mode
             self.state.save()
 
+    def dm_on(self, post):
+        """Shu post komentiga direkt yoziladimi (umumiy rejim va egasining post bo'yicha taqiqi)."""
+        return self.dm_mode != "off" and not catalog.is_dm_off((post or {}).get("id"))
+
+    def apply_owner_setup(self):
+        """Egasining bir martalik ko'rsatmalari (Railway'da bir marta bajariladi)."""
+        flag = "dm_off_last2_1911"
+        if catalog.flag_done(flag):
+            return []
+        # Egasi (19.11): oxirgi ikkita postga direktga yozilmasin, faqat komentga javob
+        posts = ig.get_recent_posts(2)
+        if not posts:
+            return []
+        for p in posts:
+            catalog.set_dm_off(p["id"], True)
+        catalog.set_flag(flag)
+        log.info("Oxirgi %s ta postga direkt yozish o'chirildi", len(posts))
+        return posts
+
     def _plan_dm(self, post, comment, verdict, preview=False):
         """
         Komentga javobdan keyin direkt xabar (matn komentga javob bilan bitta AI so'rovida keladi).
@@ -987,7 +1021,7 @@ class CommentResponder:
           xavfsiz xabar ishlatiladi.
         auto: darhol yuboriladi (egasi faqat xabardor qilinadi). approve: tasdiqqa. preview: ko'rsatadi.
         """
-        if self.dm_mode == "off" or verdict["category"] not in DM_CATEGORIES:
+        if not self.dm_on(post) or verdict["category"] not in DM_CATEGORIES:
             return None
         dm = verdict.get("dm") or {}
         dm_text = (dm.get("text") or "").strip()[:1000] if isinstance(dm.get("text"), str) else ""

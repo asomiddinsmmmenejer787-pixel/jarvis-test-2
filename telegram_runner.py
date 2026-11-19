@@ -1314,6 +1314,14 @@ async def instagram_tick(app):
                 raise
             logger.warning("Obunachilar sonini o'qib bo'lmadi: %s", e)
 
+        if responder is not None:
+            try:
+                await asyncio.to_thread(responder.apply_owner_setup)
+            except InstagramError as e:
+                if e.fatal:
+                    raise
+                logger.warning("Egasining sozlamasini qo'llab bo'lmadi: %s", e)
+
         if responder is not None and responder.mode != "off":
             try:
                 events = await asyncio.to_thread(responder.run_once)

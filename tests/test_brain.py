@@ -169,6 +169,10 @@ def run():
     check(set(r.state.pending) == {"p2"} and r.state.done.get("p1") == "reply_off",
           "Javobi o'chirilgan post komentlari ruxsat ro'yxatidan olindi")
     catalog.set_reply_off(off_id, False)
+    lines, _ = brain.apply({"reply": "Xo'p", "actions": [{"type": "post_dm", "post": 1, "on": False}]}, r)
+    check(catalog.is_dm_off(off_id) and not catalog.is_reply_off(off_id) and "direktga yozilmaydi" in lines[-1],
+          "Chat orqali postga direkt yozish o'chirildi, komentga javob qoldi")
+    catalog.set_dm_off(off_id, False)
     v = auto_reply.assess({"category": "positive", "confidence": 0.9,
                            "reply": "Xato uchun uzr, endi hammasi joyida. Postni tekshirib ko'ring-a?"},
                           "Aka layk ochrb qoybszkuu🗿")

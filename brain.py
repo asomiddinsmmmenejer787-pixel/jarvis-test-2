@@ -158,6 +158,8 @@ TURLAR (kind):
        "post" = OXIRGI POSTLAR ro'yxatidagi raqam (1 = eng yangi). Egasi "shu videoga yozma",
        "blogerlar videosiga koment yozishni to'xtat" desa, ro'yxatdan mos postni tanla. Aniq bo'lmasa,
        harakat qilma, reply'da qaysi post ekanini so'ra.
+    {"type": "post_dm", "post": 2, "on": false}  - bitta post komentlaridan keyin direktga yozishni
+       o'chirish/yoqish (komentga javob davom etadi). Egasi "shu postga direktga yozma" desa.
     {"type": "set_policy", ...}  - limitni tejash qoidalari, faqat o'zgarayotgan kalitlarni yoz:
        "low_limit": belgilash (@) va maqtov komentlariga kunlik javob soni (0-1000; 0 = umuman yozma),
        "per_user_day": bir odamga kuniga nechta shunday javob (1-10),
@@ -207,7 +209,7 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                 acts.append({"type": t, "mode": a["mode"]})
             elif t == "dm_mode" and a.get("mode") in ("auto", "approve", "off"):
                 acts.append({"type": t, "mode": a["mode"]})
-            elif t == "post_reply":
+            elif t in ("post_reply", "post_dm"):
                 acts.append({"type": t, "post": max(1, min(15, int(a.get("post") or 1))), "on": bool(a.get("on"))})
             elif t == "set_policy":
                 ch = {k: int(a[k]) for k in ("low_limit", "per_user_day", "short_ratio", "reserve_pct")
@@ -266,6 +268,7 @@ def build_context(responder, chat, memory):
             for i, p in enumerate(posts, 1):
                 cap = " ".join((p.get("caption") or "").split())[:110]
                 off = " [KOMMENTGA JAVOB O'CHIQ]" if catalog.is_reply_off(p.get("id")) else ""
+                off += " [DIREKTGA YOZILMAYDI]" if catalog.is_dm_off(p.get("id")) else ""
                 rows.append(f"{i}. {catalog._post_time(p)}, {p.get('comments_count', 0)} komment{off}: {cap}")
             last_post = "OXIRGI POSTLAR (1 = eng yangi):\n" + "\n".join(rows)
     except ig.InstagramError as e:
@@ -327,6 +330,19 @@ def apply(res, responder, chat=None):
             lines.append(("✅ Komentlarga javob yoqildi: " if act["on"] else "⛔ Bu postga komment yozilmaydi: ")
                          + f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}")
             log_entry(f"Post {p['id']} komment javobi: {'yoqildi' if act['on'] else 'ochirildi'}")
+        elif t == "post_dm":
+            import instagram_api as ig
+            posts = ig.get_recent_posts(15)
+            if act["post"] > len(posts):
+                lines.append("⚠️ Bunday post topilmadi.")
+                continue
+            p = posts[act["post"] - 1]
+            catalog.set_dm_off(p["id"], not act["on"])
+            cap = " ".join((p.get("caption") or "").split())[:60]
+            lines.append(("✅ Bu post komentlaridan keyin direktga yana yoziladi: " if act["on"]
+                          else "⛔ Bu postga faqat komentda javob, direktga yozilmaydi: ")
+                         + f"{catalog._post_time(p)} «{cap}» {p.get('permalink') or ''}")
+            log_entry(f"Post {p['id']} direkt: {'yoqildi' if act['on'] else 'ochirildi'}")
         elif t == "set_policy":
             responder.set_policy(**act["changes"])
             lines.append("✅ Tejash qoidalari yangilandi:\n" + policy_text(responder.status()))

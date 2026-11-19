@@ -48,6 +48,8 @@ def load():
         data.setdefault("posts", {})
         data.setdefault("memory", [])
         data.setdefault("reply_off", [])
+        data.setdefault("dm_off", [])
+        data.setdefault("flags", [])
         return data
 
 
@@ -109,6 +111,35 @@ def set_reply_off(media_id, off=True):
         data["reply_off"] = ids[-200:]
         save(data)
     return off
+
+
+# ---------- postga direkt (private reply) yozishni o'chirish ----------
+
+def is_dm_off(media_id):
+    return bool(media_id) and str(media_id) in load()["dm_off"]
+
+
+def set_dm_off(media_id, off=True):
+    with _lock:
+        data = load()
+        ids = [x for x in data["dm_off"] if x != str(media_id)]
+        if off:
+            ids.append(str(media_id))
+        data["dm_off"] = ids[-200:]
+        save(data)
+    return off
+
+
+def flag_done(name):
+    return name in load()["flags"]
+
+
+def set_flag(name):
+    with _lock:
+        data = load()
+        if name not in data["flags"]:
+            data["flags"] = (data["flags"] + [name])[-100:]
+            save(data)
 
 
 GIVEAWAY_RE = re.compile(r"o['ʻ`’]?yin|tanlov|konkurs|yutib|yutuq|sovg['ʻ`’]?a|g['ʻ`’]?olib|giveaway|"
