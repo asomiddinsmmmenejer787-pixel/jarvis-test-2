@@ -149,6 +149,19 @@ def run():
     catalog.set_dm_off("m1", False)
     catalog.set_dm_off("m2", False)
 
+    print("\n4b2) Model nomi qisqa maqtov emas; narxsiz direktda 'narxini yozdik' deyilmaydi")
+    check(not auto_reply.is_short("Kukirin g2") and not auto_reply.is_short("G2")
+          and auto_reply.is_short("😍😍😍") and auto_reply.is_short("qiz2 zo'r"),
+          "'Kukirin g2' kabi model nomi tejashga tushmaydi, emoji esa tushadi")
+    check(auto_reply.dm_will_fallback("", "300 000 so'm") and auto_reply.dm_will_fallback("Narxi 450 000", "300 000")
+          and not auto_reply.dm_will_fallback("Narxi 300 000 so'm", "300 000 so'm"),
+          "Direktga umumiy xabar ketishi oldindan aniqlanadi")
+    fixed = auto_reply.honest_price_claim("Narxi va batafsil ma'lumotni direktga yozdik 😊")
+    check(fixed in auto_reply.DM_ASK_REPLIES and "narx" not in fixed.lower(),
+          "Narxsiz direktda komentda 'narxini yozdik' yolg'oni yo'q")
+    check(auto_reply.honest_price_claim("Direktga qarang 😊") == "Direktga qarang 😊",
+          "Narx haqida da'vosiz javob o'zgarmaydi")
+
     print("\n4c) Egasi: 'Krasofka haqidagi komentlarga faqat komentda javob, direktga o'tkazma'")
     import brain
     lesson = "Krasofka haqidagi komentlarga faqat kommentda javob ber, direktga o'tkazma."

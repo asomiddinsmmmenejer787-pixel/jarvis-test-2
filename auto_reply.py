@@ -256,6 +256,27 @@ def safe_reply(reply):
     return reply
 
 
+# Direktga umumiy (narxsiz) xabar ketadigan bo'lsa, komentda "narxini direktga yozdik" deyish yolg'on
+PRICE_CLAIM_RE = re.compile(r"narx|batafsil|ma.?lumot|hammasi|цен|подроб", re.I)
+DM_ASK_REPLIES = ["Direktga yozdik, qaysi mahsulot qiziqtirganini ayting 😊",
+                  "Direktingizga xabar yubordik, qaysi model kerakligini yozing 😊",
+                  "Direktga qarang, qaysi mahsulot ekanini aniqlab olamiz 😊"]
+
+
+def dm_will_fallback(dm_text, source_text):
+    """Direktga AI matni o'rniga umumiy narxsiz xabar ketadimi (matn yo'q yoki raqami faktlarda yo'q)."""
+    dm_text = (dm_text or "").strip() if isinstance(dm_text, str) else ""
+    return not dm_text or not catalog.numbers_ok(dm_text, source_text)
+
+
+def honest_price_claim(reply, recent=()):
+    """Komentda "narx/ma'lumotni direktga yozdik" deyilgan bo'lsa, narxsiz direktga mos javobga almashtiradi."""
+    if reply and DM_CLAIM_RE.search(reply) and PRICE_CLAIM_RE.search(reply):
+        alts = [x for x in DM_ASK_REPLIES if not too_similar(x, recent)] or DM_ASK_REPLIES
+        return random.choice(alts)
+    return reply
+
+
 DM_OFF_REPLIES = ["Narxini direktga yozing, shaxsan aytamiz 😊", "Direktga yozing, narxini aytib beramiz 😊",
                   "Batafsil bilish uchun direktga yozing 😊", "Direktga bir xabar tashlang, hammasini aytamiz 😊"]
 # "direktga yozdik/yubordik/yuboramiz" kabi, biz yubormaydigan xabar haqidagi da'vo
@@ -409,7 +430,8 @@ QUESTION_HINT = re.compile(
 # Faqat mahsulot nomi ("Krasofka", "Kirosofka😍", "Красовка") - bu xarid qiziqishi, qisqa maqtov emas
 PRODUCT_HINT = re.compile(
     r"[kq][aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к|(?<![a-z])rolik|ролик|(?<![a-z])dron|дрон|"
-    r"samokat|самокат|velosiped|велосипед", re.I)
+    r"samokat|самокат|velosiped|велосипед|kukirin|kugoo|"
+    r"(?<![^\W\d_])[a-zа-я]\d{1,2}(?![^\W\d_])", re.I)  # model kodi: "G2", "X5"
 
 
 # Egasining ko'rsatmasi: "Krasofka haqidagi komentlarga faqat komentda javob ber, direktga o'tkazma"
@@ -865,6 +887,10 @@ class CommentResponder:
                     "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
                     "topic": result.get("topic") if isinstance(result, dict) else "",
                 }
+                if (verdict["category"] == "price" and self.dm_on(post, text)
+                        and dm_will_fallback(verdict["dm"]["text"], catalog.post_facts(post)["source_text"])):
+                    # direktga narxsiz umumiy xabar ketadi: "narxini direktga yozdik" yolg'on bo'lmasin
+                    verdict["reply"] = honest_price_claim(verdict["reply"], self._recent)
                 info = {
                     "cid": cid,
                     "post": str(post.get("id") or ""),
