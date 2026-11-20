@@ -218,6 +218,15 @@ def run():
     fake.comments["m1"].append({"id": "c28", "text": "Samokat narxi qancha?", "username": "u28", "timestamp": ts(1)})
     events = r.run_once()
     check(any(e["type"] == "dm_sent" and e["cid"] == "c28" for e in events), "Boshqa mahsulotga direkt yozilaveradi")
+    # Kuzatuv 20.11: Krasofka postidagi "Narxi qancha", "33 razmer bormi" ga direkt ketgan
+    check(auto_reply.lesson_blocks_dm("Narxi qancha❤❤", [lesson], "Rolikli krasofkalar 28-37 razmer")
+          and auto_reply.lesson_blocks_dm("33razmeram  bormi", [lesson], "Krasovka")
+          and not auto_reply.lesson_blocks_dm("Narxi qancha", [lesson], "Samokat G2")
+          and not auto_reply.lesson_blocks_dm("Samokat narxi?", [lesson], "Krasofka va samokat"),
+          "Mahsulot nomisiz komentda post qaysi mahsulot haqida ekanligiga qaraldi")
+    kpost = {"id": "kpost_x", "caption": "Bolalar uchun rolikli krasofka 🔥"}
+    check(not r.dm_on(kpost, "Nech pul 33 rwzmera") and r.dm_on({"id": "spost_x", "caption": "Samokat"}, "Nech pul"),
+          "Krasofka postidagi narx savoliga direkt yozilmaydi, boshqa postga yoziladi")
     catalog.save({**catalog.load(), "lessons": []})
 
     fake.dm_forbidden = True

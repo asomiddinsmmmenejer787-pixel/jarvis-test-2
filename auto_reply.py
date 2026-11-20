@@ -468,13 +468,21 @@ LESSON_DM_RE = re.compile(r"direkt|директ|lichk|shaxsiy", re.I)
 LESSON_NO_RE = re.compile(r"o.?tkazma|yozma|yuborma|to.?xtat|kerak\s+emas|faqat\s+kom+en|не\s+пиш", re.I)
 
 
-def lesson_blocks_dm(comment_text, lessons):
-    """Egasi biror mahsulot haqidagi komentlarga direktga yozmaslikni aytgan bo'lsa, True."""
+def lesson_blocks_dm(comment_text, lessons, post_text=""):
+    """Egasi biror mahsulot haqidagi komentlarga direktga yozmaslikni aytgan bo'lsa, True.
+
+    Komentda mahsulot nomi bo'lmasa ("Narxi qancha", "33 razmer bormi"), post qaysi mahsulot
+    haqida ekanligiga qaraladi: Krasofka postidagi narx savoli ham Krasofka komenti.
+    """
+    comment_text = comment_text or ""
+    target = comment_text
+    if not any(fam.search(comment_text) for fam in PRODUCT_FAMILIES):
+        target = comment_text + " " + (post_text or "")
     for lesson in lessons or []:
         if not (LESSON_DM_RE.search(lesson) and LESSON_NO_RE.search(lesson)):
             continue
         for fam in PRODUCT_FAMILIES:
-            if fam.search(lesson) and fam.search(comment_text or ""):
+            if fam.search(lesson) and fam.search(target):
                 return True
     return False
 
@@ -1073,7 +1081,24 @@ class CommentResponder:
         """Shu post komentiga direkt yoziladimi (umumiy rejim, egasining post va mahsulot bo'yicha taqiqi)."""
         if self.dm_mode == "off" or catalog.is_dm_off((post or {}).get("id")):
             return False
-        return not (comment_text and lesson_blocks_dm(comment_text, brain.get_lessons()))
+        if not comment_text:
+            return True
+        lessons = brain.get_lessons()
+        if not lessons:
+            return True
+        return not lesson_blocks_dm(comment_text, lessons, self._post_topic(post))
+
+    @staticmethod
+    def _post_topic(post):
+        """Post qaysi mahsulot haqida: opisaniya, egasi yozgan nom/ma'lumot va vazifa."""
+        post = post or {}
+        try:
+            info = catalog.get_post_info(post.get("id"))
+        except Exception:
+            info = {}
+        caption = (post.get("caption") or "") if info.get("use_caption", True) else ""
+        # umumiy vazifa emas, faqat shu postning o'z vazifasi
+        return " ".join([caption[:1500], info.get("title") or "", info.get("info") or "", info.get("task") or ""])
 
     def apply_owner_setup(self):
         """Egasining bir martalik ko'rsatmalari (Railway'da bir marta bajariladi)."""
