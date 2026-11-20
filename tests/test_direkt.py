@@ -227,6 +227,28 @@ def run():
     kpost = {"id": "kpost_x", "caption": "Bolalar uchun rolikli krasofka 🔥"}
     check(not r.dm_on(kpost, "Nech pul 33 rwzmera") and r.dm_on({"id": "spost_x", "caption": "Samokat"}, "Nech pul"),
           "Krasofka postidagi narx savoliga direkt yozilmaydi, boshqa postga yoziladi")
+    # Kuzatuv 20.11: opisaniyada "krasofka" so'zi yo'q rolik postida "Неча пул" ga direkt ketgan,
+    # AI mavzuni "Rolikli krasovka narxi" deb aniqlagan edi
+    check(not r.dm_on({"id": "npost_x", "caption": "🔥🔥"}, "Неча пул", "Rolikli krasovka narxi")
+          and r.dm_on({"id": "npost_x", "caption": "🔥🔥"}, "Неча пул", "Samokat narxi"),
+          "Opisaniyada nom bo'lmasa ham AI aniqlagan mavzu bo'yicha ko'rsatma qo'llandi")
+    ai.dm = {"text": "Krasovkalarimiz 300 ming so'm.", "answered": True, "topic": "Rolikli krasovka narxi"}
+    orig_gen = ai.generate_json
+
+    def claim_gen(system, message, temperature=0.9):
+        res = orig_gen(system, message, temperature)
+        if res.get("category") == "price":
+            res["reply"] = "Direktingizni tekshiring, javob yozdik 😊"
+        return res
+    ai.generate_json = claim_gen
+    fake.comments.setdefault("m2", []).append({"id": "c29", "text": "Narxi?", "username": "u29", "timestamp": ts(1)})
+    n = len(fake.dms)
+    events = r.run_once()
+    ai.generate_json = orig_gen
+    rep = [t for c, t in fake.replies if c == "c29"]
+    check(len(fake.dms) == n and not any(e["type"].startswith("dm") and e.get("cid") == "c29" for e in events),
+          "Mavzusi krasovka bo'lgan narx komentiga direkt yuborilmadi")
+    check(rep and not auto_reply.DM_CLAIM_RE.search(rep[0]), "Komentda 'javob yozdik' degan yolg'on qolmadi")
     catalog.save({**catalog.load(), "lessons": []})
 
     fake.dm_forbidden = True

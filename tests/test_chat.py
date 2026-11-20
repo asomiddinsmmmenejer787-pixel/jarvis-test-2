@@ -179,6 +179,33 @@ def run():
     check(dm_chat._similar("Narxi 300 ming. Qaysi o'lcham?", "narxi 300 ming, qaysi o'lcham kerak?") > 0.72
           and dm_chat._similar("Ha, ishtirok bepul", "Narxi 300 ming") < 0.5, "O'xshashlik o'lchovi")
 
+    print("\n3c2) Kuzatuv 20.11: 'samakat yo'q' takrori va haqorat")
+    chat.set_mode("auto")
+    chat.s["counts"] = {}
+    u12 = {"id": "U12", "username": "baba"}
+    t0 = time.time()
+    q1 = {"id": "zk1", "from": u12, "message": "Elektron samaqat", "created_time": t0 - 60}
+    a1 = {"id": "zk2", "from": ME, "message": "Samakat hozirda omborda yo'q, sotuvda mavjud emas.", "created_time": t0 - 50}
+    q2 = {"id": "zk3", "from": u12, "message": "Keremidiiii", "created_time": t0 - 2}
+    ig.record_sent({"message_id": "zk2"}, a1["message"])
+    fake.conversations = [{"id": "t12", "messages": {"data": [q2, a1, q1]}}]
+    ai.res = {"text": "Elektron samakatlarimiz hozirda omborda yo'q, shuning uchun sizga yordam bera olmaymiz.",
+              "kind": "answer", "topic": "samakat"}
+    n = len(fake.chat_sent)
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_approval" and "takrorla" in events[0]["reason"]
+          and len(fake.chat_sent) == n, "Boshqa so'z bilan 'yana yo'q' deyish takror deb egasiga topshirildi")
+    check(not dm_chat.repeats_stock_out("33 razmer ham yo'q, 35 bor.", ["32 razmer yo'q, 34 bor."])
+          and not dm_chat.repeats_stock_out("Hech qisi yo'q, buyurtma bering!", ["Samokat hozir yo'q."])
+          and not dm_chat.repeats_stock_out("Krasofka narxi 300 ming so'm.", ["Samokat yo'q."]),
+          "Boshqa o'lcham yoki boshqa gap takror hisoblanmadi")
+    q3 = {"id": "zk4", "from": u12, "message": "Dolbayla", "created_time": t0}
+    fake.conversations = [{"id": "t12", "messages": {"data": [q3, a1, q1]}}]
+    ai.res = {"text": "Tushunishingizni so'raymiz.", "kind": "answer", "topic": "x"}
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_approval" and "qo'pol" in events[0]["reason"]
+          and len(fake.chat_sent) == n, "Haqorat yozgan mijozga Jarvis o'zi javob bermadi, egasiga topshirildi")
+
     print("\n3d) Kuzatuvdagi xatolar: begona reel va 'Zo'rku'")
     chat.set_mode("auto")
     chat.s["counts"] = {}

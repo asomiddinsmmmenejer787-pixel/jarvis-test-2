@@ -908,18 +908,19 @@ class CommentResponder:
                             self.state.mark(cid, "budget")
                             self.state.save()
                         continue
-                if (not self.dm_on(post, text) and verdict["reply"]
-                        and (verdict["reply"] in SAFE_FALLBACK["price"]
-                             or (verdict["category"] in DM_CATEGORIES and DM_CLAIM_RE.search(verdict["reply"])))):
-                    # direkt yuborilmaydi: "direktga yozdik" degan yolg'on o'rniga direktga taklif
-                    alts = [x for x in DM_OFF_REPLIES if not too_similar(x, self._recent)] or DM_OFF_REPLIES
-                    verdict["reply"] = random.choice(alts)
                 verdict["dm"] = {
                     "text": result.get("dm") if isinstance(result, dict) else "",
                     "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
                     "topic": result.get("topic") if isinstance(result, dict) else "",
                 }
-                if (verdict["category"] == "price" and self.dm_on(post, text)
+                dm_ok = self.dm_on(post, text, verdict["dm"]["topic"])
+                if (not dm_ok and verdict["reply"]
+                        and (verdict["reply"] in SAFE_FALLBACK["price"]
+                             or (verdict["category"] in DM_CATEGORIES and DM_CLAIM_RE.search(verdict["reply"])))):
+                    # direkt yuborilmaydi: "direktga yozdik" degan yolg'on o'rniga direktga taklif
+                    alts = [x for x in DM_OFF_REPLIES if not too_similar(x, self._recent)] or DM_OFF_REPLIES
+                    verdict["reply"] = random.choice(alts)
+                if (verdict["category"] == "price" and dm_ok
                         and dm_will_fallback(verdict["dm"]["text"], catalog.post_facts(post)["source_text"])):
                     # direktga narxsiz umumiy xabar ketadi: "narxini direktga yozdik" yolg'on bo'lmasin
                     verdict["reply"] = honest_price_claim(verdict["reply"], self._recent)
@@ -1077,8 +1078,12 @@ class CommentResponder:
             self.state.dm_mode = mode
             self.state.save()
 
-    def dm_on(self, post, comment_text=None):
-        """Shu post komentiga direkt yoziladimi (umumiy rejim, egasining post va mahsulot bo'yicha taqiqi)."""
+    def dm_on(self, post, comment_text=None, topic=""):
+        """Shu post komentiga direkt yoziladimi (umumiy rejim, egasining post va mahsulot bo'yicha taqiqi).
+
+        topic: AI aniqlagan mavzu ("Rolikli krasovka narxi"). Opisaniyada mahsulot nomi bo'lmasa ham
+        egasining "Krasofkaga direktga yozma" ko'rsatmasi shu orqali qo'llanadi (kuzatuv 20.11).
+        """
         if self.dm_mode == "off" or catalog.is_dm_off((post or {}).get("id")):
             return False
         if not comment_text:
@@ -1086,6 +1091,9 @@ class CommentResponder:
         lessons = brain.get_lessons()
         if not lessons:
             return True
+        topic = topic if isinstance(topic, str) else ""
+        if topic and lesson_blocks_dm(topic, lessons):
+            return False
         return not lesson_blocks_dm(comment_text, lessons, self._post_topic(post))
 
     @staticmethod
@@ -1123,9 +1131,10 @@ class CommentResponder:
           xavfsiz xabar ishlatiladi.
         auto: darhol yuboriladi (egasi faqat xabardor qilinadi). approve: tasdiqqa. preview: ko'rsatadi.
         """
-        if not self.dm_on(post, (comment or {}).get("text")) or verdict["category"] not in DM_CATEGORIES:
-            return None
         dm = verdict.get("dm") or {}
+        if (not self.dm_on(post, (comment or {}).get("text"), dm.get("topic"))
+                or verdict["category"] not in DM_CATEGORIES):
+            return None
         dm_text = (dm.get("text") or "").strip()[:1000] if isinstance(dm.get("text"), str) else ""
         answered = bool(dm.get("answered")) and bool(dm_text)
         if verdict["category"] == "question" and not answered:

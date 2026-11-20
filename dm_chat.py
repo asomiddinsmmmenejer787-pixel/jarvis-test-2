@@ -27,6 +27,7 @@ import brain
 import catalog
 import config
 import humanizer_uz
+from auto_reply import PROFANITY_RE
 import instagram_api as ig
 from instagram_api import InstagramError
 
@@ -45,6 +46,36 @@ def _similar(a, b):
     if not a or not b:
         return 0.0
     return difflib.SequenceMatcher(None, a, b).ratio()
+
+# "Yo'q / mavjud emas / qolmagan": mahsulot yo'qligi haqidagi javob
+STOCK_OUT_RE = re.compile(r"(?<![\w'’`ʻ])yo['’`ʻ]?q(?![\w'’`ʻ])|mavjud\s+emas|qolmagan|tugagan|нет\s+в\s+наличии|законч|йўқ",
+                          re.I)
+# Takrorni aniqlashda hisobga olinmaydigan umumiy so'zlar (5 harfli o'zak)
+_COMMON = {"hozir", "ombor", "sotuv", "mavju", "shuni", "ma'lu", "malum", "tushu", "qo'sh", "qoshi", "raqam",
+           "bog'l", "mumki", "yorda", "afsus", "kechi", "bo'li", "bo'ls", "olmay", "javob",
+           "sizga", "bizda", "aniql", "qolma", "elekt"}
+
+
+def _stems(text):
+    words = re.findall(r"[^\W\d_][\w'’`ʻ]{4,}", (text or "").lower())
+    return {w.replace("’", "'").replace("`", "'").replace("ʻ", "'")[:5] for w in words} - _COMMON
+
+
+def repeats_stock_out(text, ours_before):
+    """Mijozga "bu mahsulot yo'q" deb aytilgan, u yana yozdi, Jarvis yana "yo'q" demoqchi: takror.
+
+    Kuzatuv 20.11: "samakat yo'q" 5 marta har xil so'z bilan qaytarildi ("Keremidi?", "Gapirin" ga ham).
+    Mijoz boshqa narsa so'rayapti (qachon keladi, qayerdan olasiz) — buni egasi hal qiladi.
+    """
+    if not STOCK_OUT_RE.search(text or ""):
+        return False
+    sizes = set(re.findall(r"(?<!\d)\d{1,3}(?!\d)", text))
+    for o in ours_before[-3:]:
+        if (STOCK_OUT_RE.search(o) and _stems(text) & _stems(o)
+                and sizes <= set(re.findall(r"(?<!\d)\d{1,3}(?!\d)", o))):
+            return True
+    return False
+
 
 PROMPT = """
 Sen do'kon nomidan Instagram direktda mijoz bilan yozishasan. Sen tajribali, samimiy sotuvchisan.
@@ -455,7 +486,12 @@ class DirectChat:
                     # Chegirma qilish-qilmaslikni faqat egasi hal qiladi (to'g'ri bo'lsa, bir bosishda tasdiqlaydi)
                     res.update(safe=False, kind="human",
                                reason="Mijoz narxda kelishmoqchi — chegirma qilasizmi, o'zingiz javob bering")
-                if any(_similar(res["text"], o) >= SIMILAR for o in ours_before[-3:]):
+                if PROFANITY_RE.search(last.get("message") or ""):
+                    # Mijoz so'kindi yoki haqorat qildi: Jarvis o'zi javob bermaydi, egasi hal qiladi
+                    res.update(safe=False, kind="human",
+                               reason="Mijoz qo'pol so'z yozdi — o'zingiz javob bering")
+                elif (any(_similar(res["text"], o) >= SIMILAR for o in ours_before[-3:])
+                        or repeats_stock_out(res["text"], ours_before)):
                     # Oldingi javobimizni qaytarmaymiz: mijozga yetmagan, egasiga topshiramiz
                     res.update(safe=False, kind="human",
                                reason="Jarvis oldingi javobini takrorlamoqchi edi — o'zingiz javob bering")
