@@ -161,7 +161,11 @@ class GeminiProvider(AIProvider):
     def _generate_with_fallback(self, payload: dict) -> requests.Response:
         """Modellarni navbat bilan sinaydi, birinchi ishlaganini eslab qoladi."""
         last_response, last_error = None, None
-        for model in self._candidates()[:MAX_MODELS_PER_REQUEST]:
+        tried = 0
+        for model in self._candidates():
+            if tried >= MAX_MODELS_PER_REQUEST:
+                break
+            tried += 1
             try:
                 response = self._post_generate(model, payload)
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
@@ -174,8 +178,11 @@ class GeminiProvider(AIProvider):
                 self._resolved_model = model
                 return response
             if response.status_code == 404:
+                # Bu kalitga yopilgan model: darhol javob qaytaradi, shuning uchun urinishlar soniga
+                # kirmaydi (aks holda 2 ta band model + 1 ta 404 bo'lsa, Gemini butunlay ishlamay qolardi)
                 self._mark_bad(model, "not_found")
                 last_response = response
+                tried -= 1
                 continue
             if response.status_code in RETRY_STATUS_CODES:
                 self._mark_bad(model, "busy")

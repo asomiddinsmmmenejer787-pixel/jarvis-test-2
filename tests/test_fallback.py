@@ -174,6 +174,35 @@ def run():
     check(Msg.deleted and out[-1].startswith("✅ Groq ulandi") and groq.get_api_key() == "gsk_" + "A" * 40,
           "Kalitni oddiy xabar qilib yuborsa ham ulandi va xabar o'chirildi")
 
+    print("\n5) Gemini: yopilgan (404) model urinishlar soniga kirmaydi")
+    # Kuzatuv 20.11: 3.5-flash va 3-flash-preview band, 2.5-flash 404 -> Gemini butunlay ishlamay,
+    # sifatsiz zaxira AI javob yozgan. Endi 4-model (3.1-flash-lite) ham sinaladi.
+    seen = []
+    status = {"gemini-3.5-flash": 503, "gemini-3-flash-preview": 503, "gemini-2.5-flash": 404}
+    names = [{"name": "models/" + m, "supportedGenerationMethods": ["generateContent"]} for m in gem.MODEL_CANDIDATES]
+
+    def post5(url, json=None, headers=None, timeout=None):
+        model = url.split("/models/")[1].split(":")[0]
+        seen.append(model)
+        code = status.get(model, 200)
+        if code != 200:
+            return R(code, {"error": {"message": "x"}})
+        return R(200, {"candidates": [{"content": {"parts": [{"text": "Lite javobi"}]}}]})
+
+    gem.requests.post, gem.requests.get = post5, lambda *a, **k: R(200, {"models": names})
+    g = gem.GeminiProvider("k", "gemini-3.5-flash")
+    check(g.generate_text("s", "u") == "Lite javobi" and "gemini-3.1-flash-lite" in seen,
+          "2 ta band + 1 ta 404 modeldan keyin keyingi Gemini modeli javob berdi")
+    seen.clear()
+    status.update({"gemini-3.1-flash-lite": 503, "gemini-2.5-flash-lite": 503})
+    g2 = gem.GeminiProvider("k", "gemini-3.5-flash")
+    try:
+        g2.generate_text("s", "u")
+    except Exception:
+        pass
+    check(len(set(seen)) == gem.MAX_MODELS_PER_REQUEST + 1, "Faqat 3 ta ishlaydigan model + 404 model sinaldi")
+    gem.requests.post, gem.requests.get = w.post, w.get
+
     print("\n✅ Zaxira AI testlari o'tdi")
 
 

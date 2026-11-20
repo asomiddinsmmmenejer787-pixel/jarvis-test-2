@@ -223,6 +223,25 @@ def run():
     chat.run_once()
     check("t.me" in fake.chat_sent[-1][1], "Savolimizga 'ok' deb javob bersa, so'ralgan havola yuborildi")
 
+    # Kuzatuv 20.11: "kelishtirishni iloji yo'qmi" ga "Bor, buyurtma berish uchun..." — chegirma va'dasiday
+    bg = {"id": "k5", "from": {"id": "U14", "username": "kadirov"}, "created_time": time.time(),
+          "message": "Qimatli qildi qizim rosa hohlavitudi kelishtirishni iloji yo'qmi"}
+    fake.conversations = [{"id": "t14", "messages": {"data": [bg]}}]
+    ai.res = {"text": "Bor, buyurtma berish uchun +998 77 499 47 44 raqamga murojaat qiling.", "kind": "order", "topic": "x"}
+    n = len(fake.chat_sent)
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_approval" and len(fake.chat_sent) == n
+          and "kelishmoqchi" in events[0]["reason"],
+          "Savdolashishga 'Bor' deb yozilmadi — chegirmani egasi hal qiladi")
+    bg2 = {"id": "k6", "from": {"id": "U15", "username": "dilnoza2"}, "message": "Kelishtirazmi", "created_time": time.time()}
+    fake.conversations = [{"id": "t15", "messages": {"data": [bg2]}}]
+    ai.res = {"text": "Narxlarimiz qat'iy, lekin sifatiga ishonchimiz komil.", "kind": "answer", "topic": "x"}
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_sent", "Kelishish so'roviga 'narx qat'iy' javobi o'zi yuborildi")
+    check(dm_chat.is_bargain("skidka bormi") and not dm_chat.is_bargain("qachon yetib kelishi")
+          and not dm_chat.is_bargain("33 razmer bormi") and not dm_chat.bargain_agreed("Kechirasiz, chegirma yo'q"),
+          "Savdolashish va rozilik to'g'ri aniqlandi")
+
     print("\n4) HUD API")
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
