@@ -178,6 +178,9 @@ AQL
 - Kommentni diqqat bilan o'qi: bir nechta savol bo'lsa, hammasiga javob ber.
 - Mijoz ismi yoki vaziyati aytilgan bo'lsa (masalan "o'g'limga"), javobda shuni hisobga ol.
 - Umumiy "rahmat, direktga yozing" o'rniga aynan shu kommentga xos javob yoz.
+- Savoldan qochma: "hammasi videoda", "javob videoda yashiringan", "videoni qayta ko'ring" deb javob BERMA.
+  "Qayerda", "manzil qayer" so'ralsa va manzil FAKTLARda bo'lsa, manzilni qisqa yoz (manzil ochiq
+  yozilsa bo'ladi). Javobni bilmasang (masalan o'yin g'olibi), to'qima: "direktga yozing, aniqlab aytamiz" de.
 
 QOIDALAR
 - FAKTLARda yo'q narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
@@ -485,6 +488,24 @@ def lesson_blocks_dm(comment_text, lessons, post_text=""):
             if fam.search(lesson) and fam.search(target):
                 return True
     return False
+
+
+def comments_product(texts):
+    """Post komentlarida eng ko'p tilga olingan mahsulot nomi ("krasofka") yoki "".
+
+    Opisaniyada mahsulot nomi yo'q postda (kuzatuv 20.11: rolik postiga "Narxi", "adres qatta nechi pul"
+    komentlariga direkt ketgan) post mavzusini boshqa komentlardan bilamiz. Kamida 2 ta komentda
+    uchrashi va boshqa mahsulotdan ancha ko'p bo'lishi kerak.
+    """
+    counts = []
+    for fam in PRODUCT_FAMILIES:
+        hits = [m.group(0) for t in texts or [] if isinstance(t, str) for m in [fam.search(t)] if m]
+        counts.append((len(hits), hits[0] if hits else ""))
+    ranked = sorted(counts, reverse=True)
+    (top, word), (second, _) = ranked[0], ranked[1]
+    if top >= 2 and top >= 2 * second:
+        return word
+    return ""
 
 
 def is_short(text):
@@ -815,6 +836,7 @@ class CommentResponder:
             clean = True
             comments = ig.get_all_comments(post["id"], limit=200)
             stats["comments"] += len(comments)
+            post = {**post, "_comments_product": comments_product([c.get("text") for c in comments])}
             for c in comments:
                 cid = c.get("id")
                 text = (c.get("text") or "").strip()
@@ -1106,7 +1128,11 @@ class CommentResponder:
             info = {}
         caption = (post.get("caption") or "") if info.get("use_caption", True) else ""
         # umumiy vazifa emas, faqat shu postning o'z vazifasi
-        return " ".join([caption[:1500], info.get("title") or "", info.get("info") or "", info.get("task") or ""])
+        topic = " ".join([caption[:1500], info.get("title") or "", info.get("info") or "", info.get("task") or ""])
+        if not any(fam.search(topic) for fam in PRODUCT_FAMILIES):
+            # opisaniyada nom yo'q: boshqa komentlar qaysi mahsulot haqida gapirayotganiga qaraymiz
+            topic += " " + (post.get("_comments_product") or "")
+        return topic
 
     def apply_owner_setup(self):
         """Egasining bir martalik ko'rsatmalari (Railway'da bir marta bajariladi)."""

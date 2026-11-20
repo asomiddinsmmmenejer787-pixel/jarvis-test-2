@@ -232,6 +232,21 @@ def run():
     check(not r.dm_on({"id": "npost_x", "caption": "🔥🔥"}, "Неча пул", "Rolikli krasovka narxi")
           and r.dm_on({"id": "npost_x", "caption": "🔥🔥"}, "Неча пул", "Samokat narxi"),
           "Opisaniyada nom bo'lmasa ham AI aniqlagan mavzu bo'yicha ko'rsatma qo'llandi")
+    # Kuzatuv 20.11 (kech): opisaniyada nom yo'q rolik postida "Narxi", "adres qatta nechi pul" ga
+    # AI mavzu bermagan, direktga umumiy xabar ketgan. Endi boshqa komentlardan post mavzusi bilinadi.
+    texts = ["Qancha ekan Shu krasofkacha", "Wu vediodagi kairasobkaliroʻliklarni narxi", "Narxi",
+             "Roliklik qirasofkelar keregiydi 37razmeeida", "🔥🔥"]
+    check(auto_reply.comments_product(texts) != ""
+          and auto_reply.comments_product(["Narxi", "Krasofka", "🔥"]) == ""
+          and auto_reply.comments_product(["krasofka", "krasofka", "samokat", "samokat"]) == "",
+          "Komentlardan post mahsuloti faqat aniq ko'pchilik bo'lsa aniqlanadi")
+    rpost = {"id": "rpost_x", "caption": "🔥🔥", "_comments_product": auto_reply.comments_product(texts)}
+    check(not r.dm_on(rpost, "Narxi") and not r.dm_on(rpost, "Assalomu alaykum adres qatta nechi pul")
+          and r.dm_on({**rpost, "_comments_product": ""}, "Narxi")
+          and r.dm_on({"id": "rpost_y", "caption": "Samokat G2", "_comments_product": "krasofka"}, "Narxi"),
+          "Opisaniyada nom yo'q postda boshqa komentlar bo'yicha krasofka ko'rsatmasi qo'llandi")
+    check("hammasi videoda" in auto_reply.SYSTEM_PROMPT and "manzilni qisqa yoz" in auto_reply.SYSTEM_PROMPT,
+          "Promptda 'javob videoda' deb savoldan qochish taqiqlangan")
     ai.dm = {"text": "Krasovkalarimiz 300 ming so'm.", "answered": True, "topic": "Rolikli krasovka narxi"}
     orig_gen = ai.generate_json
 
