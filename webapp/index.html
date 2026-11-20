@@ -275,6 +275,9 @@ a{color:var(--cyan)}
       <div class="muted" id="modeText" style="margin-top:8px"></div>
       <div style="margin-top:12px" class="row" ><div style="flex:1"><div class="muted">Bugun avtomatik javoblar</div><div class="gauge"><i id="gauge" style="width:0"></i></div></div><div class="mono" id="gaugeNum" style="color:var(--cyan2)">0/0</div></div>
       <div class="row" style="margin-top:8px"><div class="muted" style="flex:1">Kunlik limit (10–1000)</div><input id="limitIn" type="number" inputmode="numeric" min="10" max="1000" style="width:96px"><button class="btn sm" onclick="saveLimit()">Saqlash</button></div>
+      <div class="muted" style="margin-top:12px">Limitni tejash</div>
+      <div class="seg" id="saveSeg" style="margin-top:6px"><button data-s="1">YONIQ</button><button data-s="0">O'CHIQ</button></div>
+      <div class="muted" id="saveText" style="margin-top:6px"></div>
     </div>
     <div class="panel">
       <div class="ptitle">Jarvisga vazifalar</div>
@@ -710,14 +713,19 @@ const MODE_TEXT={on:'Oddiy komentlarga Jarvis o\'zi javob yozadi. Raqobatchi va 
 document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=async()=>{
   const m=b.dataset.m; if (m==='on' && !confirm('Jarvis oddiy komentlarga o\'zi javob yoza boshlaydi. Yoqilsinmi?')) return;
   try{ await api('/api/comments/mode',{method:'POST',body:{mode:m}}); haptic('ok'); loadComments() }catch(e){ alert(e.message) } });
+const SAVE_TEXT={1:'Maqtov, emoji va belgilashlarning bir qismiga javob yozilmaydi, limit muhim savollarga qoladi.',0:'Hamma komentlarga javob yoziladi, limit tejalmaydi.'};
+document.querySelectorAll('#saveSeg button').forEach(b=>b.onclick=async()=>{
+  try{ await api('/api/comments/saving',{method:'POST',body:{on:b.dataset.s==='1'}}); haptic('ok'); loadComments() }catch(e){ alert(e.message) } });
+function renderSaving(st){ const on=!!(st.policy&&st.policy.saving)?'1':'0';
+  document.querySelectorAll('#saveSeg button').forEach(b=>b.classList.toggle('on',b.dataset.s===on)); $('#saveText').textContent=SAVE_TEXT[on] }
 async function loadComments(){
   try{
     const r=await api('/api/comments');
     if (!r.enabled){ $('#pending').innerHTML='<div class="muted">Avtojavob tizimi o\'chiq (Gemini kerak).</div>'; return }
-    const st=r.status; renderDm(st, r.dm_pending); renderChat(r.chat); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
+    const st=r.status; renderDm(st, r.dm_pending); renderChat(r.chat); renderSaving(st); document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===st.mode));
     const lr=st.last_run; $('#modeText').textContent=MODE_TEXT[st.mode] + (lr ? `\nOxirgi tekshiruv ${lr.time}: ${lr.posts} post, ${lr.comments} komment, yangi ${lr.new}, yuborildi ${lr.sent}, ruxsatga ${lr.approval}.` : '');
     if (st.policy){ const cu={tag:'belgilash',positive:'maqtov',question:'savol',price:'narx',complaint:'shikoyat'}; const used=Object.entries(st.today_cats||{}).map(([k,v])=>(cu[k]||k)+' '+v).join(', ');
-      $('#modeText').textContent += `\nBugun: ${used||'hali javob yo\'q'}. Belgilash va maqtovlar ${st.low_today}/${st.policy.low_limit}, tejaldi ${st.saved_today}. Qoidalarni botga oddiy so'z bilan yozib o'zgartiring (/sozlamalar).` }
+      $('#modeText').textContent += `\nBugun: ${used||'hali javob yo\'q'}. Belgilash va maqtovlar ${st.low_today}${st.policy.saving?'/'+st.policy.low_limit:''}, tejaldi ${st.saved_today}. Qoidalarni botga oddiy so'z bilan yozib o'zgartiring (/sozlamalar).` }
     $('#modeText').style.whiteSpace='pre-line'; $('#gauge').style.width=Math.min(100,st.sent_today/st.limit_day*100)+'%'; $('#gaugeNum').textContent=st.sent_today+'/'+st.limit_day; if(document.activeElement!==$('#limitIn')) $('#limitIn').value=st.limit_day;
     $('#pendCount').textContent=r.pending.length;
     $('#pending').classList.toggle('muted', !r.pending.length);

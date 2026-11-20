@@ -174,6 +174,8 @@ TURLAR (kind):
        sana va opisaniyaga qarab tanla. Umuman aniq bo'lmasa, harakat qilma, reply'da qaysi post ekanini
        so'ra (havolasini yuborishni so'ra).
     {"type": "set_policy", ...}  - limitni tejash qoidalari, faqat o'zgarayotgan kalitlarni yoz:
+       "saving": true/false - limitni tejash umuman yoqilgan/o'chirilgan ("limit tejama" -> false).
+       Quyidagi cheklovlar faqat saving=true bo'lsa ishlaydi ("skip" doim ishlaydi):
        "low_limit": belgilash (@) va maqtov komentlariga kunlik javob soni (0-1000; 0 = umuman yozma),
        "per_user_day": bir odamga kuniga nechta shunday javob (1-10),
        "short_ratio": faqat emoji yoki 1-2 so'zli komentlarning necha foiziga javob (0-100),
@@ -259,6 +261,8 @@ def think(ai, owner_text, status_text="", last_post_text="", history_text=""):
                       if a.get(k) is not None and str(a[k]).lstrip("-").isdigit()}
                 if isinstance(a.get("skip"), list):
                     ch["skip"] = [str(x) for x in a["skip"]]
+                if isinstance(a.get("saving"), bool):
+                    ch["saving"] = a["saving"]
                 if ch:
                     acts.append({"type": t, "changes": ch})
         except (TypeError, ValueError):
@@ -283,8 +287,14 @@ def policy_text(st):
     reserve = round(lim * p.get("reserve_pct", 0) / 100)
     skip = ", ".join(CAT_UZ.get(x, x) for x in p.get("skip") or []) or "yo'q"
     used = ", ".join(f"{CAT_UZ.get(k, k)} {v}" for k, v in sorted(cats.items(), key=lambda x: -x[1])) or "hali yo'q"
+    if not p.get("saving"):
+        return (f"Kunlik limit: {st['sent_today']}/{lim}\n"
+                f"Bugun: {used}\n"
+                "Limitni tejash O'CHIQ: hamma komentlarga javob yoziladi\n"
+                f"Umuman javob yozilmaydi: {skip}")
     return (f"Kunlik limit: {st['sent_today']}/{lim}\n"
             f"Bugun: {used}\n"
+            "Limitni tejash YONIQ\n"
             f"Belgilash va maqtovlarga: {st.get('low_today', 0)}/{p.get('low_limit')} (alohida limit)\n"
             f"Faqat savol/narx/shikoyatga zaxira: {reserve} ta ({p.get('reserve_pct')}%)\n"
             f"Bir odamga kuniga: {p.get('per_user_day')} ta (belgilash/maqtov)\n"

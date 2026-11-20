@@ -427,6 +427,7 @@ DEFAULT_POLICY = {
     "short_ratio": 30,    # faqat emoji / 1-2 so'zli komentlarning necha foiziga javob (%)
     "reserve_pct": 20,    # asosiy limitning shuncha foizi faqat muhim komentlarga qoladi
     "skip": [],           # umuman javob yozilmaydigan turlar
+    "saving": False,      # limitni tejash (egasi 20.11: hozircha o'chiq, mini ilovadan yoqiladi)
 }
 POLICY_RANGES = {"low_limit": (0, 1000), "per_user_day": (1, 10), "short_ratio": (0, 100), "reserve_pct": (0, 90)}
 
@@ -442,6 +443,8 @@ def clean_policy(raw):
                     pass
         if isinstance(raw.get("skip"), list):
             out["skip"] = sorted({x for x in raw["skip"] if x in SKIPPABLE})
+        if isinstance(raw.get("saving"), bool):
+            out["saving"] = raw["saving"]
     return out
 
 
@@ -886,7 +889,8 @@ class CommentResponder:
                 if guess and self.mode != "test":
                     with self.lock:
                         why = self._low_block(guess, author)
-                        if not why and guess == "short" and not _pick(cid, self.state.policy["short_ratio"]):
+                        if (not why and guess == "short" and self.state.policy.get("saving")
+                                and not _pick(cid, self.state.policy["short_ratio"])):
                             why = "short"
                         if why:
                             self.state.mark(cid, "budget")
@@ -1073,6 +1077,8 @@ class CommentResponder:
             return "skip"
         if category not in LOW_PRIORITY and category != "short":
             return None
+        if not p.get("saving"):
+            return None  # tejash o'chiq: maqtov va belgilashlarga ham javob yoziladi
         if self.state.low_today() >= p["low_limit"]:
             return "low_limit"
         if self.state.today_count() >= self.day_limit() * (100 - p["reserve_pct"]) / 100:

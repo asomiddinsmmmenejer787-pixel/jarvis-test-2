@@ -570,6 +570,21 @@ async def api_comments_limit(request: Request, x_init_data: str = Header(default
     return {"status": responder.status()}
 
 
+@router.post("/api/comments/saving")
+async def api_comments_saving(request: Request, x_init_data: str = Header(default="")):
+    """Limitni tejashni yoqish/o'chirish (maqtov va belgilashlarga javobni cheklash)."""
+    require_owner(x_init_data)
+    responder = _ctx["responder"]
+    if responder is None:
+        raise HTTPException(status_code=400, detail="Komentga javob tizimi o'chiq")
+    on = (await request.json()).get("on")
+    if not isinstance(on, bool):
+        raise HTTPException(status_code=400, detail="on true yoki false bo'lsin")
+    responder.set_policy(saving=on)
+    brain.log_entry(f"Limit tejash {'yoqildi' if on else 'o‘chirildi'} (mini ilova)")
+    return {"status": responder.status()}
+
+
 @router.get("/api/followers")
 def api_followers(x_init_data: str = Header(default="")):
     require_owner(x_init_data)

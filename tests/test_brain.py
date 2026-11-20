@@ -81,7 +81,7 @@ def run():
     check(res["kind"] == "work" and res["lesson"] and res["actions"] == [{"type": "recheck_comments", "posts": 5}],
           "Egasining tanbehi qoida va harakatga aylandi (5 postdan oshmaydi)")
     r.state.done["t3"] = "skipped"
-    r.set_policy(short_ratio=100, low_limit=1000, per_user_day=10)
+    r.set_policy(short_ratio=100, low_limit=1000, per_user_day=10, saving=True)
     ai.spam = True
     fake.comments["m1"].append({"id": "t5", "text": "Juda chiroyli", "username": "x5", "timestamp": ts(60)})
     n = len(fake.replies)
@@ -104,7 +104,9 @@ def run():
     r.state.done.clear()
     r.state.daily = {"date": "", "count": 0}
     r._recent.clear()
-    r.set_policy(low_limit=1, short_ratio=100)
+    check(auto_reply.clean_policy({})["saving"] is False and auto_reply.clean_policy({"saving": "ha"})["saving"] is False,
+          "Egasi (20.11): limit tejash odatda o'chiq")
+    r.set_policy(low_limit=1, short_ratio=100, saving=True)
     fake.comments["m1"] = [
         {"id": "p1", "text": "@dugona1 qara", "username": "aa", "timestamp": ts(1)},
         {"id": "p2", "text": "@dugona2 qara", "username": "bb", "timestamp": ts(1)},
@@ -124,6 +126,28 @@ def run():
     check(r.policy["skip"] == ["positive"] and r.policy["per_user_day"] == 10, "Qoidalar tekshirilib saqlandi")
     lines, _ = brain.apply({"reply": "Xo'p", "actions": [{"type": "set_policy", "changes": {"low_limit": 50}}]}, r)
     check(r.policy["low_limit"] == 50 and "50" in lines[-1], "Chat orqali tejash qoidasi o'zgardi")
+    # Egasi (20.11): "limit tejama" - tejash o'chiq bo'lsa belgilash/qisqa komentlarga ham javob yoziladi
+    r.set_policy(skip=[], low_limit=1, short_ratio=0, per_user_day=1)
+    lines, _ = brain.apply({"reply": "Xo'p", "actions": [{"type": "set_policy", "changes": {"saving": False}}]}, r)
+    check(r.policy["saving"] is False and "O'CHIQ" in lines[-1], "Chat orqali tejash o'chirildi")
+    r.state.done.clear()
+    r._recent.clear()
+    fake.comments["m1"] = [
+        {"id": "s1", "text": "@dugona3 qara", "username": "cc", "timestamp": ts(1)},
+        {"id": "s2", "text": "@dugona4 qara", "username": "cc", "timestamp": ts(1)},
+    ]
+    r._counts.clear()
+    n = len(fake.replies)
+    r.run_once()
+    sent = [c for c, _ in fake.replies[n:]]
+    check("s1" in sent and r._low_block("tag", "cc") is None and r._low_block("short", "cc") is None
+          and r._low_block("positive", "cc") is None,
+          "Tejash o'chiq: belgilash limiti va bir odamga cheklov ishlamadi, hammasiga javob")
+    r.set_policy(skip=["positive"])
+    check(r._low_block("positive", "cc") == "skip", "Tejash o'chiq bo'lsa ham egasining 'yozma' ro'yxati ishlaydi")
+    r.set_policy(skip=[])
+    r.set_policy(saving=True)
+    check(r.policy["saving"] is True, "Tejash qayta yoqildi")
     check(auto_reply.is_short("zo'r 🔥") and not auto_reply.is_short("Narxi qancha?")
           and not auto_reply.is_short("Narxi qancha") and not auto_reply.is_short("bormi"), "Qisqa komment aniqlandi, savol emas")
 

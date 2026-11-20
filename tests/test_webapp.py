@@ -127,6 +127,14 @@ def run():
     check(r["status"]["limit_day"] == 500 and client.get("/api/status", headers=H).json()["autoreply"]["limit_day"] == 500,
           "Limit 500 ga o'zgardi va HUD holatida ko'rinadi")
     check(client.post("/api/comments/limit", json={"limit": "abc"}, headers=H).status_code == 400, "Noto'g'ri limit rad etildi")
+    r = client.post("/api/comments/saving", json={"on": True}, headers=H).json()
+    check(r["status"]["policy"]["saving"] is True, "HUD: limit tejash yoqildi")
+    r = client.post("/api/comments/saving", json={"on": False}, headers=H).json()
+    check(r["status"]["policy"]["saving"] is False, "HUD: limit tejash o'chirildi")
+    check(client.post("/api/comments/saving", json={"on": "ha"}, headers=H).status_code == 400,
+          "HUD: noto'g'ri qiymat rad etildi")
+    check('id="saveSeg"' in open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webapp", "index.html"), encoding="utf-8").read(),
+          "HUD'da limit tejash tugmasi bor")
 
     import followers_live
     now = time.time()
