@@ -307,6 +307,9 @@ def build_context(responder, chat, memory):
             st.append("Oxirgi komment tekshiruvi: " + json.dumps(r["last_run"], ensure_ascii=False))
     if chat is not None:
         st.append(f"Direkt suhbat rejimi: {chat.mode}")
+    stock_text, _ = catalog.stock_block()
+    if stock_text:
+        st.append(stock_text)
     last_post = ""
     try:
         posts = ig.get_recent_posts(10)

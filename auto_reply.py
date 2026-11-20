@@ -452,7 +452,7 @@ QUESTION_HINT = re.compile(
 # Faqat mahsulot nomi ("Krasofka", "Kirosofka😍", "Красовка") - bu xarid qiziqishi, qisqa maqtov emas
 PRODUCT_HINT = re.compile(
     r"[kq][aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к|(?<![a-z])rolik|ролик|(?<![a-z])dron|дрон|"
-    r"samokat|самокат|velosiped|велосипед|kukirin|kugoo|"
+    r"sam[ao][kq]at|сам[ао]кат|velosiped|велосипед|kukirin|kugoo|"
     r"(?<![^\W\d_])[a-zа-я]\d{1,2}(?![^\W\d_])", re.I)  # model kodi: "G2", "X5"
 
 
@@ -461,7 +461,7 @@ PRODUCT_FAMILIES = [
     re.compile(r"[kq][aie]?r[ao]?s+[ao][vfwp]k|кр[ао]?сс?[ао]в?к", re.I),
     re.compile(r"(?<![a-z])rolik|ролик", re.I),
     re.compile(r"(?<![a-z])dron|дрон", re.I),
-    re.compile(r"samokat|самокат", re.I),
+    re.compile(r"sam[ao][kq]at|сам[ао]кат", re.I),  # "samakat", "samaqat" ham
     re.compile(r"velosiped|велосипед", re.I),
 ]
 LESSON_DM_RE = re.compile(r"direkt|директ|lichk|shaxsiy", re.I)

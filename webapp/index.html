@@ -126,9 +126,9 @@ textarea{resize:none;min-height:44px}
 .gauge i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--green),var(--cyan))}
 .muted{color:var(--dim);font-size:13px}
 /* nav */
-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(6,1fr);
   background:rgba(10,7,4,.94);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);backdrop-filter:blur(8px)}
-nav button{background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:10.5px;letter-spacing:.1em;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+nav button{background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:10px;letter-spacing:.06em;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
 nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6}
 nav button.on{color:var(--cyan);text-shadow:var(--glow)}
 nav button.on svg{filter:drop-shadow(0 0 5px var(--cyan))}
@@ -138,6 +138,11 @@ nav button.on svg{filter:drop-shadow(0 0 5px var(--cyan))}
 .prod .p s{color:var(--dim);margin-left:6px}
 .kw{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--cyan2);border:1px solid var(--line);padding:1px 6px;margin:3px 4px 0 0}
 .off{opacity:.45}
+.prod .row2{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.prod .sz{font-family:var(--mono);font-size:12.5px;color:var(--cyan2)}
+.prod.nostock .n{color:var(--dim)}
+.prod .acts{display:flex;gap:6px;margin-top:8px}
+.badge.click{cursor:pointer}
 label.f{display:block;font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;font-weight:700;margin:9px 0 4px}
 select{width:100%;background:rgba(14,10,6,.85);border:1px solid var(--line);color:var(--text);font-family:var(--ui);font-size:14px;padding:8px}
 .lp{border-bottom:1px dashed rgba(224,168,90,.12);padding:8px 0}
@@ -296,6 +301,26 @@ a{color:var(--cyan)}
       <div id="pending" class="muted">Yuklanmoqda...</div>
     </div>
   </section>
+  <!-- OMBOR -->
+  <section class="view" id="v-ombor">
+    <div class="panel">
+      <div class="ptitle">Ombor <span id="stockCount">0</span></div>
+      <div class="muted">Jarvis komment va direktda mahsulot bor-yo'qligini, narxi va razmerini shu ro'yxatdan aytadi. Holatini (BOR / YO'Q) bir bosishda o'zgartirasiz.</div>
+      <div id="stockList" style="margin-top:6px" class="muted">Yuklanmoqda...</div>
+    </div>
+    <div class="panel" id="stockForm">
+      <div class="ptitle" id="stockFormTitle">Yangi mahsulot</div>
+      <label class="f">Nomi</label><input id="st-name" placeholder="Kugoo G2 elektr samokat">
+      <label class="f">Turi</label><input id="st-type" list="stockTypes" placeholder="Samokat">
+      <datalist id="stockTypes"><option value="Samokat"><option value="Elektr samokat"><option value="Rolikli krasofka"><option value="Krasofka"><option value="Velosiped"><option value="Dron"><option value="O'yinchoq"></datalist>
+      <label class="f">Narxi</label><input id="st-price" placeholder="2 500 000 so'm">
+      <label class="f">Razmeri</label><input id="st-sizes" placeholder="28–37 (razmeri yo'q bo'lsa bo'sh qoldiring)">
+      <label class="f">Holati</label>
+      <div class="seg" id="stSeg"><button data-s="1" class="on">BOR</button><button data-s="0">YO'Q</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn green" onclick="saveStock()">Saqlash</button><button class="btn sm" id="stCancel" style="display:none" onclick="resetStock()">Bekor</button></div>
+    </div>
+  </section>
+
   <!-- POSTLAR -->
   <section class="view" id="v-catalog">
     <div class="panel">
@@ -327,6 +352,7 @@ a{color:var(--cyan)}
   <button data-v="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 16v-5M11 16V7M16 16v-8M21 16V4"/></svg>TAHLIL</button>
   <button data-v="chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/></svg>KONTENT</button>
   <button data-v="catalog"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>POSTLAR</button>
+  <button data-v="ombor"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/></svg>OMBOR</button>
   <button data-v="comments"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>KOMENT</button>
 </nav>
 
@@ -835,8 +861,44 @@ async function saveShop(){
 
 // ---------- navigatsiya ----------
 function go(v){ if(!state.busy) $('#proc').classList.remove('show'); document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
-  if (v==='comments'){ loadComments(); loadTasks() } if (v==='catalog') loadCatalog(); window.scrollTo({top:0,behavior:'smooth'}) }
+  if (v==='comments'){ loadComments(); loadTasks() } if (v==='catalog') loadCatalog(); if (v==='ombor') loadStock(); window.scrollTo({top:0,behavior:'smooth'}) }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
+
+// ---------- OMBOR ----------
+let STOCK=[], stEdit=null, stIn=true;
+async function loadStock(){
+  try{ const r=await api('/api/stock'); STOCK=r.stock||[]; renderStock() }catch(e){ $('#stockList').innerHTML=`<div class="err">${esc(e.message)}</div>` }
+}
+function renderStock(){
+  $('#stockCount').textContent=STOCK.length; $('#stockList').classList.remove('muted');
+  if (!STOCK.length){ $('#stockList').innerHTML='<div class="muted">Hali mahsulot yo\'q. Pastdagi formadan qo\'shing.</div>'; return }
+  $('#stockList').innerHTML = STOCK.map((it,i)=>`<div class="prod${it.in_stock?'':' nostock'}">
+    <div class="row2"><div class="n">${esc(it.name)}</div>
+      <span class="badge click ${it.in_stock?'b-ok':'b-warn'}" onclick="toggleStock(${i})">${it.in_stock?'BOR':'YO\'Q'}</span></div>
+    ${it.type?`<span class="kw">${esc(it.type)}</span>`:''}
+    <div class="p">${it.price?esc(it.price):'<span class="muted">narxi yozilmagan</span>'}</div>
+    ${it.sizes?`<div class="sz">Razmer: ${esc(it.sizes)}</div>`:''}
+    <div class="acts"><button class="btn sm" onclick="editStock(${i})">✎ Tahrir</button><button class="btn sm red" onclick="delStock(${i})">✕</button></div>
+  </div>`).join('');
+}
+function setStSeg(){ document.querySelectorAll('#stSeg button').forEach(b=>b.classList.toggle('on',(b.dataset.s==='1')===stIn)) }
+document.querySelectorAll('#stSeg button').forEach(b=>b.onclick=()=>{ haptic(); stIn=b.dataset.s==='1'; setStSeg() });
+function resetStock(){ stEdit=null; stIn=true; ['name','type','price','sizes'].forEach(k=>$('#st-'+k).value=''); setStSeg();
+  $('#stockFormTitle').textContent='Yangi mahsulot'; $('#stCancel').style.display='none' }
+function editStock(i){ const it=STOCK[i]; if(!it) return; stEdit=i; stIn=!!it.in_stock;
+  ['name','type','price','sizes'].forEach(k=>$('#st-'+k).value=it[k]||''); setStSeg();
+  $('#stockFormTitle').textContent='Tahrirlash'; $('#stCancel').style.display='';
+  $('#stockForm').scrollIntoView({behavior:'smooth'}) }
+async function saveStock(){
+  const b={in_stock:stIn}; ['name','type','price','sizes'].forEach(k=>b[k]=$('#st-'+k).value.trim());
+  if (!b.name){ haptic('err'); alert('Mahsulot nomini yozing'); return }
+  try{ const r=await api(stEdit===null?'/api/stock':'/api/stock/'+stEdit,{method:'POST',body:b}); STOCK=r.stock||[]; resetStock(); renderStock(); haptic('ok') }
+  catch(e){ haptic('err'); alert(e.message) }
+}
+async function toggleStock(i){ const it=STOCK[i]; if(!it) return;
+  try{ const r=await api('/api/stock/'+i,{method:'POST',body:{...it,in_stock:!it.in_stock}}); STOCK=r.stock||[]; renderStock(); haptic('ok') }catch(e){ haptic('err'); alert(e.message) } }
+async function delStock(i){ if(!confirm('O\'chirilsinmi?')) return;
+  try{ const r=await api('/api/stock/'+i,{method:'DELETE'}); STOCK=r.stock||[]; if(stEdit!==null) resetStock(); renderStock(); haptic('ok') }catch(e){ alert(e.message) } }
 
 // ---------- demo rejim (faqat dizaynni ko'rish uchun) ----------
 function demoApi(path, opts){
@@ -856,6 +918,13 @@ function demoApi(path, opts){
     const series=[]; let v=104900; for(let i=96;i>=0;i--){ v+=Math.round(Math.random()*4-1); series.push([now-i*900,v]) } series.push([now,demoApi.fc]);
     return Promise.resolve({connected:true,now,count:demoApi.fc,updated:now,series,hour:+38,today:{gained:214,lost:41,net:173,since:now-60000,tracked_from:now-60000},instagram_today:{follows:231,unfollows:47},
       changes:[{t:now-60,delta:2,count:demoApi.fc},{t:now-240,delta:-1,count:demoApi.fc-2},{t:now-420,delta:3,count:demoApi.fc-1},{t:now-700,delta:1,count:demoApi.fc-4}]}) }
+  if (path.startsWith('/api/stock')){
+    demoApi.stock = demoApi.stock || [{name:'Kugoo G2 elektr samokat',type:'Elektr samokat',price:'2 500 000 so\'m',sizes:'',in_stock:false},
+      {name:'Rolikli krasofka',type:'Rolikli krasofka',price:'300 000 so\'m',sizes:'28–37',in_stock:true}];
+    const m=path.match(/\/api\/stock\/(\d+)/), i=m?+m[1]:null;
+    if (opts.method==='DELETE') demoApi.stock.splice(i,1);
+    else if (opts.method==='POST'){ if(i===null) demoApi.stock.push(opts.body); else demoApi.stock[i]=opts.body }
+    return Promise.resolve({stock:demoApi.stock.map(x=>({...x}))}) }
   if (path.startsWith('/api/memory')) return Promise.resolve({memory:['Rolikli krossovka — 389 000 so\'m']});
   if (path==='/api/posts') return Promise.resolve({memory:['Rolikli krossovka — 389 000 so\'m, 31-38 o\'lcham'],shop:{address:'Toshkent, Chilonzor 9',phone:'+998 77 499 47 44'},posts:[
     {id:'m1',kind:'Reels',time:'16.11.2026 19:30',comments:48,caption:'Bolangiz bu samokatni ko\'rsa uyda qolmaydi 🛴\n3-8 yosh uchun, 3 tezlik\nNarxi: 1 250 000 so\'m\nBuyurtma: direktga',has_price:true,info:{title:'',price:'',info:'',use_caption:true},thumb:''},

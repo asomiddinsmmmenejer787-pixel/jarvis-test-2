@@ -729,6 +729,44 @@ def api_memory_delete(index: int, x_init_data: str = Header(default="")):
     return {"memory": catalog.get_memory()}
 
 
+# ---------- ombor ----------
+
+@router.get("/api/stock")
+def api_stock(x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    return {"stock": catalog.get_stock()}
+
+
+@router.post("/api/stock")
+def api_stock_add(body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        stock = catalog.save_stock_item(body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    brain.log_entry(f"Omborga qo'shildi: {body.get('name', '')} (mini ilova)")
+    return {"stock": stock}
+
+
+@router.post("/api/stock/{index}")
+def api_stock_edit(index: int, body: dict, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        stock = catalog.save_stock_item(body, index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"stock": stock}
+
+
+@router.delete("/api/stock/{index}")
+def api_stock_delete(index: int, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        return {"stock": catalog.delete_stock_item(index)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/api/shop")
 def api_shop(body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)

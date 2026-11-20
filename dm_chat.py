@@ -166,6 +166,10 @@ def knowledge():
     if mem_text:
         lines.append(mem_text)
         sources.append(mem_src)
+    stock_text, stock_src = catalog.stock_block()
+    if stock_text:
+        lines.append(stock_text)
+        sources.append(stock_src)
     lines.append("\nPOSTLAR (yangidan eskiga):")
     for p in _posts_cache["posts"]:
         info = catalog.get_post_info(p.get("id"))

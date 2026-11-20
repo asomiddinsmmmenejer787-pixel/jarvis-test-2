@@ -150,6 +150,37 @@ def run():
     check(client.get(f"/audit/{key}").status_code == 404 and client.get(f"/audit/{key2}").status_code == 200,
           "Yangi kalitdan keyin eski havola ishlamaydi")
 
+    print("\nOmbor bo'limi")
+    import catalog
+    check(client.get("/api/stock").status_code == 401, "Omborni imzosiz ko'rib bo'lmaydi")
+    check(client.post("/api/stock", json={"name": ""}, headers=H).status_code == 400, "Nomsiz mahsulot qo'shilmadi")
+    client.post("/api/stock", json={"name": "Kugoo G2", "type": "Elektr samokat", "price": "2 500 000 so'm",
+                                    "in_stock": False}, headers=H)
+    r = client.post("/api/stock", json={"name": "Rolikli krasofka", "type": "Rolikli krasofka",
+                                        "price": "300 000 so'm", "sizes": "28-37"}, headers=H).json()
+    check(len(r["stock"]) == 2 and r["stock"][1]["in_stock"] and not r["stock"][0]["in_stock"],
+          "Mahsulotlar qo'shildi (holati BOR/YO'Q)")
+    r = client.post("/api/stock/0", json={**r["stock"][0], "in_stock": True}, headers=H).json()
+    check(r["stock"][0]["in_stock"] and client.get("/api/stock", headers=H).json()["stock"][0]["in_stock"],
+          "Holati bir bosishda o'zgardi va saqlandi")
+    text, src = catalog.stock_block()
+    check("Kugoo G2 (turi: Elektr samokat)" in text and "razmer yo'q (razmer aytma)" in text
+          and "razmer: 28-37 — BOR" in text, "Ombor Jarvisga tushunarli ko'rinishda berildi")
+    facts = catalog.post_facts({"id": "pz", "caption": "🔥"})
+    check(any(line.startswith("OMBOR") for line in facts["lines"])
+          and catalog.numbers_ok("Narxi 300 000 so'm", facts["source_text"])
+          and not catalog.numbers_ok("Narxi 350 000 so'm", facts["source_text"]),
+          "Komentga javobda ombor faktlari ishlatildi, to'qilgan narx ushlanadi")
+    import dm_chat
+    dm_chat._posts_cache.update(at=time.time(), posts=[])
+    ktext, ksrc = dm_chat.knowledge()
+    check("OMBOR" in ktext and catalog.numbers_ok("2 500 000 so'm", ksrc), "Direktda ham ombor ishlatildi")
+    check(client.delete("/api/stock/5", headers=H).status_code == 400, "Yo'q mahsulotni o'chirish xatosi")
+    r = client.delete("/api/stock/0", headers=H).json()
+    check([x["name"] for x in r["stock"]] == ["Rolikli krasofka"], "Mahsulot o'chirildi")
+    client.delete("/api/stock/0", headers=H)
+    check(catalog.stock_block() == ("", ""), "Ombor bo'sh bo'lsa Jarvisga hech narsa qo'shilmaydi")
+
     print("\n✅ Mini ilova testlari o'tdi")
 
 

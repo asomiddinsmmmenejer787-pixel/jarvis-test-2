@@ -50,6 +50,7 @@ def load():
         data.setdefault("reply_off", [])
         data.setdefault("dm_off", [])
         data.setdefault("flags", [])
+        data.setdefault("stock", [])
         return data
 
 
@@ -191,6 +192,70 @@ def memory_block():
             + "\n".join(f"- {m}" for m in mem)), "\n".join(mem)
 
 
+# ---------- ombor (egasi HUD'da kiritadi: nomi, turi, narxi, razmeri, bor/yo'q) ----------
+
+STOCK_FIELDS = ("name", "type", "price", "sizes")
+MAX_STOCK = 300
+
+
+def get_stock():
+    return [dict(x) for x in load()["stock"]]
+
+
+def save_stock_item(fields, index=None):
+    """Yangi tovar qo'shadi (index=None) yoki mavjudini yangilaydi. Qaytaradi: butun ro'yxat."""
+    item = {k: _clean((fields or {}).get(k), 150) for k in STOCK_FIELDS}
+    if not item["name"]:
+        raise ValueError("Mahsulot nomini yozing")
+    item["in_stock"] = bool((fields or {}).get("in_stock", True))
+    with _lock:
+        data = load()
+        if index is None:
+            if len(data["stock"]) >= MAX_STOCK:
+                raise ValueError(f"Omborda ko'pi bilan {MAX_STOCK} ta mahsulot")
+            data["stock"].append(item)
+        else:
+            if not 0 <= int(index) < len(data["stock"]):
+                raise ValueError("Bunday mahsulot yo'q")
+            data["stock"][int(index)] = item
+        save(data)
+        return [dict(x) for x in data["stock"]]
+
+
+def delete_stock_item(index):
+    with _lock:
+        data = load()
+        if not 0 <= int(index) < len(data["stock"]):
+            raise ValueError("Bunday mahsulot yo'q")
+        data["stock"].pop(int(index))
+        save(data)
+        return [dict(x) for x in data["stock"]]
+
+
+def stock_block():
+    """(AI uchun matn, raqamlarni tekshirish uchun manba). Ombor bo'sh bo'lsa ("", "")."""
+    stock = load()["stock"]
+    if not stock:
+        return "", ""
+    rows, src = [], []
+    for it in stock:
+        row = f"- {it.get('name')}"
+        if it.get("type"):
+            row += f" (turi: {it['type']})"
+        row += f" — narxi: {it['price']}" if it.get("price") else " — narxi: yozilmagan"
+        row += f" — razmer: {it['sizes']}" if it.get("sizes") else " — razmer yo'q (razmer aytma)"
+        row += " — BOR" if it.get("in_stock", True) else " — YO'Q (tugagan)"
+        rows.append(row)
+        src.append(" ".join(str(it.get(k) or "") for k in STOCK_FIELDS))
+    text = ("OMBOR (egasi kiritgan, ENG ISHONCHLI: bor-yo'qligi, narxi va razmeri faqat shu ro'yxatdan):\n"
+            + "\n".join(rows)
+            + "\nOMBOR QOIDALARI: mahsulot turini adashtirma (samokat va rolikli krasofka boshqa-boshqa tovar). "
+              "Razmerni faqat razmeri yozilgan mahsulotga ayt. Bir turdagi bitta model YO'Q bo'lsa, shu turdagi "
+              "boshqalarini ham yo'q dema: BOR bo'lganini taklif qil. Ro'yxatda umuman yo'q mahsulot haqida "
+              "'bor' ham, 'yo'q' ham dema — aniqlab berishni ayt.")
+    return text, "\n".join(src)
+
+
 def fallback_dm(greet=True):
     """Narxsiz, xavfsiz xabar: AI matni tekshiruvdan o'tmaganda yuboriladi."""
     shop = load()["shop"]
@@ -275,6 +340,10 @@ def post_facts(post):
     if mem_text:
         lines.append(mem_text)
         sources.append(mem_src)
+    stock_text, stock_src = stock_block()
+    if stock_text:
+        lines.append(stock_text)
+        sources.append(stock_src)
     gtext = " ".join([caption if info["use_caption"] else "", info["info"], info["title"], get_tasks(post.get("id")) or ""])
     if GIVEAWAY_RE.search(gtext):
         lines.append("BU POST O'YIN/TANLOV POSTI: shartlari yuqoridagi opisaniya yoki ma'lumotda.")
