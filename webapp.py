@@ -599,6 +599,13 @@ def api_ads(period: str = "7", x_init_data: str = Header(default="")):
     return JSONResponse(_jsonable({"connected": True, **data}))
 
 
+@router.get("/api/feed")
+def api_feed(n: int = 15, x_init_data: str = Header(default="")):
+    """Jarvisning oxirgi qilgan ishlari (komentga javob, direkt, ruxsatga yuborish)."""
+    require_owner(x_init_data)
+    return {"items": brain.journal_items(max(1, min(n, 50))), "now": int(time.time())}
+
+
 @router.get("/api/followers")
 def api_followers(x_init_data: str = Header(default="")):
     require_owner(x_init_data)

@@ -125,6 +125,11 @@ def log_event(ev):
         log_entry(f"Direkt yuborilmadi: {who} ({ev.get('error', '')})")
 
 
+def journal_items(n=20):
+    """Oxirgi ishlar (yangisi birinchi): HUD'dagi jonli lenta uchun."""
+    return [{"t": it.get("t", 0), "x": it.get("x", "")} for it in reversed(_jload()[-n:])]
+
+
 def journal_text(n=30):
     rows = []
     for it in _jload()[-n:]:
