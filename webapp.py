@@ -26,6 +26,7 @@ from urllib.parse import parse_qsl
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+import ads_api
 import analytics
 import audit
 import brain
@@ -583,6 +584,19 @@ async def api_comments_saving(request: Request, x_init_data: str = Header(defaul
     responder.set_policy(saving=on)
     brain.log_entry(f"Limit tejash {'yoqildi' if on else 'o‘chirildi'} (mini ilova)")
     return {"status": responder.status()}
+
+
+@router.get("/api/ads")
+def api_ads(period: str = "7", x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    if not ads_api.is_configured():
+        return {"connected": False, "account": ads_api.account_id()}
+    try:
+        period = period if period in ads_api.PRESETS else "7"
+        data = _cached("ads_" + period, 900, lambda: ads_api.get_summary(period))
+    except ads_api.AdsError as e:
+        return {"connected": True, "error": str(e)}
+    return JSONResponse(_jsonable({"connected": True, **data}))
 
 
 @router.get("/api/followers")

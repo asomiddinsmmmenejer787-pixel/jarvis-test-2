@@ -213,6 +213,11 @@ a{color:var(--cyan)}
       <div class="grid" id="tiles"></div>
     </div>
     <div class="panel">
+      <div class="ptitle">Reklama (target) <span id="adsAcc"></span></div>
+      <div class="seg" id="adsSeg" style="margin-bottom:8px"><button data-p="today">BUGUN</button><button data-p="yesterday">KECHA</button><button data-p="7" class="on">7 KUN</button><button data-p="30">30 KUN</button></div>
+      <div id="adsBox" class="muted">Yuklanmoqda...</div>
+    </div>
+    <div class="panel">
       <div class="ptitle">Format samaradorligi <span id="repDate"></span></div>
       <div id="hudFormats" class="muted">Hali tahlil qilinmagan. TAHLIL bo'limida ishga tushiring.</div>
     </div>
@@ -587,6 +592,26 @@ function renderHudReport(r){
   if (h){ $('#hudAudience').innerHTML=h; $('#hudAudience').classList.remove('muted'); animateBars($('#hudAudience')) }
 }
 
+// ---------- REKLAMA (TARGET) ----------
+let adsPeriod='7';
+document.querySelectorAll('#adsSeg button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#adsSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); adsPeriod=b.dataset.p; haptic(); loadAds() });
+const money=(v,cur)=>v==null?'—':(cur==='USD'?'$':'')+(+v).toFixed(2)+(cur&&cur!=='USD'?' '+cur:'');
+async function loadAds(){
+  const box=$('#adsBox'); let r;
+  try{ r=await api('/api/ads?period='+adsPeriod) }catch(e){ box.innerHTML=`<div class="err">${esc(e.message)}</div>`; return }
+  if (!r.connected){ $('#adsAcc').textContent=''; box.className='muted'; box.textContent='Reklama kabineti hali ulanmagan. Telegram\'da /reklamatoken buyrug\'i bilan token yuboring.'; return }
+  if (r.error){ box.innerHTML=`<div class="err">${esc(r.error)}</div>`; return }
+  const a=r.account||{}, t=r.total||{}, cur=a.currency;
+  $('#adsAcc').textContent=a.name||'';
+  let h = a.problem?`<div class="err" style="margin-bottom:8px">Kabinet holati: ${esc(a.status)}</div>`:'';
+  if (!t.impressions && !t.spend){ box.className='muted'; box.innerHTML=h+'Bu davrda reklama yurmagan.'; return }
+  h += '<div class="grid">'+tile('Sarflandi', money(t.spend,cur))+tile('Qamrov', short(t.reach))+tile('Ko\'rishlar', short(t.impressions))
+    + tile('Kliklar', fmt(t.clicks), '1 klik: '+money(t.cpc,cur))+tile('Direktga yozgan', fmt(t.messages), t.cost_per_message!=null?'1 tasi: '+money(t.cost_per_message,cur):'')+tile('CTR', (t.ctr||0).toFixed(2)+'%')+'</div>';
+  const c=(r.campaigns||[]).slice(0,6);
+  if (c.length) h += '<div class="muted" style="margin:8px 0 4px">Kampaniyalar (sarf bo\'yicha)</div>'+c.map(x=>`<div style="padding:6px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px"><span>${esc(x.name)}</span><b>${money(x.spend,cur)}</b></div><div class="muted" style="font-size:12px">${short(x.reach)} qamrov · ${fmt(x.clicks)} klik${x.messages?' · '+x.messages+' ta yozgan':''}</div></div>`).join('');
+  box.className=''; box.innerHTML=h; animateBars(box);
+}
+
 // ---------- OBUNACHILAR: JONLI ----------
 const fol={timer:null,shown:null,lastKey:null,seen:new Set()};
 document.getElementById('orbVal').onclick=()=>{ if(!state.busy && $('#orbLbl').textContent==='OBUNACHI') openFollowers() };
@@ -922,6 +947,9 @@ function demoApi(path, opts){
     dm_pending:[{cid:'9',username:'ona_1',comment:'Narxi qancha?',topic:'samokat narxi',post_time:'16.11.2026 19:30',title:'',text:'Assalomu alaykum! Bolalar elektr samokati S10 bilan qiziqqaningiz uchun rahmat 😊\n\nNarxi: 1 250 000 so\'m\n📍 Manzil: Toshkent, Chilonzor 9\n📞 Buyurtma: +998 77 499 47 44'}],pending:[
     {cid:'1',username:'rival_shop',text:'Bizda arzonroq, profilga kiring',category_name:'Raqobatchi',reason:'Raqobatchi komment',reply:'Narx emas, kafolat muhim. Tanlov sizda.'},
     {cid:'2',username:'troll_22',text:'Bu nima o\'zi, ahmoqona narsa',category_name:'Salbiy / haqorat',reason:'Komentda so\'kinish yoki haqorat bor',reply:''}]});
+  if (path.startsWith('/api/ads')) return Promise.resolve({connected:true,label:'Oxirgi 7 kun',account:{name:'bolalar_dunyosi',currency:'USD',status:'faol',problem:false},
+    total:{reach:48200,impressions:91300,clicks:1240,link_clicks:860,spend:42.5,ctr:1.36,cpc:.03,messages:37,cost_per_message:1.15},
+    campaigns:[{name:'G100 samokat Reels',spend:28.1,reach:31000,clicks:900,messages:29},{name:'Rolikli krasofka',spend:14.4,reach:17200,clicks:340,messages:8}]});
   if (path==='/api/followers'){ const now=Math.floor(Date.now()/1000); demoApi.fc=(demoApi.fc||105069)+[0,0,1,2,-1,3][Math.floor(Math.random()*6)];
     const series=[]; let v=104900; for(let i=96;i>=0;i--){ v+=Math.round(Math.random()*4-1); series.push([now-i*900,v]) } series.push([now,demoApi.fc]);
     return Promise.resolve({connected:true,now,count:demoApi.fc,updated:now,series,hour:+38,today:{gained:214,lost:41,net:173,since:now-60000,tracked_from:now-60000},instagram_today:{follows:231,unfollows:47},
@@ -954,7 +982,7 @@ function demoApi(path, opts){
 
 // ---------- ishga tushirish ----------
 if (!DEMO && (!tg || !tg.initData)) showLock();
-else { loadStatus(); setInterval(()=>{ if(!state.busy) loadStatus() }, 60000) }
+else { loadStatus(); loadAds(); setInterval(()=>{ if(!state.busy) loadStatus() }, 60000) }
 </script>
 </body>
 </html>

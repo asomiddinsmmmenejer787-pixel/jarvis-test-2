@@ -17,6 +17,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
+import ads_api
 import analytics
 import audit
 import brain
@@ -735,6 +736,50 @@ async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @owner_only
+async def reklamatoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reklama kabinetini o'qish tokenini Telegram orqali qabul qiladi."""
+    msg = update.message
+    if not context.args:
+        await msg.reply_text(
+            "Reklama kabinetini o'qish tokenini shunday yuboring:\n/reklamatoken EAA...\n\n"
+            f"Kabinet: {ads_api.account_id().replace('act_', '')}\n"
+            "Xabaringiz xavfsizlik uchun darhol o'chiriladi."
+        )
+        return
+    token = context.args[0]
+    try:
+        await msg.delete()
+    except Exception:
+        logger.warning("Token yozilgan xabarni o'chirib bo'lmadi.")
+    chat_id = update.effective_chat.id
+    try:
+        name = await asyncio.to_thread(ads_api.set_token, token)
+    except ads_api.AdsError as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ {e}")
+        return
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Reklama kabineti ulandi: {name}\nEndi /reklama yozing yoki HUD'da natijalarni ko'ring.")
+
+
+@owner_only
+async def reklama_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reklama natijasi: /reklama, /reklama bugun, /reklama kecha, /reklama 30"""
+    if not ads_api.is_configured():
+        await update.message.reply_text(
+            "Reklama kabineti hali ulanmagan. Token olib, /reklamatoken EAA... qilib yuboring.")
+        return
+    arg = (context.args[0].lower() if context.args else "7")
+    period = {"bugun": "today", "kecha": "yesterday", "30": "30", "oy": "30"}.get(arg, "7")
+    try:
+        data = await asyncio.to_thread(ads_api.get_summary, period)
+    except ads_api.AdsError as e:
+        await update.message.reply_text(f"❌ {e}")
+        return
+    await update.message.reply_text(ads_api.summary_text(data))
+
+
+@owner_only
 async def limit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if responder is None:
         await update.message.reply_text("Komentlarga javob tizimi o'chiq.")
@@ -1395,6 +1440,7 @@ async def post_init(app):
             BotCommand("insta", "Instagram to'liq tahlili"),
             BotCommand("post", "Bitta postni chuqur tahlil"),
             BotCommand("stories", "Faol storylar statistikasi"),
+            BotCommand("reklama", "Reklama (target) natijasi"),
             BotCommand("yt", "YouTube video SEO (sarlavha, teglar)"),
             BotCommand("ytholat", "YouTube holati"),
             BotCommand("autoreply", "Komentlarga javob rejimi"),
@@ -1466,6 +1512,8 @@ def build_app(token):
     app.add_handler(CommandHandler("autoreply", autoreply_cmd))
     app.add_handler(CommandHandler("pending", pending_cmd))
     app.add_handler(CommandHandler("igtoken", igtoken_cmd))
+    app.add_handler(CommandHandler("reklama", reklama_cmd))
+    app.add_handler(CommandHandler("reklamatoken", reklamatoken_cmd))
     app.add_handler(CommandHandler("diag", diag_cmd))
     app.add_handler(CommandHandler("groqkey", groqkey_cmd))
     app.add_handler(CommandHandler("limit", limit_cmd))
