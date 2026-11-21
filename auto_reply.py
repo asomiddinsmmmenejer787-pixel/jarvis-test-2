@@ -320,6 +320,38 @@ SAFE_FALLBACK = {
 }
 
 
+# Savoldan qochish: "hammasi videoda", "videoni qayta ko'ring" (kuzatuv 21.11: yetkazib berish savoliga
+# shunday javob ketdi, prompt qoidasi yetmadi). Savol/narx javobida bo'lsa, xavfsiz javob ishlatiladi.
+EVASION_RE = re.compile(
+    r"(hamma|barcha|javob|shart|ma.?lumot|batafsil)\w*\s+(\S+\s+){0,3}video(da|ning\s+ichida)\b"
+    r"|video\w*\s+(qayta|yana|diqqat\s+bilan|oxirigacha|yaxshilab)\s+(ko.?r|tomosha|qara)"
+    r"|qayta\s+(ko.?rib|tomosha\s+qilib)\s+(chiq|qo.?y)|videoga\s+(yaxshilab\s+)?qarang"
+    r"|видео\w*\s+(қайта|яна|ещ[её]\s+раз)|всё\s+в\s+видео|ҳаммаси\s+видеода", re.I)
+
+# Do'st belgilash/ulashishga da'vat (egasining darsi: faqat oxirgi postda)
+_FRIEND_RE = re.compile(r"do.?st|yaqin(ingiz|laringiz)|tanish|dugona|o.?rtoq|дўст|друз|друг", re.I)
+_CTA_RE = re.compile(r"belgila|ulash|chaqir|tag\s*qil|отмет|подел|белгила|улаш|чақир", re.I)
+
+
+def drop_tag_cta(reply):
+    """Javobdan do'stni belgilash/ulashishga chaqiruvchi gaplarni olib tashlaydi."""
+    if not isinstance(reply, str) or not reply:
+        return reply
+    parts = re.split(r"(?<=[.!?…])\s+", reply.strip())
+    keep = [p for p in parts if not (_FRIEND_RE.search(p) and _CTA_RE.search(p))]
+    return " ".join(keep).strip()
+
+
+def latest_post_id(posts):
+    """Ro'yxatdagi eng yangi post id'si (timestamp bo'yicha, bo'lmasa birinchisi)."""
+    posts = [p for p in posts or [] if isinstance(p, dict) and p.get("id")]
+    if not posts:
+        return ""
+    if all(p.get("timestamp") for p in posts):
+        return str(max(posts, key=lambda p: str(p["timestamp"]))["id"])
+    return str(posts[0]["id"])
+
+
 def assess(result, comment_text):
     """
     AI natijasini baholaydi.
@@ -334,6 +366,8 @@ def assess(result, comment_text):
 
     cat = result["category"]
     reply = safe_reply(result.get("reply"))
+    if cat in ("question", "price") and reply and EVASION_RE.search(reply):
+        reply = ""  # savoldan qochgan javob o'rniga pastda xavfsiz javob tanlanadi
     try:
         conf = float(result.get("confidence", 0))
     except (TypeError, ValueError):
@@ -722,6 +756,11 @@ class CommentResponder:
             message += (f"\n\nBELGILASH: komment egasi @{author} quyidagilarni belgilagan: "
                         + ", ".join("@" + m for m in mentions)
                         + ". Javobni ikkala tomonga qarat, qisqa yoz, @ belgisini yozma.")
+        if post.get("_latest"):
+            message += "\n\nBU POST: sahifadagi eng oxirgi post."
+        else:
+            message += ("\n\nBU POST: eng oxirgi post EMAS. Do'stini belgilash yoki ulashishga "
+                        "chaqirma.")
         message += f"\n\n<komment>{comment_text[:500]}</komment>"
         system = SYSTEM_PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK
         if self.dm_on(post, comment_text):
@@ -826,7 +865,9 @@ class CommentResponder:
                  "sent": 0, "approval": 0, "test": 0, "skipped": 0, "ai_errors": 0, "send_errors": 0}
         self.last_run = stats
 
-        for post in ig.get_recent_posts(posts_to_check):
+        recent_posts = ig.get_recent_posts(posts_to_check) or []
+        latest_id = latest_post_id(recent_posts)
+        for post in recent_posts:
             stats["posts"] += 1
             if not post.get("comments_count"):
                 continue
@@ -841,7 +882,8 @@ class CommentResponder:
             clean = True
             comments = ig.get_all_comments(post["id"], limit=200)
             stats["comments"] += len(comments)
-            post = {**post, "_comments_product": comments_product([c.get("text") for c in comments])}
+            post = {**post, "_comments_product": comments_product([c.get("text") for c in comments]),
+                    "_latest": str(post.get("id")) == latest_id}
             for c in comments:
                 cid = c.get("id")
                 text = (c.get("text") or "").strip()
@@ -919,6 +961,13 @@ class CommentResponder:
                 if mentions and isinstance(result, dict):
                     result = {**result, "reply": strip_mentions(result.get("reply"))}
                 verdict = apply_tags(assess(result, text), author, mentions, text)
+                if (not post.get("_latest") and verdict["reply"] and verdict["category"] != "tag"
+                        and not mentions):
+                    # Egasining darsi: do'st belgilashga faqat oxirgi postda chaqiramiz
+                    cut = drop_tag_cta(verdict["reply"])
+                    if cut != verdict["reply"]:
+                        verdict["reply"] = cut or random.choice(
+                            SAFE_FALLBACK.get(verdict["category"]) or [verdict["reply"]])
                 if verdict["action"] == "auto":
                     verdict = survey_answer(verdict, text, catalog.post_facts(post).get("survey"), self._recent)
                 if verdict["action"] == "auto" and too_similar(verdict["reply"], self._recent):

@@ -348,6 +348,54 @@ def run():
     check("Faqat price kategoriyasida" in auto_reply.SYSTEM_PROMPT and "question" not in auto_reply.DM_SEND_CATEGORIES,
           "Prompt va sozlama: direkt faqat narx uchun")
 
+    print("\n9) Kuzatuv 21.11: savoldan qochish va do'st belgilash faqat oxirgi postda")
+    ev = auto_reply.assess({"category": "question", "confidence": 0.9,
+                            "reply": "Barcha shartlar videoda bor, videoni qayta ko'ring 😊"}, "Dastavka bormi")
+    check(ev["action"] == "auto" and "video" not in ev["reply"].lower()
+          and ev["reply"] in auto_reply.SAFE_FALLBACK["question"],
+          "'Videoni qayta ko'ring' javobi savolga yuborilmadi, xavfsiz javob tanlandi")
+    ok = auto_reply.assess({"category": "question", "confidence": 0.9,
+                            "reply": "Videodagi samokat 3 yoshdan mos. Qaysi rangi yoqdi?"}, "Necha yoshga?")
+    check("3 yoshdan" in ok["reply"], "Oddiy 'videodagi' so'zi xato deb hisoblanmadi")
+    check(auto_reply.drop_tag_cta("Sizga qaysi biri kerak? Narxini direktga yozsangiz shaxsan aytamiz. "
+                                  "Do'stingizni ham kommentda belgilashni unutmang!")
+          == "Sizga qaysi biri kerak? Narxini direktga yozsangiz shaxsan aytamiz.",
+          "Do'stni belgilashga chaqiruv gapi olib tashlandi")
+    check(auto_reply.drop_tag_cta("Olovli reaksiya uchun rahmat! Yaqin do'stingizni belgilab qo'ydingizmi?")
+          == "Olovli reaksiya uchun rahmat!", "Savol shaklidagi chaqiruv ham olib tashlandi")
+    check(auto_reply.latest_post_id([{"id": "a", "timestamp": "2026-11-19T10:00:00+0000"},
+                                     {"id": "b", "timestamp": "2026-11-21T10:00:00+0000"}]) == "b",
+          "Eng yangi post vaqt bo'yicha aniqlandi")
+
+    class CtaAI(DmAI):
+        def generate_json(self, system, message, temperature=0.9):
+            self.last_reply_msg = message
+            if "super" in message.lower():
+                reply = "Rahmat, bizga ham yoqdi! Do'stlaringizni ham belgilang 😊"
+            else:
+                reply = "Chiroyli deganingiz uchun katta rahmat! Do'stingizga ham ulashing 😊"
+            return {"category": "positive", "confidence": 0.9, "reply": reply}
+
+    fake4 = FakeInstagram()
+    ig.requests.request = fake4.request
+    fake4.posts[1]["comments_count"] = 2
+    fake4.comments["m1"] = [{"id": "c95", "text": "Super ekan", "username": "u95", "timestamp": ts(1)}]
+    fake4.comments["m2"] = [{"id": "c96", "text": "Juda chiroyli", "username": "u96", "timestamp": ts(1)}]
+    fake4.posts[0]["comments_count"] = 1
+    catalog.set_dm_off("m1", False)
+    catalog.set_dm_off("m2", False)
+    r4 = auto_reply.CommentResponder(CtaAI())
+    r4.run_once()
+    rep_new = [t for c, t in fake4.replies if c == "c95"]
+    rep_old = [t for c, t in fake4.replies if c == "c96"]
+    check(rep_new and "belgilang" in rep_new[0], "Oxirgi postda do'st belgilashga chaqiruv qoldi")
+    check(rep_old and "belgila" not in rep_old[0].lower() and "ulash" not in rep_old[0].lower()
+          and rep_old[0].startswith("Chiroyli"),
+          "Eski postdagi javobdan do'st belgilashga chaqiruv olib tashlandi")
+    check("eng oxirgi post EMAS" in r4.ai.last_reply_msg,
+          "AI'ga post oxirgimi yoki yo'qligi aytildi")
+    ig.requests.request = fake.request
+
     print("\n✅ Direkt testlari o'tdi")
 
 
