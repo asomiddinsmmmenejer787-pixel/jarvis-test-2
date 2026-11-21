@@ -65,7 +65,7 @@ def main():
           "eski narx ustidan G100 narxi yozildi")
     check("Rangi qora" in info["info"] and "Sport Plus" in info["info"], "egasining ma'lumoti saqlandi")
     check(catalog.get_fixed_dm("5") == catalog.G100_DM and "7 200 000" in catalog.G100_DM, "direkt matni saqlandi")
-    check(catalog.apply_g100_fix([early]) is None and not catalog.upcoming_pending(), "bir marta bajariladi")
+    check(catalog.apply_g100_fix([early]) is None and catalog.flag_done(catalog.G100_FIX["flag"]), "bir marta bajariladi")
 
     r = auto_reply.CommentResponder(None)
     r.set_dm_mode("auto")
@@ -77,6 +77,22 @@ def main():
     check("3 mln" not in plan["text"] and "3 000 000" not in plan["text"], "3 milliondan degan gap yo'q")
     check(r._plan_dm(early, c, {**v, "category": "positive"}, preview=True) is None, "maqtovga direkt yozilmaydi")
     check(r._plan_dm(other, c, v, preview=True)["text"] != catalog.G100_DM, "boshqa postga bu matn ketmaydi")
+    # trial reellar: har biri o'z opisaniyasi bo'yicha, bir-biriga adashmaydi
+    r1 = post("11", "2026-11-22T04:00:00+0000", "Samokat olishdan oldin buni ko'ring 👀 Yadea G100")
+    r4 = post("14", "2026-11-22T10:00:00+0000", "Bu samokatning narxini taxmin qiling 🤔")
+    s1 = next(s for s in catalog.UPCOMING_POSTS if s["flag"] == "setup_g100_trial1")
+    s4 = next(s for s in catalog.UPCOMING_POSTS if s["flag"] == "setup_g100_trial4")
+    s2 = next(s for s in catalog.UPCOMING_POSTS if s["flag"] == "setup_g100_trial2")
+    check(catalog.pick_upcoming_post(s1, [r4, r1])["id"] == "11", "1-reel o'z opisaniyasi bo'yicha topiladi")
+    check(catalog.pick_upcoming_post(s2, [r4, r1]) is None, "2-reel hali chiqmagan: boshqasi olinmaydi")
+    done = catalog.apply_upcoming([r1, r4])
+    check(sorted(p["id"] for p in done) == ["11", "14"], "chiqqan ikkala reel yozildi")
+    check("taxmin" in catalog.get_post_info("14")["task"], "4-reelda taxmin vazifasi")
+    check(len(catalog.get_post_info("14")["task"]) <= 500, "4-reel vazifasi 500 belgidan oshmaydi")
+    check("+998 77 499 47 43" in catalog.get_post_info("11")["info"], "telefon raqami ma'lumotda")
+    check(catalog.get_fixed_dm("11") == catalog.G100_DM and catalog.get_fixed_dm("14") == catalog.G100_DM,
+          "trial reellarda ham aniq direkt matni")
+    check(catalog.upcoming_pending(), "qolgan reellar kutilmoqda")
     print("OK: test_upcoming")
 
 

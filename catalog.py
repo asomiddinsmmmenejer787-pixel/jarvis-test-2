@@ -160,25 +160,43 @@ SURVEY_RE = re.compile(
 # va HUD'dagi shu post maydonlarini (nom, narx, ma'lumot, vazifa) to'ldiradi. Egasi postga o'zi
 # ma'lumot kiritgan bo'lsa, ustidan yozilmaydi.
 
-UPCOMING_POSTS = [
-    {
-        "flag": "setup_yadea_g100_2111",
-        "after": "2026-11-21T13:00:00+0000",   # 18:00 Toshkent
-        "until": "2026-12-05T00:00:00+0000",
+_G100_INFO = ("Yadea G100 elektr samokati. Maksimal tezligi 25 km/soat. To'la zaryad bilan 50-70 km yuradi. "
+              "Maksimal yuklama 120-130 kg. Tablosi (ekrani) sensorli. Faralari yonadi. 3 xil rejimi bor: "
+              "Eco, Sport va Sport Plus. Amortizatorlari juda yumshoq, yo'ldagi chuqurlarni deyarli sezmaydi. "
+              "Sifatli va baquvvat qilib ishlangan. To'lov: boshlang'ich to'lovsiz, 12 oyga bo'lib, oyiga "
+              "900 000 so'mdan. Naqd narxi 7 200 000 so'm. Yaqinda bomba aksiya bo'ladi, e'lon sahifada chiqadi. "
+              "Buyurtma uchun telefon: +998 77 499 47 43.")
+_G100_PRICE = "7 200 000 so'm (boshlang'ich to'lovsiz, 12 oyga oyiga 900 000 so'm)"
+_G100_TASK = ("Bu Yadea G100 samokati videosi. Komentga \"SAMOKAT\" yoki samokat haqida qisqa so'z yozganlar "
+              "narx so'ragan hisoblanadi. Komentga javob mazmuni: direktdan javob berdik, sizga bu samokatning "
+              "aynan nimasi yoqdi? Direktga FAQAT narx yoz: naqd narxi 7 200 000 so'm, boshlang'ich to'lovsiz "
+              "12 oyga oyiga atigi 900 000 so'mdan. Oxirida yaqinda bomba aksiya bo'lishini va obuna bo'lishni "
+              "eslat. Direktda texnik xususiyat yozma.")
+_G100_GUESS_TASK = ("Bu Yadea G100 samokati videosi, narxini taxmin qilish o'yini. Komentdagi raqam yoki 'SAMOKAT' "
+                    "narx so'rovi hisoblanadi. Komentga: taxminiga iliq hazil bilan javob ber, to'g'ri-noto'g'riligini "
+                    "va narxni ochiq yozma, to'g'ri narxni direktga yuborganimizni ayt. Direktga FAQAT narx: naqd "
+                    "narxi 7 200 000 so'm, boshlang'ich to'lovsiz 12 oyga oyiga atigi 900 000 so'mdan. Oxirida "
+                    "yaqinda bomba aksiya bo'lishini va obuna bo'lishni eslat.")
+
+
+def _g100(flag, after, hook=None, task=_G100_TASK, fixed_dm=False):
+    return {"fixed_dm": fixed_dm,
+        "flag": flag, "after": after, "until": "2026-12-05T00:00:00+0000",
         "match": re.compile(r"samokat|самокат|yadea|g ?100", re.I),
-        "title": "Yadea G100 elektr samokati",
-        "price": "7 200 000 so'm (boshlang'ich to'lovsiz, 12 oyga oyiga 900 000 so'm)",
-        "info": ("Yadea G100 elektr samokati. Maksimal tezligi 25 km/soat. Bir zaryadda 50-70 km yuradi. "
-                 "130 kg gacha yuk ko'taradi. Tablosi (ekrani) sensorli. Faralari yonadi. 3 xil rejimi bor: "
-                 "Eco, Sport va Sport Plus. Amortizatorlari juda yumshoq, yo'ldagi chuqurlarni deyarli sezmaydi. "
-                 "Sifatli va baquvvat qilib ishlangan. To'lov: boshlang'ich to'lovsiz, 12 oyga bo'lib, oyiga "
-                 "900 000 so'mdan. Naqd narxi 7 200 000 so'm. Yaqinda bomba aksiya bo'ladi, e'lon sahifada chiqadi."),
-        "task": ("Bu Yadea G100 samokati videosi. Komentga \"SAMOKAT\" yoki samokat haqida qisqa so'z yozganlar "
-                 "narx so'ragan hisoblanadi. Komentga javob mazmuni: direktdan javob berdik, sizga bu samokatning "
-                 "aynan nimasi yoqdi? Direktga FAQAT narx yoz: naqd narxi 7 200 000 so'm, boshlang'ich to'lovsiz "
-                 "12 oyga oyiga atigi 900 000 so'mdan. Oxirida yaqinda bomba aksiya bo'lishini va obuna bo'lishni "
-                 "eslat. Direktda texnik xususiyat yozma."),
-    },
+        # hook berilsa: faqat opisaniyasi shu gapdan boshlangan video (bir nechta reel adashmasin)
+        "hook": re.compile(hook, re.I) if hook else None,
+        "title": "Yadea G100 elektr samokati", "price": _G100_PRICE, "info": _G100_INFO, "task": task,
+    }
+
+
+UPCOMING_POSTS = [
+    _g100("setup_yadea_g100_2111", "2026-11-21T13:00:00+0000"),
+    # 22.11: 5 ta trial reel (09:00 dan har 2 soatda)
+    _g100("setup_g100_trial1", "2026-11-22T03:00:00+0000", r"olishdan oldin buni ko", _G100_TASK, True),
+    _g100("setup_g100_trial2", "2026-11-22T03:00:00+0000", r"bunaqa samokat ham bor", _G100_TASK, True),
+    _g100("setup_g100_trial3", "2026-11-22T03:00:00+0000", r"displeyi xuddi mashinanikidek", _G100_TASK, True),
+    _g100("setup_g100_trial4", "2026-11-22T03:00:00+0000", r"narxini taxmin qiling", _G100_GUESS_TASK, True),
+    _g100("setup_g100_trial5", "2026-11-22T03:00:00+0000", r"3 ta siri", _G100_TASK, True),
 ]
 
 
@@ -202,6 +220,8 @@ def pick_upcoming_post(setup, posts, now=None):
     if not videos:
         return None
     videos.sort(key=lambda x: x[0])
+    if setup.get("hook"):
+        return next((p for _, p in videos if setup["hook"].search(p.get("caption") or "")), None)
     for _, p in videos:
         if setup["match"].search(p.get("caption") or ""):
             return p
@@ -229,6 +249,8 @@ def apply_upcoming(posts, now=None):
                                        "use_caption": False})
         if not cur["task"]:
             set_task(post["id"], setup["task"])
+        if setup.get("fixed_dm"):
+            set_fixed_dm(post["id"], G100_DM)   # narx so'raganga egasi aytgan aniq direkt matni
         set_dm_off(post["id"], False)
         set_reply_off(post["id"], False)
         set_flag(setup["flag"])
