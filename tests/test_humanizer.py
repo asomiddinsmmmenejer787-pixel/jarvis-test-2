@@ -43,6 +43,16 @@ def run():
     out = humanize("Qaysi rang kerak? Qaysi shahardasiz?", kind="dm")
     check(out.count("?") == 2, "turli savollar saqlanadi")
 
+    # jonli audit: story javobiga "Assalomu alaykum! Qanday yordam bera olaman?" — chatbot savoli
+    out = humanize("Assalomu alaykum! Qanday yordam bera olaman?", kind="dm")
+    check(out == "Assalomu alaykum! Qaysi mahsulot qiziqtirdi?", f"chatbot savoli sotuvchi savoliga almashadi: {out}")
+    out = humanize("Sizga nima yordam bera olamiz?", kind="dm", already_greeted=True)
+    check("yordam" not in out and out.endswith("qiziqtirdi?"), "'nima yordam bera olamiz' ham almashadi")
+    out = humanize("Здравствуйте! Чем могу помочь?", kind="dm")
+    check("помочь" not in out, "ruscha 'Чем могу помочь?' ham almashadi")
+    out = humanize("Yetkazib berishda yordam bera olamiz, Toshkent bo'ylab.", kind="dm")
+    check("yordam bera olamiz" in out, "savol bo'lmagan oddiy gap tegilmaydi")
+
     long = "Bu juda yaxshi mahsulot. " * 20
     check(len(humanize(long, kind="comment")) <= 200, "komment 200 belgidan oshmaydi")
     print("\n✅ Humanizer testlari o'tdi")

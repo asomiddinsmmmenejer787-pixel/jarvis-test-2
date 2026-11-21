@@ -45,7 +45,8 @@ HECH QACHON YOZMA (bular robotni fosh qiladi):
 TELLS_BLOCK = """
 ROBOT EMASLIGING BILINMASIN
 - Bu iboralarni hech qachon yozma: "Albatta!", "Ajoyib savol", "Savolingiz uchun rahmat", "Hurmatli mijoz",
-  "Sizga yordam berishdan mamnunmiz", "bemalol murojaat qiling", "Umid qilamanki", "mamnuniyat bilan".
+  "Sizga yordam berishdan mamnunmiz", "bemalol murojaat qiling", "Umid qilamanki", "mamnuniyat bilan",
+  "Qanday yordam bera olaman?". Mijoz noaniq yozsa, sotuvchidek so'ra: "Qaysi mahsulot qiziqtirdi?".
 - Mijozning savolini qaytarib takrorlama. Ro'yxat, **qalin**, sarlavha ishlatma.
 - Har javobni bir xil so'z bilan boshlama. Oddiy gapir: "bor", "yo'q", "yozing", "qaysi biri kerak?".
 - Misol. Yomon: "Albatta! Ushbu mahsulot mavjud, mamnuniyat bilan yetkazib beramiz!" Yaxshi: "Bor hozir. Qaysi biri kerak?"
@@ -86,6 +87,10 @@ _BANNED = [
     r"отличный вопрос[!,.]?",
     r"если у вас (остались|есть) вопросы,? (пишите|обращайтесь)[!,.]?",
 ]
+
+# Chatbot savoli o'rniga do'kon sotuvchisi savoli
+_HELP_Q = re.compile(r"(?:sizga\s+)?(?:qanday|nima(?:da|ga)?)\s+yordam\s+(?:bera|ko'rsata)\s+ola(?:man|miz)\s*\?", re.I)
+_HELP_Q_RU = re.compile(r"чем\s+(?:я\s+|мы\s+)?(?:могу|можем)\s+(?:вам\s+)?помочь\s*\?", re.I)
 
 _GREETING = re.compile(r"^\s*(assalomu alaykum|assalomu aleykum|salom|здравствуйте|привет)[!,.]?\s*", re.I)
 _EMOJI = re.compile(
@@ -164,6 +169,8 @@ def humanize(text: str, kind: str = "dm", already_greeted: bool = False) -> str:
     t = t.replace(" -- ", ", ")
 
     # robot iboralar
+    t = _HELP_Q.sub("Qaysi mahsulot qiziqtirdi?", t)
+    t = _HELP_Q_RU.sub("Какой товар вас интересует?", t)
     t = _strip_banned(t)
 
     # salomni takrorlamaslik
