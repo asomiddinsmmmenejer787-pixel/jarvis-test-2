@@ -689,6 +689,7 @@ class CommentResponder:
         self.state = State(state_path or os.path.join(config.DATA_DIR, "auto_reply_state.json"))
         self.lock = threading.RLock()
         self.last_run = None
+        self._upcoming_checked = 0       # kelayotgan post (21.11) oxirgi tekshirilgan vaqt
         self._me = ""
         self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
         self._recent = deque(maxlen=20)   # oxirgi javoblar (takrorlamaslik uchun)
@@ -820,6 +821,16 @@ class CommentResponder:
                 if now - (it.get("created") or now) > self.DM_PENDING_TTL:
                     self.state.dm_pending.pop(cid, None)
             self.state.save()
+        if catalog.upcoming_pending() and now - self._upcoming_checked > 120:
+            # 21.11: Yadea G100 videosi chiqqach uning HUD ma'lumotlari o'zi to'ldiriladi
+            self._upcoming_checked = now
+            try:
+                catalog.apply_upcoming(ig.get_recent_posts(5))
+            except InstagramError as e:
+                if e.fatal:
+                    raise
+            except Exception as e:  # noqa: BLE001
+                log.warning("Kelayotgan post sozlamasi bajarilmadi: %s", e)
         if need_off:
             # 19.11 egasining buyrug'i: blogerlarni belgilash videosiga komment yozilmasin
             try:

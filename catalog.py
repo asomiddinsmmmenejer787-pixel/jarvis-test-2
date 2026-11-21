@@ -154,6 +154,92 @@ SURVEY_RE = re.compile(
     r"какие\s+товар|что\s+(?:вам\s+)?(?:нужно|хотите)|напишите\s+в\s+коммент|қайси\s+товар", re.I)
 
 
+# ---------- kelayotgan postga oldindan tayyorlangan ma'lumot ----------
+# Egasi (21.11): Yadea G100 samokat videosi hali joylanmagan. Video chiqqach Jarvis uni o'zi topadi
+# va HUD'dagi shu post maydonlarini (nom, narx, ma'lumot, vazifa) to'ldiradi. Egasi postga o'zi
+# ma'lumot kiritgan bo'lsa, ustidan yozilmaydi.
+
+UPCOMING_POSTS = [
+    {
+        "flag": "setup_yadea_g100_2111",
+        "after": "2026-11-21T13:00:00+0000",   # 18:00 Toshkent
+        "until": "2026-12-05T00:00:00+0000",
+        "match": re.compile(r"samokat|самокат|yadea|g ?100", re.I),
+        "title": "Yadea G100 elektr samokati",
+        "price": "7 200 000 so'm (boshlang'ich to'lovsiz, 12 oyga oyiga 900 000 so'm)",
+        "info": ("Yadea G100 elektr samokati. Maksimal tezligi 25 km/soat. Bir zaryadda 50-70 km yuradi. "
+                 "130 kg gacha yuk ko'taradi. Tablosi (ekrani) sensorli. Faralari yonadi. 3 xil rejimi bor: "
+                 "Eco, Sport va Sport Plus. Amortizatorlari juda yumshoq, yo'ldagi chuqurlarni deyarli sezmaydi. "
+                 "Sifatli va baquvvat qilib ishlangan. To'lov: boshlang'ich to'lovsiz, 12 oyga bo'lib, oyiga "
+                 "900 000 so'mdan. Naqd narxi 7 200 000 so'm. Yaqinda bomba aksiya bo'ladi, e'lon sahifada chiqadi."),
+        "task": ("Bu Yadea G100 samokati videosi. Komentga \"SAMOKAT\" yoki samokat haqida qisqa so'z yozganlar "
+                 "narx so'ragan hisoblanadi. Komentga javob mazmuni: direktdan javob berdik, sizga bu samokatning "
+                 "aynan nimasi yoqdi? Direktga FAQAT narx yoz: naqd narxi 7 200 000 so'm, boshlang'ich to'lovsiz "
+                 "12 oyga oyiga atigi 900 000 so'mdan. Oxirida yaqinda bomba aksiya bo'lishini va obuna bo'lishni "
+                 "eslat. Direktda texnik xususiyat yozma."),
+    },
+]
+
+
+def _ts(value):
+    try:
+        return datetime.strptime(value or "", "%Y-%m-%dT%H:%M:%S%z")
+    except (TypeError, ValueError):
+        return None
+
+
+def pick_upcoming_post(setup, posts, now=None):
+    """Kelayotgan post qaysi ekanini topadi: belgilangan vaqtdan keyin joylangan video.
+    Opisaniyasida samokat/Yadea bor video birinchi tanlanadi; bo'lmasa, o'sha vaqtdan keyingi eng birinchi video."""
+    after = _ts(setup["after"])
+    videos = []
+    for p in posts or []:
+        t = _ts(p.get("timestamp"))
+        kind = (p.get("media_type") or "").upper()
+        if t and after and t >= after and kind == "VIDEO":
+            videos.append((t, p))
+    if not videos:
+        return None
+    videos.sort(key=lambda x: x[0])
+    for _, p in videos:
+        if setup["match"].search(p.get("caption") or ""):
+            return p
+    return videos[0][1]
+
+
+def apply_upcoming(posts, now=None):
+    """Kelayotgan post chiqqan bo'lsa, ma'lumotini bir marta yozadi. Yozilgan postlar ro'yxatini qaytaradi."""
+    done = []
+    now = now or datetime.now(timezone.utc)
+    for setup in UPCOMING_POSTS:
+        if flag_done(setup["flag"]):
+            continue
+        until = _ts(setup.get("until"))
+        if until and now > until:
+            set_flag(setup["flag"])
+            continue
+        post = pick_upcoming_post(setup, posts, now)
+        if not post:
+            continue
+        cur = get_post_info(post["id"])
+        if not (cur["title"] or cur["price"] or cur["info"]):
+            # opisaniya o'chiq: unda "komentga yozing" kabi gap bo'lsa, post so'rovnoma deb adashmasin
+            set_post_info(post["id"], {"title": setup["title"], "price": setup["price"], "info": setup["info"],
+                                       "use_caption": False})
+        if not cur["task"]:
+            set_task(post["id"], setup["task"])
+        set_dm_off(post["id"], False)
+        set_reply_off(post["id"], False)
+        set_flag(setup["flag"])
+        log.info("Kelayotgan post ma'lumoti yozildi: %s (%s)", post["id"], setup["flag"])
+        done.append(post)
+    return done
+
+
+def upcoming_pending():
+    return any(not flag_done(s["flag"]) for s in UPCOMING_POSTS)
+
+
 # ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------
 
 def get_memory():
