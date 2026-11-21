@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import threading
+from datetime import datetime, timezone
 
 import requests
 
@@ -37,7 +38,7 @@ PRESETS = {
     "30": ("last_30d", "Oxirgi 30 kun"),
 }
 
-INSIGHT_FIELDS = "reach,impressions,clicks,inline_link_clicks,spend,cpc,cpm,ctr,actions"
+INSIGHT_FIELDS = "reach,impressions,clicks,inline_link_clicks,spend,cpc,cpm,ctr,frequency,actions"
 CAMPAIGN_FIELDS = "campaign_id,campaign_name," + INSIGHT_FIELDS
 
 # Direktga yozishni boshlaganlar (Meta har xil nom bilan qaytaradi)
@@ -157,7 +158,91 @@ def _row(raw):
         "cpc": round(spend / clicks, 2) if clicks else None,
         "messages": msgs,
         "cost_per_message": round(spend / msgs, 2) if msgs else None,
+        "frequency": round(_num(raw.get("frequency")), 2),
     }
+
+
+# ---------- target sozlamalari ----------
+
+GENDERS = {1: "Erkaklar", 2: "Ayollar"}
+
+
+def targeting_summary(t):
+    """Meta target sozlamalarini oddiy so'zlar bilan: yosh, jins, joy, qiziqishlar."""
+    t = t or {}
+    a1, a2 = t.get("age_min") or 18, t.get("age_max") or 65
+    out = {"age": f"{a1}–{a2}{'+' if a2 >= 65 else ''} yosh",
+           "gender": ", ".join(GENDERS.get(g, str(g)) for g in t.get("genders") or []) or "Hammasi"}
+    geo = t.get("geo_locations") or {}
+    places = [c.get("name", "") + (f" (+{c['radius']} km)" if c.get("radius") else "")
+              for c in geo.get("cities") or []]
+    places += [r.get("name", "") for r in geo.get("regions") or []]
+    places += [f"{c.get('name') or 'nuqta'} atrofi {c.get('radius', '')} km".replace("  ", " ")
+               for c in geo.get("custom_locations") or []]
+    out["places"] = [x for x in places if x.strip()] or list(geo.get("countries") or [])
+    interests = []
+    for spec in t.get("flexible_spec") or []:
+        for key in ("interests", "behaviors", "life_events", "family_statuses"):
+            interests += [i.get("name") for i in spec.get(key) or [] if isinstance(i, dict) and i.get("name")]
+    out["interests"] = interests[:12]
+    out["advantage"] = (t.get("targeting_automation") or {}).get("advantage_audience") == 1
+    return out
+
+
+def get_targets(acc=None):
+    """Faol reklama guruhlari va ularning target sozlamalari (muddati tugaganlari tashlanadi)."""
+    acc = acc or account_id()
+    body = _request(f"{acc}/adsets", {
+        "fields": "name,campaign{name},daily_budget,end_time,targeting",
+        "filtering": json.dumps([{"field": "effective_status", "operator": "IN", "value": ["ACTIVE"]}]),
+        "limit": 50,
+    })
+    now = datetime.now(timezone.utc)
+    out = []
+    for a in body.get("data") or []:
+        end = a.get("end_time") or ""
+        try:
+            if end and datetime.fromisoformat(end.replace("+0000", "+00:00")) < now:
+                continue
+        except ValueError:
+            pass
+        out.append({
+            "name": a.get("name") or "Guruh",
+            "campaign": (a.get("campaign") or {}).get("name") or "",
+            "daily_budget": round(_num(a.get("daily_budget")) / 100, 2) or None,
+            "end": end[:10],
+            "target": targeting_summary(a.get("targeting")),
+        })
+    return out
+
+
+def advice(campaigns, targets, period):
+    """Raqamlardan kelib chiqadigan qisqa maslahatlar. Hech narsa to'qilmaydi."""
+    tips = []
+    spent = [c for c in campaigns if c["spend"] > 0]
+    if period in ("7", "30"):
+        names = {c["name"] for c in spent}
+        idle = sorted({t["campaign"] for t in targets if t["campaign"] and t["campaign"] not in names})
+        if idle:
+            tips.append(", ".join(f"«{n}»" for n in idle[:3]) + " faol turibdi, lekin bu davrda pul "
+                        "sarflanmagan. Kabinetda tekshiring yoki keraksizini o'chiring.")
+    if len(spent) >= 4:
+        tips.append(f"Pul {len(spent)} ta kampaniyaga bo'linib ketgan. Eng arzon natija berayotgan "
+                    "1-2 tasiga byudjetni jamlasangiz, Meta tezroq o'rganadi.")
+    for c in spent:
+        if c["impressions"] >= 1000 and 0 < c["ctr"] < 0.7:
+            tips.append(f"«{c['name']}»: bosish foizi past ({c['ctr']}%). Videoning birinchi 2 soniyasini "
+                        "kuchliroq qiling yoki boshqa video qo'ying.")
+        if c.get("frequency", 0) >= 3.5:
+            tips.append(f"«{c['name']}»: bir odamga o'rtacha {c['frequency']} marta ko'rsatilgan, auditoriya "
+                        "charchagan. Yangi video qo'ying yoki auditoriyani kengaytiring.")
+    paid = sorted([c for c in spent if c["cost_per_message"] and c["messages"] >= 3],
+                  key=lambda c: c["cost_per_message"])
+    if len(paid) >= 2 and paid[-1]["cost_per_message"] >= paid[0]["cost_per_message"] * 1.8:
+        b, w = paid[0], paid[-1]
+        tips.append(f"Direktga bitta yozgan «{b['name']}»da ${b['cost_per_message']}, «{w['name']}»da "
+                    f"${w['cost_per_message']}. Byudjetni «{b['name']}» tomonga o'tkazish foydali.")
+    return tips[:6]
 
 
 def get_summary(period="7"):
@@ -175,6 +260,11 @@ def get_summary(period="7"):
         item["name"] = c.get("campaign_name") or c.get("campaign_id") or "Kampaniya"
         campaigns.append(item)
     campaigns.sort(key=lambda x: x["spend"], reverse=True)
+    try:
+        targets = get_targets(acc)
+    except AdsError as e:
+        log.warning("Target sozlamalarini o'qib bo'lmadi: %s", e)
+        targets = []
     status = info.get("account_status")
     return {
         "account": {"id": acc, "name": info.get("name") or acc, "currency": info.get("currency") or "USD",
@@ -184,6 +274,8 @@ def get_summary(period="7"):
         "label": label,
         "total": _row(rows[0] if rows else {}),
         "campaigns": campaigns,
+        "targets": targets,
+        "advice": advice(campaigns, targets, str(period) if str(period) in PRESETS else "7"),
     }
 
 
@@ -221,4 +313,12 @@ def summary_text(s):
             extra = f", {c['messages']} ta yozgan" if c["messages"] else ""
             lines.append(f"• {c['name'][:40]}: {_money(c['spend'], cur)}, {_int(c['reach'])} qamrov, "
                          f"{_int(c['clicks'])} klik{extra}")
+    if s.get("targets"):
+        lines += ["", "🎯 Target sozlamalari:"]
+        for t in s["targets"][:5]:
+            g = t["target"]
+            where = ", ".join(g["places"][:3]) or "joy ko'rsatilmagan"
+            lines.append(f"• {t['name'][:40]}: {g['age']}, {g['gender']}, {where}")
+    if s.get("advice"):
+        lines += ["", "💡 Maslahat:"] + [f"- {x}" for x in s["advice"]]
     return "\n".join(lines)

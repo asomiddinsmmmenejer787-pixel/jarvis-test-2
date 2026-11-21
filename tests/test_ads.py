@@ -135,10 +135,59 @@ def test_empty_period():
     print("  ✅ Reklama yurmagan kun: bo'sh natija, xato emas")
 
 
+def test_targets_and_advice():
+    adsets = {"data": [
+        {"name": "Toshkent ota-onalar", "campaign": {"name": "G100 samokat Reels"}, "daily_budget": "400",
+         "targeting": {"age_min": 24, "age_max": 45, "genders": [2],
+                       "geo_locations": {"cities": [{"name": "Tashkent", "radius": 25}]},
+                       "flexible_spec": [{"interests": [{"id": "1", "name": "Toys"}]}],
+                       "targeting_automation": {"advantage_audience": 1}}},
+        {"name": "So'rovnoma guruhi", "campaign": {"name": "So'rovnoma"}, "targeting": {"geo_locations": {"countries": ["UZ"]}}},
+        {"name": "Eski", "campaign": {"name": "lid velo"}, "end_time": "2026-02-26T23:59:00+0500", "targeting": {}},
+    ]}
+    camps = {"data": [
+        {"campaign_name": "G100 samokat Reels", "impressions": "61300", "clicks": "900", "ctr": "1.5", "spend": "20",
+         "frequency": "1.4", "actions": [{"action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "20"}]},
+        {"campaign_name": "Rolikli krasofka", "impressions": "30000", "clicks": "150", "ctr": "0.5", "spend": "15",
+         "frequency": "4.1", "actions": [{"action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "5"}]},
+    ]}
+    resp = good_responses()
+    resp = [(lambda u, p: u.endswith("/adsets"), FakeResp(adsets)),
+            (lambda u, p: u.endswith("/insights") and p.get("level") == "campaign", FakeResp(camps))] + resp[1:]
+    ads_api.requests.get = fake_get(resp)
+    s = ads_api.get_summary("7")
+    names = [t["name"] for t in s["targets"]]
+    assert names == ["Toshkent ota-onalar", "So'rovnoma guruhi"], names  # muddati tugagan guruh ko'rsatilmaydi
+    g = s["targets"][0]["target"]
+    assert g["age"] == "24–45 yosh" and g["gender"] == "Ayollar" and g["places"] == ["Tashkent (+25 km)"]
+    assert g["interests"] == ["Toys"] and g["advantage"] and s["targets"][0]["daily_budget"] == 4.0
+    assert s["targets"][1]["target"]["places"] == ["UZ"] and s["targets"][1]["target"]["gender"] == "Hammasi"
+    tips = " ".join(s["advice"])
+    assert "«So'rovnoma» faol turibdi" in tips, tips
+    assert "Rolikli krasofka" in tips and "bosish foizi past" in tips and "charchagan" in tips
+    assert "$1.0" in tips and "$3.0" in tips and "G100 samokat Reels» tomonga" in tips
+    assert not any(w in tips for w in ("tekin", "chegirma", "bepul"))
+    text = ads_api.summary_text(s)
+    assert "Target sozlamalari" in text and "24–45 yosh, Ayollar, Tashkent (+25 km)" in text and "Maslahat" in text
+    # bugun: hali pul sarflanmagan kampaniyani "ishlamayapti" deb aytmaydi
+    assert not any("faol turibdi" in x for x in ads_api.get_summary("today")["advice"])
+    print("  ✅ Target sozlamalari (yosh, jins, joy, qiziqish) va maslahatlar to'g'ri")
+
+
+def test_targets_failure_keeps_results():
+    resp = [(lambda u, p: u.endswith("/adsets"), FakeResp({"error": {"code": 100, "message": "no"}}, 400))]
+    ads_api.requests.get = fake_get(resp + good_responses())
+    s = ads_api.get_summary("7")
+    assert s["targets"] == [] and s["total"]["spend"] == 42.5
+    print("  ✅ Target o'qilmasa ham natijalar chiqaveradi")
+
+
 if __name__ == "__main__":
     test_not_configured()
     test_set_token_and_summary()
     test_unpaid_account_warning()
     test_errors_hide_token()
     test_empty_period()
+    test_targets_and_advice()
+    test_targets_failure_keeps_results()
     print("\n✅ Reklama testlari o'tdi")
