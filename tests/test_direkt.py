@@ -332,6 +332,22 @@ def run():
           "Vazifalar HUD orqali saqlandi")
     check(c.get("/api/posts").status_code == 401, "Postlar API imzosiz yopiq")
 
+    print("\n8) Egasi 21.11: direktga faqat narx so'raganlarga, narx aytilib suhbat yakunlanadi")
+    r3 = auto_reply.CommentResponder(DmAI())
+    r3.set_dm_mode("auto")
+    p3 = {"id": "m9", "caption": "Samokat\nNarxi: 1 250 000 so'm", "timestamp": ts(1)}
+    q = {"id": "c90", "text": "Necha yoshga mos?", "username": "q1"}
+    vq = {"category": "question", "reply": "6 yoshdan", "dm": {"text": "6 yoshdan mos.", "answered": True, "topic": "yosh"}}
+    check(r3._plan_dm(p3, q, vq, preview=True) is None, "Oddiy savol komentiga direkt ochilmadi")
+    pr = {"id": "c91", "text": "Narxi qancha?", "username": "q2"}
+    vp = {"category": "price", "reply": "Direktga yozdik",
+          "dm": {"text": "Samokat narxi 1 250 000 so'm. Qaysi rangini olasiz?", "answered": True, "topic": "narx"}}
+    plan = r3._plan_dm(p3, pr, vp, preview=True)
+    check(plan and "1 250 000" in plan["text"] and "?" not in plan["text"],
+          "Narx so'raganga direktda narx aytildi, oxirida savol yo'q")
+    check("Faqat price kategoriyasida" in auto_reply.SYSTEM_PROMPT and "question" not in auto_reply.DM_SEND_CATEGORIES,
+          "Prompt va sozlama: direkt faqat narx uchun")
+
     print("\n✅ Direkt testlari o'tdi")
 
 

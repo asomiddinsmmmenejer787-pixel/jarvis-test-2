@@ -60,6 +60,8 @@ CATEGORY_NAMES = {
 MODES = ("on", "off", "test")
 DM_MODES = ("approve", "auto", "off")
 DM_CATEGORIES = {"price", "question"}
+# Egasining qarori (21.11): direktga faqat narx so'raganlarga yoziladi, boshqa komentlarga direkt ochilmaydi
+DM_SEND_CATEGORIES = {"price"}
 MAX_REPLY_LEN = 200
 MAX_MANUAL_REPLY_LEN = 2000
 MAX_ATTEMPTS = 3
@@ -194,15 +196,15 @@ JAVOB FORMATI: faqat JSON.
 {{"category": "price|question|positive|negative|complaint|competitor|spam", "confidence": 0.0 dan 1.0 gacha son, "reply": "javob matni yoki bo'sh satr", "dm": "direkt xabar yoki bo'sh satr", "dm_answered": true yoki false, "topic": "mijoz nimani so'radi, 2-5 so'z"}}
 
 DIREKT XABAR (dm)
-Faqat price va question kategoriyasida to'ldir, boshqalarida bo'sh satr. Bu mijozning direktiga boradigan
-birinchi xabar va uning maqsadi sotuv:
+Faqat price kategoriyasida to'ldir, boshqalarida bo'sh satr. Bu mijozning direktiga boradigan
+xabar: narxni aytadi va shu bilan yakunlanadi.
 - Mijoz so'ragan narsaga FAKTLARdan aniq javob ber. Narxni FAKTLARda qanday yozilgan bo'lsa, shunday yoz
   (direktda narx yozish mumkin). "Egasi kiritgan" narx va DO'KON XOTIRASI opisaniyadan ustun.
 - DO'KON XOTIRASIda bir nechta mahsulot bo'lsa, faqat shu postga tegishlisini ol. Qaysi biri ekani aniq
   bo'lmasa, narx yozma, qaysi mahsulot qiziqtirganini so'ra va dm_answered=false qil.
 - FAKTLARda javob bo'lmasa, to'qima: qaysi mahsulot/rang/o'lcham kerakligini so'ra, dm_answered=false.
-- 3-6 qator, iliq, mijoz tilida. Mahsulotning FAKTLARdagi bitta foydali tomonini ayt.
-- Oxirida keyingi qadamga unda: bitta savol (rang, o'lcham, qaysi shahar) yoki buyurtma yo'li (telefon/manzil FAKTLARda bo'lsa).
+- 1-3 qator, iliq, mijoz tilida. Narx aytilgan bo'lsa, oxirida savol berma va suhbatni davom ettirishga
+  undama (rang, o'lcham, buyurtma so'rama).
 
 NAMUNA USLUB (nusxa ko'chirma, ruhini ol)
 - price: "Narxni bu yerda aytsak, boshqa mijozlar ham tomosha qilib qoladi 😄 Direktga yozing, shaxsan javob beramiz. Qaysi rangini ko'zlab turibsiz?"
@@ -940,7 +942,8 @@ class CommentResponder:
                     "topic": result.get("topic") if isinstance(result, dict) else "",
                 }
                 dm_ok = self.dm_on(post, text, verdict["dm"]["topic"])
-                if (not dm_ok and verdict["reply"]
+                dm_sends = dm_ok and verdict["category"] in DM_SEND_CATEGORIES
+                if (not dm_sends and verdict["reply"]
                         and (verdict["reply"] in SAFE_FALLBACK["price"]
                              or (verdict["category"] in DM_CATEGORIES and DM_CLAIM_RE.search(verdict["reply"])))):
                     # direkt yuborilmaydi: "direktga yozdik" degan yolg'on o'rniga direktga taklif
@@ -1165,7 +1168,7 @@ class CommentResponder:
         """
         dm = verdict.get("dm") or {}
         if (not self.dm_on(post, (comment or {}).get("text"), dm.get("topic"))
-                or verdict["category"] not in DM_CATEGORIES):
+                or verdict["category"] not in DM_SEND_CATEGORIES):
             return None
         dm_text = (dm.get("text") or "").strip()[:1000] if isinstance(dm.get("text"), str) else ""
         answered = bool(dm.get("answered")) and bool(dm_text)
@@ -1173,6 +1176,9 @@ class CommentResponder:
             return None  # faktlarda javob yo'q: ochiq javobda direktga yo'naltirilgan
         if dm_text:
             dm_text = humanizer_uz.humanize(dm_text, kind="dm")
+            if answered:
+                from dm_chat import drop_questions
+                dm_text = drop_questions(dm_text)  # narx aytildi: savol bilan suhbat ochilmaydi
         facts = catalog.post_facts(post)
         reason = ""
         if not dm_text:

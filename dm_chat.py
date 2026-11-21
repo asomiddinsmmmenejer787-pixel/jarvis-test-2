@@ -11,6 +11,9 @@ Direktga o'zi yozgan mijozlarga javob.
 - Rejimlar: approve (standart) - har javob egasiga tasdiqqa; auto - xavfsiz javob darhol yuboriladi,
   shubhalisi tasdiqqa; off.
 - Faqat tizim yoqilgandan keyin kelgan xabarlarga javob beriladi (eski yozishmalarga tegilmaydi).
+- Egasining qarori (21.11): Jarvis direktda FAQAT narx so'raganlarga javob beradi, narxni aytadi va
+  suhbatni shu bilan yakunlaydi (savol, taklif yo'q). Boshqa xabarlarga yozmaydi.
+- Hamma yozishmalar xotirada saqlanadi (dm_memory.json): keyin muomala va ma'lumotlarni o'rganish uchun.
 """
 
 import difflib
@@ -75,6 +78,117 @@ def repeats_stock_out(text, ours_before):
                 and sizes <= set(re.findall(r"(?<!\d)\d{1,3}(?!\d)", o))):
             return True
     return False
+
+
+# Narx so'rovi: "narxi qancha", "necha pul", "qanchadan", "цена", "сколько стоит"
+PRICE_RE = re.compile(
+    r"narx|narh|нарх|нарҳ|\bprice|prays|цен[аеуы]|стоим|почём|почем|сколько|скок[ао]|"
+    r"nech[ai]?\s*pul|неч[аи]?\s*пул|nech[ai]?\s*so.?m|(?<![\w'’`ʻ])puli(?![\w'’`ʻ])|"
+    r"[qk]ancha(dan|ga|lik)|қанча|[qk]ancha(?!\s*(kun|vaqt|soat|muddat|yosh|kishi|marta|dona\s*qol))",
+    re.I)
+
+
+def is_price_question(text):
+    """Mijoz narx so'rayaptimi (ketma-ket xabarlari birga beriladi)."""
+    return bool(PRICE_RE.search(text or ""))
+
+
+def drop_questions(text):
+    """Narx javobidan keyingi savol/taklif gaplarini olib tashlaydi: javob berib, suhbat yakunlanadi."""
+    parts = re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip())
+    kept = [p for p in parts if p.strip() and "?" not in p]
+    return " ".join(kept).strip() if kept else (text or "").strip()
+
+
+PRICE_ONLY_BLOCK = """
+EGASINING QARORI: direktda faqat narx so'rovlariga javob beriladi.
+- Mijoz narx so'radi. Narxni FAKTLARdan aniq ayt va shu bilan yakunla: oxirida savol berma, buyurtma,
+  o'lcham, rang yoki boshqa taklifga undama, "yana savol bo'lsa yozing" kabi gap qo'shma.
+- Qaysi mahsulot ekani umuman noaniq bo'lsa, faqat qaysi mahsulot ekanini so'ra (kind="clarify").
+- Narx FAKTLARda yo'q bo'lsa, to'qima: "aniqlab, tez orada yozamiz" de (kind="human").
+""".strip()
+
+_WHO = {"mijoz": "Mijoz", "jarvis": "Jarvis", "egasi": "Egasi"}
+MEMORY_MAX_MSGS = 80      # bir mijozdan saqlanadigan oxirgi xabarlar
+MEMORY_MAX_USERS = 3000
+
+
+class DialogMemory:
+    """Direktdagi hamma yozishmalar (javob berilgan-berilmaganidan qat'i nazar), o'rganish uchun."""
+
+    def __init__(self, path=None):
+        self.path = path or os.path.join(config.DATA_DIR, "dm_memory.json")
+        self.lock = threading.RLock()
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                raw = json.load(f)
+            self.d = raw if isinstance(raw, dict) else {}
+        except (OSError, ValueError):
+            self.d = {}
+
+    def remember(self, msgs, my_id, my_name):
+        """Bitta yozishma xabarlarini qo'shadi (takrorsiz). Qaytaradi: yangi xabarlar soni."""
+        added = 0
+        with self.lock:
+            for m in msgs:
+                frm = m.get("from") or {}
+                ours = str(frm.get("id")) == my_id or (frm.get("username") or "").lower() == my_name
+                mid = str(m.get("id") or "")
+                if not mid or ours:
+                    continue
+                uid = str(frm.get("id") or "")
+                break
+            else:
+                return 0
+            conv = self.d.setdefault(uid, {"username": "", "msgs": []})
+            for m in msgs:
+                frm = m.get("from") or {}
+                ours = str(frm.get("id")) == my_id or (frm.get("username") or "").lower() == my_name
+                if not ours and frm.get("username"):
+                    conv["username"] = frm["username"]
+            known = {x["id"] for x in conv["msgs"]}
+            for m in msgs:
+                mid = str(m.get("id") or "")
+                if not mid or mid in known:
+                    continue
+                frm = m.get("from") or {}
+                ours = str(frm.get("id")) == my_id or (frm.get("username") or "").lower() == my_name
+                text = describe(m)[0] or "[xabar]"
+                who = ("jarvis" if ig.is_jarvis_message(m) else "egasi") if ours else "mijoz"
+                conv["msgs"].append({"id": mid, "t": int(_ts(m.get("created_time"))), "who": who, "text": text[:600]})
+                known.add(mid)
+                added += 1
+            if added:
+                conv["msgs"] = sorted(conv["msgs"], key=lambda x: x["t"])[-MEMORY_MAX_MSGS:]
+                conv["last"] = conv["msgs"][-1]["t"]
+                if len(self.d) > MEMORY_MAX_USERS:
+                    keep = sorted(self.d.items(), key=lambda kv: kv[1].get("last", 0))[-MEMORY_MAX_USERS:]
+                    self.d = dict(keep)
+                self._save()
+        return added
+
+    def _save(self):
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            with open(self.path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(self.d, f, ensure_ascii=False)
+            os.replace(self.path + ".tmp", self.path)
+        except OSError as e:
+            log.warning("Direkt xotirasini saqlab bo'lmadi: %s", e)
+
+    def stats(self):
+        with self.lock:
+            return {"users": len(self.d), "messages": sum(len(v.get("msgs", [])) for v in self.d.values())}
+
+    def dialogs(self, n=20):
+        """Oxirgi n ta yozishma matni (o'rganish va tahlil uchun)."""
+        with self.lock:
+            items = sorted(self.d.items(), key=lambda kv: kv[1].get("last", 0))[-n:]
+        out = []
+        for _, v in items:
+            lines = [f"{_WHO.get(x['who'], x['who'])}: {x['text']}" for x in v.get("msgs", [])]
+            out.append(f"@{v.get('username') or '?'}\n" + "\n".join(lines))
+        return out
 
 
 PROMPT = """
@@ -314,7 +428,8 @@ class DirectChat:
         self.last_run = None
         self._me = None
         self.s = {"mode": None, "since": 0, "seen": {}, "pending": {}, "counts": {}, "auto_v2": False,
-                  "human_since": 0}
+                  "human_since": 0, "price_only": True}
+        self.memory = DialogMemory(os.path.join(os.path.dirname(self.path), "dm_memory.json"))
         try:
             with open(self.path, encoding="utf-8") as f:
                 raw = json.load(f)
@@ -363,9 +478,15 @@ class DirectChat:
             self.s["mode"] = mode
             self._save()
 
+    def set_price_only(self, on):
+        with self.lock:
+            self.s["price_only"] = bool(on)
+            self._save()
+
     def status(self):
         with self.lock:
-            return {"mode": self.s["mode"], "pending": len(self.s["pending"]), "last_run": self.last_run}
+            return {"mode": self.s["mode"], "pending": len(self.s["pending"]), "last_run": self.last_run,
+                    "price_only": bool(self.s.get("price_only")), "memory": self.memory.stats()}
 
     def _auto_allowed(self, igsid):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -376,7 +497,7 @@ class DirectChat:
             self.s["counts"][igsid] = c
         return c["count"] < MAX_AUTO_PER_USER_DAY
 
-    def _compose(self, history, focus=None, greeted=False):
+    def _compose(self, history, focus=None, greeted=False, price_only=False):
         facts, source = knowledge()
         msg = f"FAKTLAR:\n{facts}"
         if focus is not None:
@@ -387,7 +508,8 @@ class DirectChat:
         if lessons:
             msg += "\n\n" + lessons
         msg += f"\n\nYOZISHMA:\n{history}"
-        res = self.ai.generate_json(PROMPT + "\n\n" + humanizer_uz.TELLS_BLOCK, msg, temperature=0.4)
+        system = PROMPT + ("\n\n" + PRICE_ONLY_BLOCK if price_only else "") + "\n\n" + humanizer_uz.TELLS_BLOCK
+        res = self.ai.generate_json(system, msg, temperature=0.4)
         out = {"text": "", "kind": "human", "topic": "", "safe": False, "reason": ""}
         if not isinstance(res, dict) or not isinstance(res.get("text"), str) or not res["text"].strip():
             out["reason"] = "Jarvis javob tayyorlay olmadi"
@@ -395,6 +517,8 @@ class DirectChat:
         out["text"] = humanizer_uz.humanize(res["text"].strip()[:900], kind="dm", already_greeted=greeted)
         out["kind"] = res.get("kind") if res.get("kind") in ("answer", "clarify", "order", "human") else "human"
         out["topic"] = catalog._clean(res.get("topic"), 60)
+        if price_only and out["kind"] != "clarify":
+            out["text"] = drop_questions(out["text"])  # narx aytildi: savol bilan suhbatni cho'zmaymiz
         if not catalog.numbers_ok(out["text"], source):
             # To'qilgan raqam mijozga ketmaydi: o'rniga narxsiz aniqlashtiruvchi xabar
             out["text"] = catalog.fallback_dm(greet=not greeted)
@@ -430,6 +554,7 @@ class DirectChat:
             msgs = sorted((conv.get("messages") or {}).get("data", []), key=lambda m: _ts(m.get("created_time")))
             if not msgs:
                 continue
+            self.memory.remember(msgs[-30:], my_id, my_name)
             last = msgs[-1]
             sender = last.get("from") or {}
             mid, created = str(last.get("id") or ""), _ts(last.get("created_time"))
@@ -440,12 +565,22 @@ class DirectChat:
                 if key in self.s["seen"] or key in self.s["pending"]:
                     continue
             lines, focus, human_at = [], None, 0
+            asked_text, jarvis_asked = [], False  # bizning oxirgi xabarimizdan keyin mijoz yozganlari
             for m in msgs[-12:]:
                 line, post = describe(m)
                 if post is not None:
                     focus = post
                 ours = (str((m.get("from") or {}).get("id")) == my_id
                         or ((m.get("from") or {}).get("username") or "").lower() == my_name)
+                if ours:
+                    asked_text = []
+                    body = (m.get("message") or "").lower()
+                    jarvis_asked = (ig.is_jarvis_message(m)
+                                    and ("?" in body or "qaysi mahsulot" in body))
+                else:
+                    asked_text.append(m.get("message") or "")
+                    if post is not None and not (m.get("message") or "").strip():
+                        asked_text.append("narxi")  # bizning postni matnsiz ulashdi: narx so'ragani
                 if ours:
                     t = _ts(m.get("created_time"))
                     if t >= self.s["human_since"] and not ig.is_jarvis_message(m):
@@ -473,13 +608,28 @@ class DirectChat:
                     self.s["seen"][key] = int(now)
                     self._save()
                 continue
+            price_only = bool(self.s.get("price_only"))
+            history = "\n".join(lines)
+            if price_only and not (is_price_question(" ".join(asked_text))
+                                   or (jarvis_asked and is_price_question(history))):
+                # Egasining qarori: narx so'ramagan xabarga Jarvis yozmaydi (yozishma xotirada saqlandi)
+                with self.lock:
+                    self.s["seen"][key] = int(now)
+                    self._save()
+                stats["skip"] = stats.get("skip", 0) + 1
+                try:
+                    import audit
+                    audit.record("dm", type="chat_skip", username=sender.get("username") or "",
+                                 message=text[:300], reason="narx so'ralmagan: javob yozilmadi")
+                except Exception:  # noqa: BLE001
+                    pass
+                continue
             if handled >= MAX_PER_RUN:
                 break
             stats["new"] += 1
-            history = "\n".join(lines)
             ours_before = [ln[5:] for ln in lines[:-1] if ln.startswith("Biz: ")]
             try:
-                res = self._compose(history, focus, greeted=bool(ours_before))
+                res = self._compose(history, focus, greeted=bool(ours_before), price_only=price_only)
                 last_ours = ours_before[-1] if ours_before else ""
                 if (is_reaction(last.get("message")) and "?" not in last_ours
                         and ("?" in res["text"] or "http" in res["text"] or "t.me" in res["text"])):

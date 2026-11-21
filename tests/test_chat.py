@@ -58,6 +58,8 @@ def run():
     ai = ChatAI({"text": "Samokat S10 narxi 1 250 000 so'm.", "kind": "answer", "topic": "samokat narxi"})
     chat = dm_chat.DirectChat(ai)
     check(chat.mode == "auto", "Standart rejim: avto")
+    check(chat.status()["price_only"], "Standart: direktda faqat narx so'rovlariga javob (egasi 21.11)")
+    chat.set_price_only(False)  # quyidagi bo'limlar umumiy himoyalarni sinaydi
     chat.set_mode("approve")
     fake.conversations = [conv("t0", ("old1", u2, "Eski savol", 30))]
     chat.s["since"] = time.time() - 10
@@ -268,6 +270,58 @@ def run():
     check(dm_chat.is_bargain("skidka bormi") and not dm_chat.is_bargain("qachon yetib kelishi")
           and not dm_chat.is_bargain("33 razmer bormi") and not dm_chat.bargain_agreed("Kechirasiz, chegirma yo'q"),
           "Savdolashish va rozilik to'g'ri aniqlandi")
+
+    print("\n3e) Egasi 21.11: direktda faqat narx so'raganlarga javob, keyin suhbat to'xtaydi, hammasi xotirada")
+    chat.set_price_only(True)
+    chat.set_mode("auto")
+    chat.s["counts"] = {}
+    ai.last = None
+    u20 = {"id": "U20", "username": "malika"}
+    t0 = time.time()
+    fake.conversations = [conv("t20", ("pp1", u20, "Assalomu alaykum, yetkazib berish bormi?", 2))]
+    n = len(fake.chat_sent)
+    events = chat.run_once()
+    check(events == [] and len(fake.chat_sent) == n and ai.last is None,
+          "Narx so'ramagan xabarga Jarvis yozmadi (AI ham chaqirilmadi)")
+    fake.conversations = [conv("t20", ("pp1", u20, "Assalomu alaykum, yetkazib berish bormi?", 3),
+                               ("pp2", u20, "Samokat S10 narxi qancha?", 1))]
+    ai.res = {"text": "Samokat S10 narxi 1 250 000 so'm. Qaysi rangini olasiz?", "kind": "answer", "topic": "narx"}
+    events = chat.run_once()
+    check(events and events[0]["type"] == "chat_sent" and fake.chat_sent[-1] == ("U20", "Samokat S10 narxi 1 250 000 so'm."),
+          "Narx so'roviga faktlardan javob berildi, oxiridagi savol olib tashlandi")
+    ig.record_sent({"message_id": "pp3"}, fake.chat_sent[-1][1])
+    fake.conversations = [conv("t20", ("pp2", u20, "Samokat S10 narxi qancha?", 5),
+                               ("pp3", ME, "Samokat S10 narxi 1 250 000 so'm.", 4), ("pp4", u20, "Rahmat, o'ylab ko'raman", 1))]
+    n = len(fake.chat_sent)
+    check(chat.run_once() == [] and len(fake.chat_sent) == n, "Narx aytilgach suhbat to'xtadi: keyingi xabarga yozilmadi")
+    # Mahsulot noaniq: Jarvis qaysi mahsulot deb so'radi — mijoz javobi narx suhbatining davomi
+    u21 = {"id": "U21", "username": "sardor"}
+    ai.res = {"text": "Qaysi mahsulot qiziqtirdi?", "kind": "clarify", "topic": "narx"}
+    fake.conversations = [conv("t21", ("pq1", u21, "Narxi necha pul", 2))]
+    events = chat.run_once()
+    check(events and fake.chat_sent[-1] == ("U21", "Qaysi mahsulot qiziqtirdi?"), "Noaniq narx so'roviga mahsulot so'raldi")
+    ig.record_sent({"message_id": "pq2"}, "Qaysi mahsulot qiziqtirdi?")
+    ai.res = {"text": "Samokat S10 narxi 1 250 000 so'm.", "kind": "answer", "topic": "narx"}
+    fake.conversations = [conv("t21", ("pq1", u21, "Narxi necha pul", 5), ("pq2", ME, "Qaysi mahsulot qiziqtirdi?", 4),
+                               ("pq3", u21, "Samokat S10", 1))]
+    events = chat.run_once()
+    check(events and fake.chat_sent[-1] == ("U21", "Samokat S10 narxi 1 250 000 so'm."),
+          "Mijoz mahsulot nomini yozgach narx aytildi")
+    st = chat.status()["memory"]
+    mem = dm_chat.DialogMemory(chat.memory.path)  # fayldan qayta o'qiladi
+    d20 = mem.d.get("U20", {})
+    ids = [x["id"] for x in d20.get("msgs", [])]
+    check(st["users"] >= 2 and sorted(ids) == ["pp1", "pp2", "pp3", "pp4"]
+          and {x["id"]: x["who"] for x in d20["msgs"]}["pp3"] == "jarvis" and d20["username"] == "malika",
+          "Javob berilmagan xabarlar ham, Jarvis javobi ham xotirada saqlandi (takrorsiz)")
+    check(any("Mijoz: Rahmat, o'ylab ko'raman" in x for x in mem.dialogs()), "Yozishmalar o'rganish uchun matn ko'rinishida olinadi")
+    for t, want in [("Narxi qancha?", True), ("nechpul", True), ("Цена?", True), ("сколько стоит", True),
+                    ("Puli qancha", True), ("qanchadan", True), ("Pulimi", False), ("Pulimni qaytaring", False),
+                    ("Qancha kunda keladi", False), ("Bormi?", False), ("Rahmat", False)]:
+        if dm_chat.is_price_question(t) != want:
+            check(False, f"Narx so'rovi aniqlash: {t!r}")
+    check(True, "Narx so'rovi to'g'ri aniqlandi (pullik tanlov, pul qaytarish, muddat narx emas)")
+    chat.set_price_only(False)
 
     print("\n4) HUD API")
     from fastapi import FastAPI
