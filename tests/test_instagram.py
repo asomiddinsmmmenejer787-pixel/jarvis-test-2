@@ -28,6 +28,10 @@ os.environ.pop("OWNER_CHAT_ID", None)
 import instagram_api as ig  # noqa: E402
 import analytics  # noqa: E402
 import auto_reply  # noqa: E402
+import catalog as _catalog  # noqa: E402
+
+# Bir martalik "kelayotgan post" sozlamalari haqiqiy sanaga bog'liq: soxta postlarga tushmasin
+_catalog.UPCOMING_ENABLED = False
 
 
 def ts(hours_ago):

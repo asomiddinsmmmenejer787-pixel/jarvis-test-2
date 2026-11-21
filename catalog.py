@@ -51,6 +51,7 @@ def load():
         data.setdefault("dm_off", [])
         data.setdefault("flags", [])
         data.setdefault("stock", [])
+        data.setdefault("fixed_dm", {})
         return data
 
 
@@ -236,8 +237,79 @@ def apply_upcoming(posts, now=None):
     return done
 
 
+# Egasi (21.11, ikkinchi marta): G100 videosi komentiga direktda "samokatlarimiz 3 milliondan" deb yozildi,
+# ya'ni ma'lumot shu postga tushmagan. Endi bugun joylangan samokat videosi (vaqtidan qat'i nazar) topiladi,
+# narx ustidan yoziladi va direktga egasi aytgan aniq matn ketadi.
+G100_FIX = {"flag": "setup_yadea_g100_fix_2111", "since": "2026-11-20T19:00:00+0000",   # 21.11 00:00 Toshkent
+            "until": "2026-12-05T00:00:00+0000"}
+G100_DM = ("Yadea G100 samokatimiz naqd narxi 7 200 000 so'm. Boshlang'ich to'lovsiz 12 oyga bo'lib olsangiz, "
+           "oyiga atigi 900 000 so'mdan to'laysiz. Yaqinda bomba aksiya bo'ladi, sahifamizga obuna bo'lib "
+           "qo'yishni unutmang 🔥")
+
+
+def get_fixed_dm(media_id):
+    return load()["fixed_dm"].get(str(media_id or ""), "")
+
+
+def set_fixed_dm(media_id, text):
+    with _lock:
+        data = load()
+        if text:
+            data["fixed_dm"][str(media_id)] = _clean(text, 1000)
+        else:
+            data["fixed_dm"].pop(str(media_id), None)
+        save(data)
+
+
+def pick_g100_post(posts):
+    """Bugun joylangan videolardan samokat videosini topadi: opisaniyasida samokat/Yadea/G100 bor eng yangisi,
+    bo'lmasa bugungi eng yangi video."""
+    since = _ts(G100_FIX["since"])
+    fresh = [(t, p) for p in posts or [] if isinstance(p, dict) and p.get("id")
+             for t in [_ts(p.get("timestamp"))] if t and t >= since
+             and (p.get("media_type") or "").upper() == "VIDEO"]
+    fresh.sort(key=lambda x: x[0], reverse=True)
+    match = UPCOMING_POSTS[0]["match"]
+    for _, p in fresh:
+        if match.search(p.get("caption") or ""):
+            return p
+    return fresh[0][1] if fresh else None
+
+
+def apply_g100_fix(posts, now=None):
+    """G100 postiga narx, ma'lumot, vazifa va direkt matnini bir marta yozadi (egasi kiritgan narx ustidan)."""
+    if flag_done(G100_FIX["flag"]):
+        return None
+    now = now or datetime.now(timezone.utc)
+    if now > _ts(G100_FIX["until"]):
+        set_flag(G100_FIX["flag"])
+        return None
+    post = pick_g100_post(posts)
+    if not post:
+        return None
+    setup = UPCOMING_POSTS[0]
+    cur = get_post_info(post["id"])
+    info = setup["info"]
+    if cur["info"] and "G100" not in cur["info"] and cur["info"] not in info:
+        info = (cur["info"] + "\n" + info)[:1500]
+    set_post_info(post["id"], {"title": setup["title"], "price": setup["price"], "info": info,
+                               "use_caption": False, "task": setup["task"]})
+    set_fixed_dm(post["id"], G100_DM)
+    set_dm_off(post["id"], False)
+    set_reply_off(post["id"], False)
+    set_flag(setup["flag"])          # eski sozlama boshqa videoga tushib qolmasin
+    set_flag(G100_FIX["flag"])
+    log.info("G100 posti ma'lumoti yozildi: %s", post["id"])
+    return post
+
+
+UPCOMING_ENABLED = True   # testlarda o'chiriladi (soxta postlar haqiqiy sanaga to'g'ri kelib qolmasin)
+
+
 def upcoming_pending():
-    return any(not flag_done(s["flag"]) for s in UPCOMING_POSTS)
+    if not UPCOMING_ENABLED:
+        return False
+    return any(not flag_done(s["flag"]) for s in UPCOMING_POSTS) or not flag_done(G100_FIX["flag"])
 
 
 # ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------

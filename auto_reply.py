@@ -825,7 +825,9 @@ class CommentResponder:
             # 21.11: Yadea G100 videosi chiqqach uning HUD ma'lumotlari o'zi to'ldiriladi
             self._upcoming_checked = now
             try:
-                catalog.apply_upcoming(ig.get_recent_posts(5))
+                recent = ig.get_recent_posts(10)
+                catalog.apply_g100_fix(recent)
+                catalog.apply_upcoming(recent)
             except InstagramError as e:
                 if e.fatal:
                     raise
@@ -1234,7 +1236,10 @@ class CommentResponder:
         answered = bool(dm.get("answered")) and bool(dm_text)
         if verdict["category"] == "question" and not answered:
             return None  # faktlarda javob yo'q: ochiq javobda direktga yo'naltirilgan
-        if dm_text:
+        fixed = catalog.get_fixed_dm((post or {}).get("id")) if verdict["category"] == "price" else ""
+        if fixed:
+            dm_text, answered = fixed, True   # egasi shu post uchun direkt matnini o'zi bergan
+        elif dm_text:
             dm_text = humanizer_uz.humanize(dm_text, kind="dm")
             if answered:
                 from dm_chat import drop_questions
