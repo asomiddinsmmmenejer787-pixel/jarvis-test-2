@@ -239,6 +239,133 @@ def test_hud_api_only_own_data():
     assert client.get("/creator/app").status_code == 200
 
 
+class FakeBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, chat_id, text, **kw):
+        self.sent.append((chat_id, text))
+
+        class M:
+            message_id = len(self.sent)
+        return M()
+
+    async def send_photo(self, chat_id, photo, caption="", **kw):
+        self.sent.append((chat_id, caption))
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+def test_level_override_and_promo():
+    s = new_store()
+    tg = approved_creator(s)
+    assert s.overview(tg)["level"] == "Yangi"
+    s.set_level(tg, "Hamkor", ADMIN)
+    ov = s.overview(tg)
+    assert ov["level"] == "Hamkor" and ov["level_manual"]
+    s.set_level(tg, "auto", ADMIN)
+    assert s.overview(tg)["level"] == "Yangi"
+    try:
+        s.set_level(tg, "Boss", ADMIN)
+        raise AssertionError("noto'g'ri daraja o'tmasligi kerak")
+    except StoreError:
+        pass
+    code = s.creator(tg)["promo_code"]
+    s.record_promo_sale(code.lower(), 250_000, ADMIN, "chek-9")
+    s.record_promo_sale(code, 100_000, ADMIN)
+    assert s.overview(tg)["promo"]["count"] == 2 and s.overview(tg)["promo"]["sum"] == 350_000
+
+
+def test_expiry_reminders_once_each():
+    s = new_store()
+    tg = approved_creator(s)
+    _, rw = finished_reel(s, tg, "JJJJJ1", 20_000)
+    v = s.decide_reward(rw["id"], True, ADMIN)
+    assert s.expiry_reminders() == []  # 30 kun bor
+    with s.tx() as db:
+        db.execute("UPDATE vouchers SET expires_at=? WHERE id=?", (R.to_iso(R.utcnow() + timedelta(days=6)), v["id"]))
+    first = s.expiry_reminders()
+    assert len(first) == 1 and first[0][1] == "voucher" and first[0][5] == 6
+    assert s.expiry_reminders() == []  # ikkinchi marta yuborilmaydi
+    with s.tx() as db:
+        db.execute("UPDATE vouchers SET expires_at=? WHERE id=?", (R.to_iso(R.utcnow() + timedelta(hours=20)), v["id"]))
+    again = s.expiry_reminders()
+    assert len(again) == 1 and again[0][5] == 1
+
+
+def test_screenshot_flow_with_jarvis_reading():
+    import asyncio
+    from creator_rewards import bot as cb, screens
+    s = new_store()
+    cb._ctx["store"] = s
+    cb._ctx["admins"] = lambda: {ADMIN}
+    tg = approved_creator(s)
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/KKKKK1/", posted_at=R.utcnow() - timedelta(days=7))
+    fb = FakeBot()
+    orig = screens.read_insights
+    try:
+        screens.read_insights = lambda data: {"is_insights": True, "views": 31_500, "reach": 20_000,
+                                              "posted_date": R.from_iso(s.reel(rid)["posted_at"]).astimezone(R.TASHKENT).strftime("%Y-%m-%d")}
+        res = asyncio.run(cb.submit_screenshot(fb, tg, rid, PNG))
+        assert res["views"] == 31_500 and res["flags"] == []
+        snap = s.snapshot(res["snapshot_id"])
+        assert snap["ocr_views"] == 31_500 and os.path.isfile(snap["image_path"])
+        assert any("31 500" in t for _, t in fb.sent)  # administratorga ketdi
+        asyncio.run(cb.act_verify(fb, res["snapshot_id"], ADMIN))
+        assert s.reel(rid)["last_views"] == 31_500
+        # rasmda boshqa sana va kamaygan raqam -> shubha belgilari
+        screens.read_insights = lambda data: {"is_insights": True, "views": 20_000, "posted_date": "2025-01-01"}
+        res2 = asyncio.run(cb.submit_screenshot(fb, tg, rid, PNG, typed_views=40_000))
+        text = " ".join(res2["flags"])
+        assert "farq qiladi" in text and "kam" in text and "boshqa video" in text
+        # o'qib bo'lmasa — bloger raqam yozadi
+        screens.read_insights = lambda data: None
+        res3 = asyncio.run(cb.submit_screenshot(fb, tg, rid, PNG))
+        assert res3.get("need_views")
+        res4 = asyncio.run(cb.submit_screenshot(fb, tg, rid, None, typed_views=33_000, image_path=res3["image_path"]))
+        assert res4["views"] == 33_000
+    finally:
+        screens.read_insights = orig
+    try:
+        screens.save_image(rid, b"not an image")
+        raise AssertionError("rasm bo'lmagan fayl qabul qilinmasligi kerak")
+    except ValueError:
+        pass
+    try:
+        asyncio.run(cb.submit_screenshot(fb, 999, rid, PNG))
+        raise AssertionError("boshqaning videosiga skrinshot yuborib bo'lmasligi kerak")
+    except StoreError:
+        pass
+
+
+def test_admin_api_owner_only():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import webapp
+    from creator_rewards import bot as cb, web as cw
+    os.environ["CREATOR_BOT_TOKEN"] = "123:TEST"
+    s = new_store()
+    cb._ctx["store"] = s
+    approved_creator(s, 777, "admin_view")
+    webapp.init(None, None, lambda: 42, "555:MAIN")
+    app = FastAPI()
+    app.include_router(cw.router)
+    client = TestClient(app)
+    blogger = _signed_init_data("123:TEST", {"id": 777, "first_name": "B"})
+    assert client.get("/creator/admin/api/overview", headers={"X-Init-Data": blogger}).status_code in (401, 403)
+    stranger = _signed_init_data("555:MAIN", {"id": 43, "first_name": "X"})
+    assert client.get("/creator/admin/api/overview", headers={"X-Init-Data": stranger}).status_code == 403
+    owner = _signed_init_data("555:MAIN", {"id": 42, "first_name": "Asomiddin"})
+    d = client.get("/creator/admin/api/overview", headers={"X-Init-Data": owner}).json()
+    assert d["stats"]["creators"] == 1 and d["creators"][0]["instagram"] == "admin_view"
+    r = client.post("/creator/admin/api/action", headers={"X-Init-Data": owner}, json={"action": "brief", "text": "Dronlar"})
+    assert r.status_code == 200 and s.get_setting("brief") == "Dronlar"
+    assert client.get("/creator/admin/api/creator/777", headers={"X-Init-Data": owner}).json()["profile"]["instagram"] == "admin_view"
+    assert client.get("/creator/shot/1?sig=bad").status_code == 403
+    assert client.get("/creator/admin.js").status_code == 200
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

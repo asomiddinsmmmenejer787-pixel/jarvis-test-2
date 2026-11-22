@@ -55,7 +55,24 @@ CREATE TABLE IF NOT EXISTS audit(
   id INTEGER PRIMARY KEY AUTOINCREMENT, actor INTEGER, action TEXT NOT NULL, details TEXT,
   at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS relay(admin_msg_id INTEGER PRIMARY KEY, tg_id INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS promo_sales(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER NOT NULL REFERENCES creators(tg_id),
+  code TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0), receipt TEXT, admin_id INTEGER, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 """
+
+# Eski bazaga keyin qo'shilgan ustunlar (jadval, ustun, ta'rif)
+MIGRATIONS = [
+    ("creators", "level_override", "TEXT"),
+    ("vouchers", "reminded", "TEXT NOT NULL DEFAULT '[]'"),
+    ("carry", "reminded", "TEXT NOT NULL DEFAULT '[]'"),
+    ("snapshots", "image_path", "TEXT"),
+    ("snapshots", "ocr_views", "INTEGER"),
+    ("snapshots", "typed_views", "INTEGER"),
+    ("snapshots", "flags", "TEXT NOT NULL DEFAULT '[]'"),
+]
+LEVELS = ("Yangi", "Faol", "Hamkor")
+EXPIRY_REMIND_DAYS = (7, 3, 1)
 
 
 class StoreError(Exception):
@@ -75,6 +92,10 @@ class Store:
         self._db.execute("PRAGMA foreign_keys=ON")
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
+        for table, col, decl in MIGRATIONS:
+            cols = {r[1] for r in self._db.execute(f"PRAGMA table_info({table})")}
+            if col not in cols:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
     # ---------- umumiy ----------
 
@@ -195,7 +216,8 @@ class Store:
     def reels_of(self, tg_id):
         return self._all("SELECT * FROM reels WHERE tg_id=? ORDER BY posted_at DESC", (tg_id,))
 
-    def add_snapshot(self, reel_id, views, source, file_id=None, verified=False, actor=None):
+    def add_snapshot(self, reel_id, views, source, file_id=None, verified=False, actor=None,
+                     image_path=None, ocr_views=None, typed_views=None, flags=()):
         views = int(views)
         if views < 0 or views > 1_000_000_000:
             raise StoreError("Ko'rishlar soni noto'g'ri.")
@@ -206,8 +228,10 @@ class Store:
             raise StoreError("Bu video bo'yicha hisob-kitob yopilgan.")
         with self.tx() as db:
             cur = db.execute(
-                "INSERT INTO snapshots(reel_id,views,source,file_id,verified,created_at) VALUES(?,?,?,?,?,?)",
-                (reel_id, views, source, file_id, 1 if verified else 0, R.to_iso(R.utcnow())))
+                "INSERT INTO snapshots(reel_id,views,source,file_id,verified,created_at,image_path,ocr_views,"
+                "typed_views,flags) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (reel_id, views, source, file_id, 1 if verified else 0, R.to_iso(R.utcnow()), image_path,
+                 ocr_views, typed_views, json.dumps(list(flags), ensure_ascii=False)))
             if verified:
                 db.execute("UPDATE reels SET last_views=? WHERE id=?", (views, reel_id))
             self._audit(db, actor, "snapshot", reel_id=reel_id, views=views, source=source, verified=verified)
@@ -410,18 +434,175 @@ class Store:
         available = sum(v["nominal"] for v in active) + (carry["amount"] if carry else 0)
         earned = sum(v["nominal"] - v["carried_in"] for v in history)
         successful = sum(1 for r in reels if r["status"] == "rewarded")
-        level = "Hamkor" if successful >= 5 else ("Faol" if successful >= 2 else "Yangi")
+        level = self.level_of(c, successful)
+        promo = self.promo_stats(tg_id)
         return {
             "profile": {k: c[k] for k in ("tg_id", "first_name", "last_name", "username", "photo_url", "phone",
                                            "instagram", "status", "promo_code", "created_at", "approved_at")},
-            "level": level, "successful_reels": successful,
+            "level": level, "level_manual": bool(c.get("level_override")), "successful_reels": successful,
+            "promo": promo, "brief": self.get_setting("brief", ""),
             "balance": {"available": available, "pending": pending, "earned_total": earned},
             "voucher": dict(active[0]) if active else None,
-            "carry": carry, "vouchers": history, "reels": reels,
+            "carry": {k: carry[k] for k in ("amount", "expires_at")} if carry else None,
+            "vouchers": history, "reels": reels,
             "rules": {"min_views": R.MIN_VIEWS, "base": R.BASE_REWARD, "step_views": R.STEP_VIEWS,
                       "step_reward": R.STEP_REWARD, "cap_views": R.CAP_VIEWS, "max_reward": R.MAX_REWARD,
                       "tracking_days": R.TRACKING_DAYS, "voucher_days": R.VOUCHER_DAYS},
         }
+
+    # ---------- daraja ----------
+
+    @staticmethod
+    def level_of(c, successful):
+        if c.get("level_override") in LEVELS:
+            return c["level_override"]
+        return "Hamkor" if successful >= 5 else ("Faol" if successful >= 2 else "Yangi")
+
+    def set_level(self, tg_id, level, admin_id):
+        """level: 'Yangi' | 'Faol' | 'Hamkor' — qo'lda; None yoki 'auto' — avtomatik hisob."""
+        if level in (None, "", "auto", "avto"):
+            level = None
+        elif level not in LEVELS:
+            raise StoreError("Daraja: Yangi, Faol, Hamkor yoki avto.")
+        if not self.creator(tg_id):
+            raise StoreError("Bloger topilmadi.")
+        with self.tx() as db:
+            db.execute("UPDATE creators SET level_override=? WHERE tg_id=?", (level, tg_id))
+            self._audit(db, admin_id, "level_set", tg_id=tg_id, level=level)
+
+    def set_status(self, tg_id, status, admin_id):
+        if status not in ("approved", "blocked"):
+            raise StoreError("Holat noto'g'ri.")
+        with self.tx() as db:
+            db.execute("UPDATE creators SET status=? WHERE tg_id=?", (status, tg_id))
+            self._audit(db, admin_id, "status_set", tg_id=tg_id, status=status)
+
+    def creator_by_instagram(self, name):
+        return self._one("SELECT * FROM creators WHERE instagram=?", ((name or "").strip().lstrip("@").lower(),))
+
+    # ---------- promo-kod savdolari ----------
+
+    def record_promo_sale(self, code, amount, admin_id, receipt=""):
+        amount = int(amount)
+        if amount <= 0:
+            raise StoreError("Summa noto'g'ri.")
+        c = self._one("SELECT * FROM creators WHERE promo_code=?", ((code or "").strip().upper(),))
+        if not c:
+            raise StoreError("Bunday promo-kod yo'q.")
+        with self.tx() as db:
+            db.execute("INSERT INTO promo_sales(tg_id,code,amount,receipt,admin_id,at) VALUES(?,?,?,?,?,?)",
+                       (c["tg_id"], c["promo_code"], amount, receipt, admin_id, R.to_iso(R.utcnow())))
+            self._audit(db, admin_id, "promo_sale", code=c["promo_code"], amount=amount)
+        return c
+
+    def promo_stats(self, tg_id):
+        month = R.to_iso(R.utcnow() - timedelta(days=30))
+        row = self._one("SELECT COUNT(*) n, COALESCE(SUM(amount),0) s FROM promo_sales WHERE tg_id=?", (tg_id,))
+        row30 = self._one("SELECT COUNT(*) n, COALESCE(SUM(amount),0) s FROM promo_sales WHERE tg_id=? AND at>=?",
+                          (tg_id, month))
+        return {"count": row["n"], "sum": row["s"], "count_30d": row30["n"], "sum_30d": row30["s"]}
+
+    # ---------- sozlamalar (kontent brifi) ----------
+
+    def get_setting(self, key, default=None):
+        row = self._one("SELECT value FROM settings WHERE key=?", (key,))
+        return row["value"] if row else default
+
+    def set_setting(self, key, value, admin_id=None):
+        with self.tx() as db:
+            db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (key, value))
+            self._audit(db, admin_id, "setting", key=key)
+
+    # ---------- vaucher muddati eslatmalari ----------
+
+    def expiry_reminders(self):
+        """[(tg_id, kind, code_or_None, amount, expires_at, days)] — 7, 3 va 1 kun qolganda bir martadan."""
+        now = R.utcnow()
+        out = []
+        for v in self._all("SELECT * FROM vouchers WHERE status='active'"):
+            out += self._due_expiry("vouchers", "id", v["id"], v, now, ("voucher", v["code"], v["nominal"]))
+        for c in self._all("SELECT * FROM carry"):
+            out += self._due_expiry("carry", "tg_id", c["tg_id"], c, now, ("carry", None, c["amount"]))
+        return out
+
+    def _due_expiry(self, table, key, key_val, row, now, info):
+        left = (R.from_iso(row["expires_at"]) - now).total_seconds() / 86400
+        if left <= 0:
+            return []
+        sent = set(json.loads(row.get("reminded") or "[]"))
+        due = [d for d in EXPIRY_REMIND_DAYS if left <= d and d not in sent]
+        if not due:
+            return []
+        with self.tx() as db:
+            db.execute(f"UPDATE {table} SET reminded=? WHERE {key}=?",
+                       (json.dumps(sorted(sent | {d for d in EXPIRY_REMIND_DAYS if left <= d})), key_val))
+        kind, code, amount = info
+        return [(row["tg_id"], kind, code, amount, row["expires_at"], max(1, int(left + 0.999)))]
+
+    # ---------- administrator uchun ----------
+
+    def set_snapshot_image(self, snap_id, path):
+        with self.tx() as db:
+            db.execute("UPDATE snapshots SET image_path=? WHERE id=?", (path, snap_id))
+
+    def snapshots_of(self, reel_id):
+        rows = self._all("SELECT * FROM snapshots WHERE reel_id=? ORDER BY id", (reel_id,))
+        for r in rows:
+            r["flags"] = json.loads(r.get("flags") or "[]")
+        return rows
+
+    def admin_overview(self):
+        now = R.to_iso(R.utcnow())
+        count = lambda sql, a=(): self._one(sql, a)["n"]  # noqa: E731
+        shots = self._all(
+            "SELECT s.*, r.url, r.shortcode, r.posted_at, r.ends_at, r.last_views, r.tg_id, c.instagram "
+            "FROM snapshots s JOIN reels r ON r.id=s.reel_id JOIN creators c ON c.tg_id=r.tg_id "
+            "WHERE s.verified=0 AND r.status IN ('monitoring','awaiting_final') ORDER BY s.id")
+        for sh in shots:
+            sh["flags"] = json.loads(sh.get("flags") or "[]")
+        rewards = self._all(
+            "SELECT w.*, r.url, r.shortcode, r.tg_id, c.instagram FROM rewards w JOIN reels r ON r.id=w.reel_id "
+            "JOIN creators c ON c.tg_id=r.tg_id WHERE w.status='pending' ORDER BY w.id")
+        creators = self._all("SELECT * FROM creators WHERE status<>'draft' ORDER BY created_at DESC")
+        for c in creators:
+            succ = count("SELECT COUNT(*) n FROM reels WHERE tg_id=? AND status='rewarded'", (c["tg_id"],))
+            c["level"] = self.level_of(c, succ)
+            c["successful_reels"] = succ
+            c["active_reels"] = count("SELECT COUNT(*) n FROM reels WHERE tg_id=? AND status IN "
+                                      "('monitoring','awaiting_final','awaiting_approval')", (c["tg_id"],))
+            c["promo"] = self.promo_stats(c["tg_id"])
+        outstanding = self._one(
+            "SELECT COALESCE((SELECT SUM(nominal) FROM vouchers WHERE status='active' AND expires_at>?),0) + "
+            "COALESCE((SELECT SUM(amount) FROM carry WHERE expires_at>?),0) n", (now, now))["n"]
+        month = R.to_iso(R.utcnow() - timedelta(days=30))
+        return {
+            "stats": {
+                "creators": count("SELECT COUNT(*) n FROM creators WHERE status='approved'"),
+                "applications": count("SELECT COUNT(*) n FROM creators WHERE status='pending'"),
+                "active_reels": count("SELECT COUNT(*) n FROM reels WHERE status IN ('monitoring','awaiting_final')"),
+                "issued_30d": self._one("SELECT COALESCE(SUM(nominal-carried_in),0) n FROM vouchers WHERE issued_at>=?",
+                                        (month,))["n"],
+                "outstanding": outstanding,
+                "promo_30d": self._one("SELECT COALESCE(SUM(amount),0) n FROM promo_sales WHERE at>=?", (month,))["n"],
+            },
+            "applications": self.pending_creators(),
+            "screenshots": shots, "rewards": rewards, "creators": creators,
+            "brief": self.get_setting("brief", ""),
+        }
+
+    def creator_detail(self, tg_id):
+        c = self.creator(tg_id)
+        if not c:
+            raise StoreError("Bloger topilmadi.")
+        ov = self.overview(tg_id)
+        for r in ov["reels"]:
+            r["snapshots"] = self.snapshots_of(r["id"])
+        ov["promo_sales"] = self._all("SELECT code, amount, receipt, at FROM promo_sales WHERE tg_id=? ORDER BY id DESC "
+                                      "LIMIT 30", (tg_id,))
+        ov["profile"]["level_override"] = c.get("level_override")
+        ov["profile"]["note"] = c.get("note")
+        return ov
 
     # ---------- xabar almashinuvi ----------
 

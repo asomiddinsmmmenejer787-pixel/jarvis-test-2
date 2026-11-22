@@ -36,10 +36,10 @@ h1,h2,h3,.num{font-family:'Fredoka',system-ui,sans-serif;font-weight:600;margin:
 .hero .lbl{font-size:13px;font-weight:700;opacity:.85;text-transform:uppercase;letter-spacing:.06em}
 .hero .num{font-size:38px;margin:6px 0 2px}
 .hero .sub{font-size:14px;font-weight:600}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
 .card{background:var(--surface);border-radius:20px;padding:16px;box-shadow:var(--shadow);border:1px solid var(--line)}
 .card .lbl{font-size:12px;color:var(--soft);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.card .num{font-size:22px;margin-top:6px;white-space:nowrap}
+.card .num{font-size:21px;margin-top:6px}
 .card .hint{font-size:12px;color:var(--soft);margin-top:4px;line-height:1.35}
 .sec{display:flex;align-items:baseline;justify-content:space-between;margin:22px 2px 10px}
 .sec h2{font-size:20px}.sec a{color:var(--accent-ink);font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
@@ -97,6 +97,15 @@ nav button.on{color:var(--accent-ink)}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;
   border-radius:12px;font-weight:700;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.on{opacity:1}
+.brief{background:var(--surface2);border-radius:20px;padding:16px;margin-top:12px}
+.brief .lbl{font-size:12px;font-weight:800;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.05em}
+.brief p{margin:6px 0 0;font-weight:600;line-height:1.45}
+.alert{background:var(--warn-bg);color:var(--warn);border-radius:14px;padding:12px 14px;font-weight:700;font-size:14px;margin-top:12px}
+.sheet{position:fixed;inset:0;background:rgba(20,27,39,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}
+.sheet.on{display:flex}
+.sheet .in{background:var(--surface);color:var(--ink);width:100%;max-width:560px;border-radius:24px 24px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom))}
+.sheet h3{font-size:20px;margin-bottom:8px}
+.btn.small{padding:10px;font-size:14px;margin-top:10px}
 .err{background:var(--bad-bg);color:var(--bad);padding:14px;border-radius:14px;margin-top:20px;text-align:center}
 </style>
 </head>
@@ -123,6 +132,13 @@ nav button.on{color:var(--accent-ink)}
       <div class="card"><div class="lbl">Jami topilgan</div><div class="num" id="bal-ea">—</div>
         <div class="hint" id="bal-ea-sub">Barcha tasdiqlangan mukofotlar</div></div>
     </div>
+    <div id="expiry"></div>
+    <div id="brief"></div>
+    <div class="card" style="margin-top:12px"><div class="lbl">Promo-kodingiz</div>
+      <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <div class="num" id="promo-code" style="font-size:22px;cursor:pointer">—</div>
+        <div style="text-align:right"><div class="num" id="promo-n" style="font-size:22px">0</div><div class="hint" style="margin:0">ta xarid</div></div></div>
+      <div class="hint" id="promo-sub">Obunachilaringiz shu kod bilan xarid qilsa, shu yerda ko'rinadi.</div></div>
     <div class="sec"><h2>Videolarim</h2><a data-go="reels">Hammasi</a></div>
     <div id="home-reels"></div>
   </section>
@@ -131,7 +147,7 @@ nav button.on{color:var(--accent-ink)}
   <section class="view" id="v-reels">
     <div class="sec" style="margin-top:4px"><h2>Har bir video qancha topyapti</h2></div>
     <div id="reels"></div>
-    <button class="btn ghost" id="btn-shot">📸 Skrinshot yuborish (botda)</button>
+    <input type="file" id="shot-file" accept="image/*" hidden>
   </section>
 
   <!-- VAUCHER -->
@@ -181,6 +197,7 @@ nav button.on{color:var(--accent-ink)}
   <button data-go="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profil</button>
 </div></nav>
 <div class="toast" id="toast"></div>
+<div class="sheet" id="sheet"><div class="in" id="sheet-in"></div></div>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -234,6 +251,7 @@ function reelCard(r, rules){
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="meta"><span>${r.day}/${rules.tracking_days} kun</span><span>${dt(r.posted_at)} → ${dt(r.ends_at)}</span></div>
     ${next ? `<div class="note">${next}</div>` : ""}
+    ${(r.status === "monitoring" || r.status === "awaiting_final") ? `<button class="btn small ghost" data-shot="${r.id}">📸 Skrinshot yuklash</button>` : ""}
   </div>`;
 }
 
@@ -251,6 +269,14 @@ function render(){
   $("bal-pe").textContent = som(b.pending);
   $("bal-ea").textContent = som(b.earned_total);
   $("bal-ea-sub").textContent = `${d.successful_reels} ta muvaffaqiyatli video`;
+  const days = v ? daysLeft(v.expires_at) : d.carry ? daysLeft(d.carry.expires_at) : null;
+  $("expiry").innerHTML = days !== null && days <= 7 ? `<div class="alert">⏳ ${v ? "Vaucheringiz" : "Qoldig'ingiz"} muddati ${days} kundan keyin tugaydi — ${dt(v ? v.expires_at : d.carry.expires_at, true)} gacha ishlatib qoling.</div>` : "";
+  $("brief").innerHTML = d.brief ? `<div class="brief"><div class="lbl">📝 Joriy topshiriq</div><p>${esc(d.brief)}</p></div>` : "";
+  const pr = d.promo || {count: 0, count_30d: 0};
+  $("promo-code").textContent = p.promo_code || "—";
+  $("promo-code").onclick = () => { if (p.promo_code && navigator.clipboard) { navigator.clipboard.writeText(p.promo_code); toast("Promo-kod nusxalandi"); } };
+  $("promo-n").textContent = fmt(pr.count);
+  $("promo-sub").textContent = pr.count ? `Oxirgi 30 kunda ${fmt(pr.count_30d)} ta xarid.` : "Obunachilaringiz shu kod bilan xarid qilsa, shu yerda ko'rinadi.";
   const reels = d.reels || [];
   $("home-reels").innerHTML = reels.length ? reels.slice(0, 2).map(r => reelCard(r, rules)).join("")
     : `<div class="empty">Hali video yo'q. Do'konda video olib, botga Reels havolasini yuboring.</div>`;
@@ -268,6 +294,7 @@ function render(){
   const cc = $("copy-code");
   if (cc) cc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(v.code); toast("Kod nusxalandi"); };
   calcBuy(); calcViews();
+  document.querySelectorAll("[data-shot]").forEach(b => b.onclick = () => { shotReel = +b.dataset.shot; $("shot-file").value = ""; $("shot-file").click(); });
   const hist = d.vouchers || [];
   $("vhist").innerHTML = hist.length ? hist.map(h => `<div class="it"><div><b>${esc(h.code)}</b>
       <small>${dt(h.issued_at)} · ${VSTATUS[h.status] || h.status}${h.used_amount ? " · ishlatildi " + som(h.used_amount) : ""}</small></div>
@@ -281,7 +308,7 @@ function render(){
   const levels = ["Yangi", "Faol", "Hamkor"];
   $("plevel").innerHTML = levels.map(l => `<div class="${l === d.level ? "on" : ""}">${l}</div>`).join("");
   const n = d.successful_reels;
-  $("plevel-hint").textContent = n >= 5 ? "Uyda suratga olish va yetkazib berish imkoniyati ochiq (administrator tasdig'i bilan)."
+  $("plevel-hint").textContent = d.level_manual ? "Darajangiz administrator tomonidan belgilangan." : n >= 5 ? "Uyda suratga olish va yetkazib berish imkoniyati ochiq (administrator tasdig'i bilan)."
     : `Hamkor darajasigacha yana ${5 - n} ta muvaffaqiyatli video.`;
   const rows = [
     ["Telegram ID", t.id || p.tg_id], ["Telegram", (t.username || p.username) ? "@" + (t.username || p.username) : "—"],
@@ -326,7 +353,40 @@ function go(name){
   window.scrollTo({top: 0}); if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
 }
 const toBot = () => { if (tg) tg.close(); else toast("Telegram botda davom eting"); };
-$("btn-shot").onclick = toBot; $("btn-chat").onclick = toBot;
+$("btn-chat").onclick = toBot;
+
+// ---------- skrinshot yuklash ----------
+let shotReel = null;
+function sheet(html){ $("sheet-in").innerHTML = html; $("sheet").classList.add("on"); }
+function closeSheet(){ $("sheet").classList.remove("on"); }
+$("sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
+function shrink(file){ return new Promise((ok, bad) => { const img = new Image(); const url = URL.createObjectURL(file);
+  img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)); const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.85)); };
+  img.onerror = () => bad(new Error("Rasm ochilmadi")); img.src = url; }); }
+async function post(path, body){
+  const res = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-Init-Data": initData}, body: JSON.stringify(body)});
+  const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.detail || "Xato"); return data; }
+function shotDone(r){
+  sheet(`<h3>✅ Yuborildi</h3><p class="note">Jarvis o'qidi: <b>${fmt(r.views)}</b> ko'rish. Administrator tasdiqlagach hisobingizda ko'rinadi.</p>
+    <button class="btn" onclick="closeSheet()">Yaxshi</button>`); load(); }
+$("shot-file").addEventListener("change", async e => {
+  const file = e.target.files[0]; if (!file || shotReel === null) return;
+  if (DEMO) { sheet(`<h3>Namuna rejimi</h3><p class="note">Telegram botdan ochilganda skrinshot Jarvis'ga yuboriladi.</p><button class="btn" onclick="closeSheet()">Yaxshi</button>`); return; }
+  sheet(`<h3>🔎 Jarvis skrinshotni o'qiyapti...</h3><p class="note">Bir necha soniya.</p>`);
+  try {
+    const image = await shrink(file);
+    const r = await post("/creator/api/screenshot", {reel_id: shotReel, image});
+    if (r.need_views) {
+      sheet(`<h3>Raqamni yozing</h3><p class="note">Jarvis raqamni aniq o'qiy olmadi. Skrinshotdagi ko'rishlar (Views) soni:</p>
+        <input type="number" id="shot-views" inputmode="numeric" placeholder="Masalan: 25400"><button class="btn" id="shot-send">Yuborish</button>`);
+      $("shot-send").onclick = async () => { try { shotDone(await post("/creator/api/screenshot/views",
+        {reel_id: shotReel, views: $("shot-views").value, image_token: r.image_token, image_path_id: r.image_path_id})); }
+        catch (er) { toast(er.message); } };
+    } else shotDone(r);
+  } catch (er) { sheet(`<h3>Yuborilmadi</h3><p class="note">${esc(er.message)}</p><button class="btn" onclick="closeSheet()">Yopish</button>`); }
+});
 
 function demoData(){
   const now = Date.now(), iso = d => new Date(now + d * 864e5).toISOString();
@@ -334,7 +394,9 @@ function demoData(){
     telegram: {id: 123456789, first_name: "Madina", last_name: "Karimova", username: "madina_blog"},
     profile: {tg_id: 123456789, first_name: "Madina", last_name: "Karimova", username: "madina_blog", phone: "+998 90 123 45 67",
       instagram: "madina_blog", status: "approved", promo_code: "MADINABL", created_at: iso(-60), approved_at: iso(-59)},
-    level: "Faol", successful_reels: 3,
+    level: "Faol", level_manual: false, successful_reels: 3,
+    brief: "Shu hafta rolikli krossovka va dronlarni suratga oling. Bolaning reaksiyasi videoning boshida bo'lsin.",
+    promo: {count: 14, sum: 3200000, count_30d: 6, sum_30d: 1400000},
     balance: {available: 300000, pending: 444000, earned_total: 720000},
     voucher: {code: "BD-7K92-QX4M", nominal: 300000, carried_in: 80000, expires_at: iso(21)}, carry: null,
     vouchers: [{code: "BD-7K92-QX4M", nominal: 300000, status: "active", issued_at: iso(-9)},

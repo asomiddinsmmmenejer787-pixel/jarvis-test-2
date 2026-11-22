@@ -280,6 +280,7 @@ nav .dotc.show{display:flex}
     </div>
 
     <div class="quick">
+      <button class="qa" onclick="go('creators')">👥 Blogerlar<span class="dotc" id="crBadge" style="position:static;display:none;margin-left:6px"></span></button>
       <button class="qa" onclick="go('ads')">🎯 Target</button>
       <button class="qa" onclick="go('shop');shopTab('stock')">📦 Ombor</button>
       <button class="qa" onclick="go('jarvis');setChip('/ideas')">💡 G'oya so'rash</button>
@@ -464,6 +465,12 @@ nav .dotc.show{display:flex}
       <summary><div>Akkaunt va tizim<small id="igUser">—</small></div></summary>
       <div class="card"><div class="grid" id="tiles"></div><div class="grid" id="sysTiles" style="margin-top:10px"></div></div>
     </details>
+  </section>
+  <!-- BLOGERLAR (Creator Rewards) -->
+  <section class="view" id="v-creators">
+    <h2 class="sec">Blogerlar</h2>
+    <div class="sub">Arizalar, skrinshotlar, mukofotlar, vaucher va promo-kodlar.</div>
+    <div id="creatorsBox"><div class="muted">Yuklanmoqda...</div></div>
   </section>
 </main>
 
@@ -806,12 +813,12 @@ function go(v){ curView=v; if(!state.busy) $('#proc').classList.remove('show');
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
   document.body.classList.toggle('home', v==='home');
-  if (v==='home') loadHome(false); if (v==='inbox') loadComments(); if (v==='ads') loadAds(); if (v==='shop') shopTab(shopCur);
+  if (v==='home') loadHome(false); if (v==='inbox') loadComments(); if (v==='ads') loadAds(); if (v==='shop') shopTab(shopCur); if (v==='creators' && window.loadCreators) loadCreators();
   window.scrollTo({top:0,behavior:'smooth'}) }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
 $('#tasksBox').addEventListener('toggle',e=>{ if(e.target.open) loadTasks() });
 async function refreshNow(){ const b=$('#refreshBtn'); b.classList.add('spin'); haptic();
-  try{ if(curView==='home') await loadHome(true); else if(curView==='inbox') await loadComments(); else if(curView==='ads') await loadAds(); else if(curView==='shop') shopTab(shopCur); else await loadStatus() }
+  try{ if(curView==='home') await loadHome(true); else if(curView==='inbox') await loadComments(); else if(curView==='ads') await loadAds(); else if(curView==='shop') shopTab(shopCur); else if(curView==='creators' && window.loadCreators) await loadCreators(); else await loadStatus() }
   finally{ setTimeout(()=>b.classList.remove('spin'),400) } }
 
 // ---------- jarayon ko'rsatkichi ----------
@@ -1243,5 +1250,6 @@ else {
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden && curView==='home') loadHome(false) });
 }
 </script>
+<script src="/creator/admin.js"></script>
 </body>
 </html>

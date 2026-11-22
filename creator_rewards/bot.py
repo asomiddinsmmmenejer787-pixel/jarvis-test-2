@@ -3,13 +3,15 @@ creator_rewards/bot.py
 ----------------------
 Blogerlar uchun alohida Telegram bot (CREATOR_BOT_TOKEN). Jarvis'ning shaxsiy botiga tegmaydi.
 
-Bloger:  ro'yxatdan o'tish (telefon + Instagram), Reels qo'shish, skrinshot yuborish,
-         vaucher, HUD (mini ilova), administrator bilan yozishish.
-Admin:   arizani tasdiqlash, skrinshotdagi raqamni tasdiqlash, mukofotni tasdiqlash,
-         /ishlat KOD SUMMA — xariddan keyin vaucherni ishlatish, /tekshir KOD, /arizalar.
+Bloger:  ro'yxatdan o'tish (telefon + Instagram), Reels qo'shish, skrinshot yuborish (Jarvis raqamni o'zi
+         o'qiydi), vaucher, kabinet (mini ilova), administrator bilan yozishish.
+Admin:   arizani, skrinshotni va mukofotni tasdiqlash; /ishlat KOD SUMMA [chek]; /promo KOD SUMMA [chek];
+         /daraja @instagram Hamkor|Faol|Yangi|avto; /brif matn; /tekshir KOD; /arizalar.
+         Xuddi shu amallar Jarvis HUD'ning "Blogerlar" bo'limida ham bor.
 """
 
 import asyncio
+import io
 import logging
 import os
 
@@ -19,7 +21,8 @@ from telegram.ext import (ApplicationBuilder, CallbackQueryHandler, CommandHandl
                           MessageHandler, filters)
 
 from . import rewards as R
-from .store import Store, StoreError
+from . import screens
+from .store import LEVELS, Store, StoreError
 
 log = logging.getLogger("creator_bot")
 TICK_SEC = int(os.environ.get("CREATOR_TICK_SEC", "600") or 600)
@@ -41,7 +44,7 @@ RULES_TEXT = (
     "• Sun'iy ko'rish yoki soxta skrinshot aniqlansa, hisob to'xtatiladi."
 )
 
-_ctx = {"store": None, "admins": lambda: set()}
+_ctx = {"store": None, "admins": lambda: set(), "app": None, "loop": None}
 
 
 def store() -> Store:
@@ -66,6 +69,19 @@ def hud_url():
     return f"https://{domain}/creator/app" if domain else ""
 
 
+def run_in_bot(coro, timeout=90):
+    """Web-server oqimidan bot amalini bajarish (masalan, HUD'dan tasdiqlash)."""
+    loop, app = _ctx["loop"], _ctx["app"]
+    if loop is None or app is None:
+        coro.close()
+        raise StoreError("Blogerlar boti ishlamayapti (CREATOR_BOT_TOKEN).")
+    return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout)
+
+
+def bot():
+    return _ctx["app"].bot
+
+
 def main_keyboard():
     url = hud_url()
     first = [KeyboardButton(BTN_HUD, web_app=WebAppInfo(url=url))] if url else []
@@ -74,17 +90,144 @@ def main_keyboard():
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
-async def notify_admins(bot, text, **kw):
+async def safe_send(b, chat_id, text, **kw):
+    try:
+        return await b.send_message(chat_id, text, **kw)
+    except Exception:
+        log.exception("Xabar yuborilmadi | chat=%s", chat_id)
+        return None
+
+
+async def notify_admins(b, text, **kw):
     sent = []
     for a in admins():
-        try:
-            sent.append(await bot.send_message(a, text, **kw))
-        except Exception:
-            log.exception("Administratorga xabar yuborilmadi")
+        m = await safe_send(b, a, text, **kw)
+        if m:
+            sent.append(m)
     return sent
 
 
-# ---------------- bloger: ro'yxatdan o'tish ----------------
+def fmt(n):
+    return f"{int(n):,}".replace(",", " ")
+
+
+# ================= umumiy amallar (bot va HUD uchun) =================
+
+async def act_decide_creator(b, tg_id, approve, admin_id, note=""):
+    c = store().decide_creator(tg_id, approve, admin_id, note)
+    if approve:
+        await safe_send(b, tg_id, "🎉 Arizangiz tasdiqlandi! Endi do'konga kelib video olishingiz mumkin.\n"
+                                  f"Obunachilaringiz uchun promo-kod: {c['promo_code']}", reply_markup=main_keyboard())
+    else:
+        await safe_send(b, tg_id, "Afsuski, arizangiz hozircha tasdiqlanmadi."
+                        + (f"\nSabab: {note}" if note else "") + "\nSavollar bo'lsa, shu yerga yozing.")
+    return c
+
+
+async def submit_screenshot(b, tg_id, reel_id, data, typed_views=None, image_path=None):
+    """Skrinshotni saqlaydi, Jarvis o'qiydi, tekshiradi va administratorga yuboradi.
+    Raqamni o'qib bo'lmasa va bloger yozmagan bo'lsa: {'need_views': True, 'image_path': ...}."""
+    st = store()
+    reel = st.reel(int(reel_id))
+    if not reel or reel["tg_id"] != int(tg_id):
+        raise StoreError("Video topilmadi.")
+    if reel["status"] not in ("monitoring", "awaiting_final"):
+        raise StoreError("Bu video bo'yicha skrinshot qabul qilinmaydi.")
+    if image_path is None:
+        image_path = screens.save_image(reel["id"], bytes(data))
+    with open(image_path, "rb") as f:
+        data = f.read()
+    ocr = await asyncio.to_thread(screens.read_insights, data)
+    ocr_views = ocr.get("views") if isinstance(ocr, dict) and isinstance(ocr.get("views"), int) else None
+    if ocr_views is None and typed_views is None:
+        return {"need_views": True, "image_path": image_path}
+    views = ocr_views if ocr_views is not None else int(typed_views)
+    flags = screens.check_flags(reel, st.snapshots_of(reel["id"]), ocr, typed_views)
+    sid = st.add_snapshot(reel["id"], views, "screenshot", actor=tg_id, image_path=image_path,
+                          ocr_views=ocr_views, typed_views=typed_views, flags=flags)
+    c = st.creator(tg_id)
+    age = (R.utcnow() - R.from_iso(reel["posted_at"])).days
+    caption = (f"📸 @{c['instagram']} — {reel['shortcode']} ({age}-kun)\n{reel['url']}\n"
+               f"Jarvis o'qidi: {fmt(ocr_views) if ocr_views is not None else '—'}"
+               + (f"\nBloger yozdi: {fmt(typed_views)}" if typed_views is not None else "")
+               + (f"\nTaxminiy mukofot: {R.som(R.reward_for_views(views))}")
+               + ("".join(f"\n⚠️ {x}" for x in flags) if flags else "\n✅ Shubhali belgi topilmadi"))
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ {fmt(views)} — to'g'ri", callback_data=f"cr|sv|{sid}"),
+                                InlineKeyboardButton("✏️ Boshqa raqam", callback_data=f"cr|se|{sid}")]])
+    for a in admins():
+        try:
+            await b.send_photo(a, io.BytesIO(data), caption=caption[:1020], reply_markup=kb)
+        except Exception:
+            log.exception("Skrinshot administratorga yuborilmadi")
+    return {"snapshot_id": sid, "views": views, "ocr_views": ocr_views, "flags": flags}
+
+
+async def act_verify(b, snap_id, admin_id, views=None):
+    st = store()
+    reward = st.verify_snapshot(snap_id, admin_id, views)
+    snap = st.snapshot(snap_id)
+    reel = st.reel(snap["reel_id"])
+    await safe_send(b, reel["tg_id"], f"✅ Skrinshot tasdiqlandi: {fmt(reel['last_views'])} ko'rish.\n"
+                                      f"Hozirgi taxminiy mukofot: {R.som(R.reward_for_views(reel['last_views']))}")
+    if reward:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vaucher chiqarish", callback_data=f"cr|ra|{reward['id']}"),
+                                    InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|rx|{reward['id']}")]])
+        c = st.creator(reel["tg_id"])
+        await notify_admins(b, f"💰 Yakuniy hisob-kitob\n@{c['instagram']} — {reel['url']}\n"
+                               f"30 kunlik ko'rishlar: {fmt(reward['views'])}\nMukofot: {R.som(reward['amount'])}",
+                            reply_markup=kb)
+    elif st.reel(reel["id"])["status"] == "no_reward":
+        await safe_send(b, reel["tg_id"], "30 kun yakunlandi. Afsuski, 10 000 ko'rishga yetmadi, bu video uchun mukofot yo'q.")
+    return reward
+
+
+async def act_decide_reward(b, reward_id, approve, admin_id, note=""):
+    st = store()
+    rw = st.reward(int(reward_id))
+    if not rw:
+        raise StoreError("Hisob-kitob topilmadi.")
+    reel = st.reel(rw["reel_id"])
+    v = st.decide_reward(int(reward_id), approve, admin_id, note)
+    if v:
+        extra = f"\n(Oldingi qoldiq {R.som(v['carried_in'])} ham qo'shildi.)" if v["carried_in"] else ""
+        await safe_send(b, reel["tg_id"], f"🎟 Yangi vaucher!\nKod: {v['code']}\nQiymati: {R.som(v['nominal'])}{extra}\n"
+                                          f"Amal qiladi: {R.tashkent_str(v['expires_at'])} gacha.\n"
+                                          "Kod bir marta ishlatiladi, qoldiq keyingi vaucherga o'tadi.")
+    else:
+        await safe_send(b, reel["tg_id"], f"Video bo'yicha mukofot tasdiqlanmadi: {reel['url']}"
+                        + (f"\nSabab: {note}" if note else ""))
+    return v
+
+
+async def act_redeem(b, code, amount, admin_id, receipt=""):
+    res = store().redeem(code, amount, admin_id, receipt)
+    left = (f"Qoldiq: {R.som(res['left'])} — keyingi vaucheringizga qo'shiladi "
+            f"({R.tashkent_str(res['left_expires_at'], False)} gacha amal qiladi)." if res["left"] else "Qoldiq yo'q.")
+    await safe_send(b, res["tg_id"], f"🛍 Vaucheringiz ishlatildi.\nVaucher: {R.som(res['nominal'])}\n"
+                                     f"Ishlatildi: {R.som(res['used'])}\n{left}")
+    return res
+
+
+async def act_promo(b, code, amount, admin_id, receipt=""):
+    c = store().record_promo_sale(code, amount, admin_id, receipt)
+    stats = store().promo_stats(c["tg_id"])
+    await safe_send(b, c["tg_id"], f"🛒 Promo-kodingiz ({c['promo_code']}) bilan xarid bo'ldi: {R.som(int(amount))}.\n"
+                                   f"Jami: {stats['count']} ta xarid.")
+    return c
+
+
+async def act_set_level(b, tg_id, level, admin_id):
+    st = store()
+    st.set_level(tg_id, level, admin_id)
+    ov = st.overview(tg_id)
+    if ov["level"] == "Hamkor":
+        await safe_send(b, tg_id, "⭐️ Darajangiz: Hamkor. Endi uyda suratga olish va mahsulot yetkazib berish imkoniyati ochiq.")
+    else:
+        await safe_send(b, tg_id, f"Darajangiz yangilandi: {ov['level']}.")
+    return ov["level"]
+
+
+# ================= bloger =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
@@ -92,8 +235,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     if is_admin(u.id):
         await update.message.reply_text(
-            "Administrator rejimi.\n/arizalar — kutilayotgan arizalar\n/ishlat KOD SUMMA [chek] — vaucherni ishlatish\n"
-            "/tekshir KOD — vaucher holati\nBlogerga javob berish uchun uning xabariga Reply qiling.")
+            "Administrator rejimi. Hammasi Jarvis HUD'dagi «Blogerlar» bo'limida ham bor.\n"
+            "/arizalar — kutilayotgan arizalar\n/ishlat KOD SUMMA [chek] — vaucherni ishlatish\n"
+            "/promo KOD SUMMA [chek] — promo-kod bilan xarid\n/daraja @instagram Hamkor|Faol|Yangi|avto\n"
+            "/brif matn — blogerlar uchun joriy topshiriq\n/tekshir KOD — vaucher holati\n"
+            "Blogerga javob berish uchun uning xabariga Reply qiling.")
         return
     if c["status"] == "approved":
         await update.message.reply_text(f"Xush kelibsiz, {u.first_name}! Kabinetingiz tayyor.", reply_markup=main_keyboard())
@@ -120,25 +266,19 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     reply_markup=ReplyKeyboardRemove())
 
 
-async def ask_rules(update, ig):
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Roziman, ariza yuborish", callback_data="cr|apply")]])
-    await update.message.reply_text(f"Instagram: @{ig}\n\n{RULES_TEXT}", reply_markup=kb)
-
-
-# ---------------- bloger: menyu ----------------
-
 async def voucher_text(tg_id):
     ov = store().overview(tg_id)
     b = ov["balance"]
     lines = [f"Asosiy balans: {R.som(b['available'])}", f"Kutilayotgan (30 kun ichida): {R.som(b['pending'])}"]
     v = ov["voucher"]
     if v:
-        lines.append(f"\nFaol vaucher: {v['code']}\nQiymati: {R.som(v['nominal'])}\nAmal qiladi: {R.tashkent_str(v['expires_at'])} gacha")
+        lines.append(f"\nFaol vaucher: {v['code']}\nQiymati: {R.som(v['nominal'])}\n"
+                     f"Amal qiladi: {R.tashkent_str(v['expires_at'])} gacha")
     if ov["carry"]:
         lines.append(f"\nQoldiq: {R.som(ov['carry']['amount'])} — keyingi vaucheringizga qo'shiladi "
                      f"({R.tashkent_str(ov['carry']['expires_at'], False)} gacha).")
     if ov["profile"]["promo_code"]:
-        lines.append(f"\nObunachilaringiz uchun promo-kod: {ov['profile']['promo_code']}")
+        lines.append(f"\nPromo-kodingiz: {ov['profile']['promo_code']} · {ov['promo']['count']} ta xarid")
     return "\n".join(lines)
 
 
@@ -149,12 +289,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_admin(u.id):
         await admin_text(update, context, text)
         return
-    state = context.user_data.get("await")
+    state = context.user_data.get("await") or ""
     try:
         if state == "instagram":
             ig = st.set_instagram(u.id, text)
             context.user_data.pop("await", None)
-            await ask_rules(update, ig)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Roziman, ariza yuborish", callback_data="cr|apply")]])
+            await update.message.reply_text(f"Instagram: @{ig}\n\n{RULES_TEXT}", reply_markup=kb)
             return
         if state == "reel":
             rid = st.add_reel(u.id, text)
@@ -165,22 +306,12 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "1, 7, 14 va 30-kunlarda Insights skrinshotini so'rayman.", reply_markup=main_keyboard())
             await notify_admins(context.bot, f"🎬 Yangi Reels: @{c['instagram']}\n{r['url']}")
             return
-        if state and state.startswith("views:"):
-            rid, file_id = state.split(":", 2)[1:]
+        if state.startswith("views:"):
+            _, rid, path = state.split(":", 2)
             views = int(text.replace(" ", "").replace(",", "").replace(".", ""))
-            sid = st.add_snapshot(int(rid), views, "screenshot", file_id=file_id, actor=u.id)
             context.user_data.pop("await", None)
+            await submit_screenshot(context.bot, u.id, int(rid), None, typed_views=views, image_path=path)
             await update.message.reply_text("Rahmat! Skrinshot administratorga yuborildi.", reply_markup=main_keyboard())
-            r = st.reel(int(rid))
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ To'g'ri", callback_data=f"cr|sv|{sid}"),
-                                        InlineKeyboardButton("✏️ Boshqa raqam", callback_data=f"cr|se|{sid}")]])
-            for a in admins():
-                try:
-                    await context.bot.send_photo(
-                        a, file_id, reply_markup=kb,
-                        caption=f"📸 @{c['instagram']} — {r['url']}\nBloger yozgan ko'rishlar: {views:,}".replace(",", " "))
-                except Exception:
-                    log.exception("Skrinshot administratorga yuborilmadi")
             return
     except StoreError as e:
         await update.message.reply_text(str(e))
@@ -194,7 +325,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if text == BTN_REEL:
         context.user_data["await"] = "reel"
-        await update.message.reply_text("Instagram'da joylagan Collab Reels havolasini yuboring.")
+        brief = st.get_setting("brief", "")
+        await update.message.reply_text(("📝 Joriy topshiriq: " + brief + "\n\n" if brief else "")
+                                        + "Instagram'da joylagan Collab Reels havolasini yuboring.")
     elif text == BTN_SHOT:
         reels = [r for r in st.reels_of(u.id) if r["status"] in ("monitoring", "awaiting_final")]
         if not reels:
@@ -217,18 +350,29 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
-    state = context.user_data.get("await", "")
+    state = context.user_data.get("await") or ""
     if not state.startswith("photo:"):
         await update.message.reply_text(f"Skrinshot yuborish uchun avval «{BTN_SHOT}» tugmasini bosing.")
         return
-    rid = state.split(":")[1]
-    file_id = update.message.photo[-1].file_id
-    context.user_data["await"] = f"views:{rid}:{file_id}"
-    await update.message.reply_text("Skrinshotdagi ko'rishlar (Views) sonini raqam bilan yozing:")
-    log.info("Skrinshot qabul qilindi | user=%s reel=%s", u.id, rid)
+    rid = int(state.split(":")[1])
+    f = await update.message.photo[-1].get_file()
+    data = await f.download_as_bytearray()
+    await update.message.reply_text("🔎 Jarvis skrinshotni o'qiyapti...")
+    try:
+        res = await submit_screenshot(context.bot, u.id, rid, data)
+    except (StoreError, ValueError) as e:
+        await update.message.reply_text(str(e))
+        return
+    if res.get("need_views"):
+        context.user_data["await"] = f"views:{rid}:{res['image_path']}"
+        await update.message.reply_text("Raqamni aniq o'qiy olmadim. Skrinshotdagi ko'rishlar (Views) sonini yozing:")
+        return
+    context.user_data.pop("await", None)
+    await update.message.reply_text(f"✅ Jarvis o'qidi: {fmt(res['views'])} ko'rish. Administratorga yuborildi.",
+                                    reply_markup=main_keyboard())
 
 
-# ---------------- tugmalar ----------------
+# ================= tugmalar =================
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -256,71 +400,36 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("Ruxsat yo'q")
             return
         if action in ("ca", "cx"):
-            c = st.decide_creator(int(arg), action == "ca", u.id)
+            await act_decide_creator(context.bot, int(arg), action == "ca", u.id)
             await q.answer("Saqlandi")
             await q.edit_message_text(q.message.text + ("\n\n✅ Tasdiqlandi" if action == "ca" else "\n\n❌ Rad etildi"))
-            if action == "ca":
-                await context.bot.send_message(int(arg), "🎉 Arizangiz tasdiqlandi! Endi do'konga kelib video olishingiz mumkin.\n"
-                                                         f"Obunachilaringiz uchun promo-kod: {c['promo_code']}",
-                                               reply_markup=main_keyboard())
-            else:
-                await context.bot.send_message(int(arg), "Afsuski, arizangiz hozircha tasdiqlanmadi. Savollar bo'lsa, shu yerga yozing.")
         elif action == "sv":
+            await act_verify(context.bot, int(arg), u.id)
             await q.answer("Tasdiqlandi")
-            await after_verify(context, st, int(arg), u.id, None, q)
+            await q.edit_message_caption((q.message.caption or "") + "\n\n✅ Tasdiqlandi")
         elif action == "se":
             context.user_data["await"] = f"fix:{int(arg)}"
             await q.answer()
             await q.message.reply_text("Skrinshotdagi to'g'ri ko'rishlar sonini yozing:")
         elif action in ("ra", "rx"):
+            v = await act_decide_reward(context.bot, int(arg), action == "ra", u.id)
             await q.answer("Saqlandi")
-            rw = st.reward(int(arg))
-            reel = st.reel(rw["reel_id"])
-            v = st.decide_reward(int(arg), action == "ra", u.id)
-            if v:
-                await q.edit_message_text(q.message.text + f"\n\n✅ Vaucher chiqarildi: {v['code']}")
-                extra = f"\n(Oldingi qoldiq {R.som(v['carried_in'])} ham qo'shildi.)" if v["carried_in"] else ""
-                await context.bot.send_message(reel["tg_id"],
-                    f"🎟 Yangi vaucher!\nKod: {v['code']}\nQiymati: {R.som(v['nominal'])}{extra}\n"
-                    f"Amal qiladi: {R.tashkent_str(v['expires_at'])} gacha.\nKod bir marta ishlatiladi, qoldiq keyingi vaucherga o'tadi.")
-            else:
-                await q.edit_message_text(q.message.text + "\n\n❌ Rad etildi")
-                await context.bot.send_message(reel["tg_id"], f"Video bo'yicha mukofot tasdiqlanmadi: {reel['url']}")
+            await q.edit_message_text(q.message.text + (f"\n\n✅ Vaucher chiqarildi: {v['code']}" if v else "\n\n❌ Rad etildi"))
     except StoreError as e:
         await q.answer(str(e)[:190], show_alert=True)
 
 
-async def after_verify(context, st, snap_id, admin_id, views, q=None):
-    reward = st.verify_snapshot(snap_id, admin_id, views)
-    snap = st.snapshot(snap_id)
-    reel = st.reel(snap["reel_id"])
-    if q is not None:
-        await q.edit_message_caption((q.message.caption or "") + f"\n\n✅ Tasdiqlandi: {snap['views']:,}".replace(",", " "))
-    est = R.reward_for_views(reel["last_views"])
-    await context.bot.send_message(reel["tg_id"], f"✅ Skrinshot tasdiqlandi: {reel['last_views']:,} ko'rish.\n"
-                                                  f"Hozirgi taxminiy mukofot: {R.som(est)}".replace(",", " "))
-    if reward:
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vaucher chiqarish", callback_data=f"cr|ra|{reward['id']}"),
-                                    InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|rx|{reward['id']}")]])
-        c = st.creator(reel["tg_id"])
-        await notify_admins(context.bot, f"💰 Yakuniy hisob-kitob\n@{c['instagram']} — {reel['url']}\n"
-                                         f"30 kunlik ko'rishlar: {reward['views']:,}\nMukofot: {R.som(reward['amount'])}".replace(",", " "),
-                            reply_markup=kb)
-    elif reel["status"] == "no_reward":
-        await context.bot.send_message(reel["tg_id"], "30 kun yakunlandi. Afsuski, 10 000 ko'rishga yetmadi, bu video uchun mukofot yo'q.")
-
-
-# ---------------- administrator ----------------
+# ================= administrator =================
 
 async def admin_text(update, context, text):
     st = store()
-    state = context.user_data.get("await", "")
+    state = context.user_data.get("await") or ""
     replied = update.message.reply_to_message
     try:
         if state.startswith("fix:"):
             views = int(text.replace(" ", "").replace(",", ""))
             context.user_data.pop("await", None)
-            await after_verify(context, st, int(state.split(":")[1]), update.effective_user.id, views)
+            await act_verify(context.bot, int(state.split(":")[1]), update.effective_user.id, views)
             await update.message.reply_text("Saqlandi.")
             return
         if replied is not None:
@@ -335,30 +444,64 @@ async def admin_text(update, context, text):
     except ValueError:
         await update.message.reply_text("Faqat raqam yozing.")
         return
-    await update.message.reply_text("Buyruqlar: /arizalar, /ishlat KOD SUMMA [chek], /tekshir KOD")
+    await update.message.reply_text("Buyruqlar: /arizalar, /ishlat, /promo, /daraja, /brif, /tekshir")
 
 
-async def cmd_redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-    args = context.args
-    if len(args) < 2:
+def admin_only(fn):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if is_admin(update.effective_user.id):
+            try:
+                await fn(update, context)
+            except (StoreError, ValueError) as e:
+                await update.message.reply_text(f"❌ {e}")
+    return wrapper
+
+
+@admin_only
+async def cmd_redeem(update, context):
+    a = context.args
+    if len(a) < 2:
         await update.message.reply_text("Ishlatish: /ishlat BD-XXXX-XXXX 180000 [chek raqami]")
         return
-    try:
-        res = store().redeem(args[0], int(args[1].replace(" ", "")), update.effective_user.id, " ".join(args[2:]))
-    except (StoreError, ValueError) as e:
-        await update.message.reply_text(f"❌ {e}")
-        return
-    left = (f"Qoldiq: {R.som(res['left'])} — keyingi vaucheringizga qo'shiladi "
-            f"({R.tashkent_str(res['left_expires_at'], False)} gacha amal qiladi)." if res["left"] else "Qoldiq yo'q.")
-    await context.bot.send_message(res["tg_id"], f"🛍 Vaucheringiz ishlatildi.\nVaucher: {R.som(res['nominal'])}\n"
-                                                 f"Ishlatildi: {R.som(res['used'])}\n{left}")
+    res = await act_redeem(context.bot, a[0], int(a[1].replace(" ", "")), update.effective_user.id, " ".join(a[2:]))
     await update.message.reply_text(f"✅ {res['code']}: {R.som(res['used'])} ishlatildi, qoldiq {R.som(res['left'])}.")
 
 
-async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id) or not context.args:
+@admin_only
+async def cmd_promo(update, context):
+    a = context.args
+    if len(a) < 2:
+        await update.message.reply_text("Ishlatish: /promo MADINABL 250000 [chek raqami]")
+        return
+    c = await act_promo(context.bot, a[0], int(a[1].replace(" ", "")), update.effective_user.id, " ".join(a[2:]))
+    await update.message.reply_text(f"✅ @{c['instagram']} promo-kodi bilan xarid yozildi.")
+
+
+@admin_only
+async def cmd_level(update, context):
+    a = context.args
+    if len(a) < 2:
+        await update.message.reply_text("Ishlatish: /daraja @instagram Hamkor | Faol | Yangi | avto")
+        return
+    c = store().creator_by_instagram(a[0])
+    if not c:
+        await update.message.reply_text("Bunday Instagram bilan bloger topilmadi.")
+        return
+    level = a[1].capitalize() if a[1].lower() not in ("avto", "auto") else None
+    lv = await act_set_level(context.bot, c["tg_id"], level, update.effective_user.id)
+    await update.message.reply_text(f"✅ @{c['instagram']} darajasi: {lv}" + (" (qo'lda)" if level else " (avtomatik)"))
+
+
+@admin_only
+async def cmd_brief(update, context):
+    text = " ".join(context.args).strip()
+    store().set_setting("brief", text, update.effective_user.id)
+    await update.message.reply_text("✅ Topshiriq saqlandi." if text else "Topshiriq o'chirildi.")
+
+
+@admin_only
+async def cmd_check(update, context):
+    if not context.args:
         return
     v = store().voucher_by_code(context.args[0])
     if not v:
@@ -369,9 +512,8 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     f"Muddati: {R.tashkent_str(v['expires_at'])}\nBloger: @{c['instagram']}")
 
 
-async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
+@admin_only
+async def cmd_pending(update, context):
     rows = store().pending_creators()
     if not rows:
         await update.message.reply_text("Kutilayotgan ariza yo'q.")
@@ -382,33 +524,25 @@ async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         f"Instagram: https://instagram.com/{c['instagram']}", reply_markup=kb)
 
 
-# ---------------- fon jarayoni ----------------
+# ================= fon jarayoni =================
 
-async def tick(bot):
+async def tick(b):
     st = store()
     for r in st.close_due_reels():
-        try:
-            await bot.send_message(r["tg_id"], f"⏱ 30 kun yakunlandi: {r['url']}\nYakuniy Insights skrinshotini 24 soat ichida yuboring.")
-        except Exception:
-            log.exception("Blogerga xabar yuborilmadi")
-        await notify_admins(bot, f"⏱ 30 kun tugadi, yakuniy skrinshot kutilmoqda: {r['url']}")
+        await safe_send(b, r["tg_id"], f"⏱ 30 kun yakunlandi: {r['url']}\nYakuniy Insights skrinshotini 24 soat ichida yuboring.")
+        await notify_admins(b, f"⏱ 30 kun tugadi, yakuniy skrinshot kutilmoqda: {r['url']}")
     for r, day in st.due_reminders():
-        try:
-            await bot.send_message(r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring — «{BTN_SHOT}».")
-        except Exception:
-            log.exception("Eslatma yuborilmadi")
+        await safe_send(b, r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring — «{BTN_SHOT}».")
         st.mark_reminded(r["id"], day)
+    for tg_id, kind, code, amount, expires_at, days in st.expiry_reminders():
+        what = f"{code} vaucheringiz ({R.som(amount)})" if kind == "voucher" else f"{R.som(amount)} qoldig'ingiz"
+        await safe_send(b, tg_id, f"⏳ Eslatma: {what} muddati {days} kundan keyin tugaydi — "
+                                  f"{R.tashkent_str(expires_at)} gacha. Do'konga kelib ishlatib qoling!")
     expired, carries = st.expire_old()
     for v in expired:
-        try:
-            await bot.send_message(v["tg_id"], f"⌛️ {v['code']} vaucher muddati tugadi.")
-        except Exception:
-            pass
+        await safe_send(b, v["tg_id"], f"⌛️ {v['code']} vaucher muddati tugadi.")
     for row in carries:
-        try:
-            await bot.send_message(row["tg_id"], f"⌛️ {R.som(row['amount'])} qoldiq muddati tugadi.")
-        except Exception:
-            pass
+        await safe_send(b, row["tg_id"], f"⌛️ {R.som(row['amount'])} qoldiq muddati tugadi.")
 
 
 async def loop(app):
@@ -427,6 +561,9 @@ def build_app(token):
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ishlat", cmd_redeem))
+    app.add_handler(CommandHandler("promo", cmd_promo))
+    app.add_handler(CommandHandler("daraja", cmd_level))
+    app.add_handler(CommandHandler("brif", cmd_brief))
     app.add_handler(CommandHandler("tekshir", cmd_check))
     app.add_handler(CommandHandler("arizalar", cmd_pending))
     app.add_handler(CallbackQueryHandler(on_callback, pattern=r"^cr\|"))
@@ -447,6 +584,7 @@ async def start_bot(get_admin_ids):
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=False)
+    _ctx["app"], _ctx["loop"] = app, asyncio.get_running_loop()
     url = hud_url()
     if url:
         try:
@@ -456,3 +594,6 @@ async def start_bot(get_admin_ids):
     app.bot_data["loop"] = asyncio.create_task(loop(app))
     log.info("Blogerlar boti ishga tushdi.")
     return app
+
+
+__all__ = ["LEVELS", "start_bot", "run_in_bot", "store"]
