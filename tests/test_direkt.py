@@ -396,6 +396,52 @@ def run():
           "AI'ga post oxirgimi yoki yo'qligi aytildi")
     ig.requests.request = fake.request
 
+    print("\n9) Bir mijoz ketma-ket yozsa: takror javob va takror direkt yo'q (kuzatuv 22.11)")
+
+    class SameUserAI(FakeAI):
+        n = 0
+
+        def generate_json(self, system, message, temperature=0.9):
+            SameUserAI.n += 1
+            k = SameUserAI.n
+            replies = ["Samokatimiz zaryadda turibdi, narxini direktingizga yubordik.",
+                       "Yoqqanidan xursandmiz, rangini ham ko'rib chiqing!",
+                       "Bu model bolalarga juda qulay, ma'lumotni direktga tashladik.",
+                       "Rahmat, bunday iliq gapdan kayfiyatimiz ko'tarildi!",
+                       "Zo'r tanlov, hovlida ham, parkda ham yuradi."]
+            body = message.split("<komment>")[-1].split("</komment>")[0].lower()
+            cat = "price" if "narx" in body else "positive"
+            res = {"category": cat, "confidence": 0.9, "reply": replies[(k - 1) % len(replies)]}
+            if cat == "price":
+                res.update(dm="Salom! Samokat narxi 1 250 000 so'm.", dm_answered=True, topic="narx")
+            return res
+
+    fake5 = FakeInstagram()
+    ig.requests.request = fake5.request
+    fake5.comments["m1"] = [
+        {"id": "c201", "text": "Samokat narxi qancha?", "username": "oliya", "timestamp": ts(1)},
+        {"id": "c202", "text": "😍", "username": "oliya", "timestamp": ts(1)},
+        {"id": "c203", "text": "😍😍", "username": "oliya", "timestamp": ts(1)},
+        {"id": "c204", "text": "Narxi qancha edi?", "username": "oliya", "timestamp": ts(1)},
+        {"id": "c205", "text": "😍", "username": "boshqa_ona", "timestamp": ts(1)},
+    ]
+    fake5.comments["m2"] = []
+    catalog.set_dm_off("m1", False)
+    catalog.set_post_info("m1", {"title": "Samokat", "price": "1 250 000 so'm"})
+    r5 = auto_reply.CommentResponder(SameUserAI())
+    r5.set_dm_mode("auto")
+    r5.run_once()
+    got = {c for c, _ in fake5.replies}
+    check("c201" in got and "c204" in got, "Mijozning savollariga javob yozildi")
+    check("c202" not in got and "c203" not in got, "Javob olgan mijozning keyingi '😍' komentlariga javob yozilmadi")
+    check("c205" in got, "Boshqa odamning birinchi '😍' komentiga javob yozildi")
+    oliya_dms = [c for c, _ in fake5.dms if c in ("c201", "c204")]
+    check(oliya_dms == ["c201"], "Bir mijozga shu post bo'yicha direkt faqat bir marta ketdi")
+    check(auto_reply.repeat_short("😍", 1) and not auto_reply.repeat_short("😍", 0)
+          and not auto_reply.repeat_short("Zo'r", 1) and auto_reply.repeat_short("Zo'r", 2),
+          "Qisqa takror komment qoidasi")
+    ig.requests.request = fake.request
+
     print("\n✅ Direkt testlari o'tdi")
 
 

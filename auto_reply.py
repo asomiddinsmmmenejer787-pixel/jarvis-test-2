@@ -585,6 +585,19 @@ def is_short(text):
     return len(words) <= 2
 
 
+def repeat_short(text, replied):
+    """Shu odamga shu postda allaqachon javob yozilgan bo'lsa, yana qisqa komentga javob kerakmi.
+
+    Faqat emoji/raqam (harfsiz) bo'lsa: bitta javobdan keyin yozilmaydi.
+    1-2 so'zli qisqa komment: 2 ta javobdan keyin yozilmaydi.
+    """
+    if replied <= 0:
+        return False
+    if not re.search(r"[^\W\d_]", MENTION_RE.sub("", text or "")):
+        return True
+    return replied >= 2
+
+
 def guess_low(text, mentions):
     """AI'siz taxmin: belgilash yoki qisqa maqtov bo'lsa uning turi, aks holda None."""
     if PROFANITY_RE.search(text or "") or re.search(r"https?://|www\.", text or "", re.I):
@@ -684,13 +697,42 @@ class State:
     def today_count(self):
         today = datetime.now(TASHKENT).strftime("%Y-%m-%d")
         if self.daily.get("date") != today:
-            self.daily = {"date": today, "count": 0, "cats": {}, "users": {}, "saved": 0}
-        for k, v in (("cats", {}), ("users", {}), ("saved", 0)):
+            self.daily = {"date": today, "count": 0, "cats": {}, "users": {}, "saved": 0,
+                          "post_users": {}, "dm_users": {}}
+        for k, v in (("cats", {}), ("users", {}), ("saved", 0), ("post_users", {}), ("dm_users", {})):
             self.daily.setdefault(k, v)
         return self.daily["count"]
 
-    def add_sent(self, category="", user=""):
+    @staticmethod
+    def _pu(post, user):
+        return f"{post}|{(user or '').lower()}"
+
+    def _bump(self, key, post, user):
         self.today_count()
+        d = self.daily[key]
+        k = self._pu(post, user)
+        d[k] = d.get(k, 0) + 1
+        if len(d) > 3000:
+            self.daily[key] = dict(list(d.items())[-2000:])
+
+    def post_user_today(self, post, user):
+        """Bugun shu postda shu odamga nechta javob yozildi."""
+        self.today_count()
+        return self.daily["post_users"].get(self._pu(post, user), 0)
+
+    def dm_sent_today(self, post, user):
+        """Bugun shu post komenti uchun shu odamga direkt ketganmi."""
+        self.today_count()
+        return self.daily["dm_users"].get(self._pu(post, user), 0) > 0
+
+    def add_dm(self, post, user):
+        if user:
+            self._bump("dm_users", post, user)
+
+    def add_sent(self, category="", user="", post=""):
+        self.today_count()
+        if user and post:
+            self._bump("post_users", post, user)
         self.daily["count"] += 1
         if category:
             self.daily["cats"][category] = self.daily["cats"].get(category, 0) + 1
@@ -978,6 +1020,11 @@ class CommentResponder:
                         if (not why and guess == "short" and self.state.policy.get("saving")
                                 and not _pick(cid, self.state.policy["short_ratio"])):
                             why = "short"
+                        if not why and guess == "short" and author and repeat_short(
+                                text, self.state.post_user_today(pid, author)):
+                            # Egasining darsi (takror javob yo'q): bir odam shu postga ketma-ket "😍" yozsa
+                            # har biriga javob yozilmaydi (kuzatuv 22.11: bir mijozga 8 javob, 5 direkt)
+                            why = "same_user"
                         if why:
                             self.state.mark(cid, "budget")
                             self.state.daily["saved"] = self.state.daily.get("saved", 0) + 1
@@ -1119,7 +1166,7 @@ class CommentResponder:
 
                 with self.lock:
                     self.state.mark(cid, "sent")
-                    self.state.add_sent(verdict["category"], author)
+                    self.state.add_sent(verdict["category"], author, pid)
                     self.state.save()
                 stats["sent"] += 1
                 A("sent", category=verdict["category"], reply=verdict["reply"])
@@ -1293,8 +1340,20 @@ class CommentResponder:
         }
         if preview:
             return info
+        author = comment.get("username") or ""
+        pid = str((post or {}).get("id") or "")
+        with self.lock:
+            if author and self.state.dm_sent_today(pid, author):
+                # shu odamga shu post bo'yicha bugun direkt ketgan: bir xil xabar qayta yuborilmaydi
+                return None
+            if self.dm_mode != "auto":
+                self.state.add_dm(pid, author)   # tasdiqqa ham bir marta chiqadi
         if self.dm_mode == "auto":
             ok, err = self._send_dm(cid, dm_text)
+            if ok:
+                with self.lock:
+                    self.state.add_dm(pid, author)
+                    self.state.save()
             return {"type": "dm_sent" if ok else "dm_error", **info, "error": err}
         with self.lock:
             self.state.dm_pending[cid] = {**info, "created": int(time.time()), "msg_id": None}
