@@ -80,10 +80,12 @@ def repeats_stock_out(text, ours_before):
     return False
 
 
-# Narx so'rovi: "narxi qancha", "necha pul", "qanchadan", "цена", "сколько стоит"
+# Narx so'rovi: "narxi qancha", "necha pul", "qanchadan", "цена", "сколько стоит".
+# Bo'lib to'lash ham narx savoli: kuzatuv 22.11 — narx yozilgach mijoz "Oyiga" deb so'radi, javobsiz qoldi
 PRICE_RE = re.compile(
     r"narx|narh|нарх|нарҳ|\bprice|prays|цен[аеуы]|стоим|почём|почем|сколько|скок[ао]|"
     r"nech[ai]?\s*pul|неч[аи]?\s*пул|nech[ai]?\s*so.?m|(?<![\w'’`ʻ])puli(?![\w'’`ʻ])|"
+    r"(?<![\w'’`ʻ])oyiga(?![\w'’`ʻ])|ойига|nasiya|насия|rass?roch|рассроч|bo.?lib\s*to.?la|"
     r"[qk]ancha(dan|ga|lik)|қанча|[qk]ancha(?!\s*(kun|vaqt|soat|muddat|yosh|kishi|marta|dona\s*qol))",
     re.I)
 

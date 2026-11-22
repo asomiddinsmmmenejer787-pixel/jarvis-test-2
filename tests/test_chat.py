@@ -317,10 +317,13 @@ def run():
     check(any("Mijoz: Rahmat, o'ylab ko'raman" in x for x in mem.dialogs()), "Yozishmalar o'rganish uchun matn ko'rinishida olinadi")
     for t, want in [("Narxi qancha?", True), ("nechpul", True), ("Цена?", True), ("сколько стоит", True),
                     ("Puli qancha", True), ("qanchadan", True), ("Pulimi", False), ("Pulimni qaytaring", False),
-                    ("Qancha kunda keladi", False), ("Bormi?", False), ("Rahmat", False)]:
+                    ("Qancha kunda keladi", False), ("Bormi?", False), ("Rahmat", False),
+                    ("Oyiga", True), ("Rassrochka bormi", True), ("Nasiyaga bersa bo'ladimi", True),
+                    ("Bo'lib to'lasa bo'ladimi", True), ("рассрочка есть?", True), ("Oyim uchun", False),
+                    ("Rostan berasizmi", False)]:
         if dm_chat.is_price_question(t) != want:
             check(False, f"Narx so'rovi aniqlash: {t!r}")
-    check(True, "Narx so'rovi to'g'ri aniqlandi (pullik tanlov, pul qaytarish, muddat narx emas)")
+    check(True, "Narx so'rovi to'g'ri aniqlandi (bo'lib to'lash ham; pullik tanlov, pul qaytarish, muddat narx emas)")
     chat.set_price_only(False)
 
     print("\n4) HUD API")
