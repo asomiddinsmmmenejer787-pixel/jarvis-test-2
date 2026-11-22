@@ -307,6 +307,16 @@ def run():
     events = chat.run_once()
     check(events and fake.chat_sent[-1] == ("U21", "Samokat S10 narxi 1 250 000 so'm."),
           "Mijoz mahsulot nomini yozgach narx aytildi")
+    # 22.11: bitta mijoz bizning postni ulashdi, Instagram uni ikki yozishma qilib qaytardi -> ikki xil javob ketgan edi
+    u30 = {"id": "U30", "username": "solish"}
+    ai.res = {"text": "Qaysi mahsulot qiziqtirdi?", "kind": "clarify", "topic": "aniqlashtirish"}
+    before = len(fake.chat_sent)
+    fake.conversations = [conv("t30", ("dd1", u30, "Narxi qancha?", 2)),
+                          conv("t31", ("dd2", u30, "Narxi qancha?", 1))]
+    events = chat.run_once()
+    check(len([e for e in events if e["type"] == "chat_sent"]) == 1
+          and len([x for x in fake.chat_sent[before:] if x[0] == "U30"]) == 1,
+          "Bir mijozga bir tekshiruvda faqat bitta javob ketdi (ikki yozishma bo'lsa ham)")
     st = chat.status()["memory"]
     mem = dm_chat.DialogMemory(chat.memory.path)  # fayldan qayta o'qiladi
     d20 = mem.d.get("U20", {})

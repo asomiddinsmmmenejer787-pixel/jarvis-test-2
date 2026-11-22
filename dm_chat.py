@@ -549,6 +549,7 @@ class DirectChat:
         my_id, my_name = str(me.get("user_id") or ""), (me.get("username") or "").lower()
         now = time.time()
         events, handled = [], 0
+        replied = set()  # shu tekshiruvda javob berilgan mijozlar: bir mijozga bir martada bitta javob
         stats = {"time": datetime.now(catalog.TASHKENT).strftime("%H:%M"), "convs": 0, "new": 0, "sent": 0, "approval": 0}
         self.last_run = stats
         for conv in ig.get_conversations():
@@ -566,6 +567,10 @@ class DirectChat:
             with self.lock:
                 if key in self.s["seen"] or key in self.s["pending"]:
                     continue
+            if str(sender.get("id") or "") in replied:
+                # Instagram bir mijozni ikki yozishma sifatida qaytardi (masalan post ikki marta ulashildi):
+                # ikkinchi javob yozilmaydi; keyingi tekshiruvda yozishmada bizning javobimiz ko'rinadi
+                continue
             lines, focus, human_at = [], None, 0
             asked_text, jarvis_asked = [], False  # bizning oxirgi xabarimizdan keyin mijoz yozganlari
             for m in msgs[-12:]:
@@ -663,6 +668,8 @@ class DirectChat:
                     "history": history[-900:], "text": res["text"], "topic": res["topic"],
                     "kind": res["kind"], "reason": res["reason"], "created": int(created)}
             handled += 1
+            if igsid:
+                replied.add(igsid)
             with self.lock:
                 auto = self.mode == "auto" and res["safe"] and self._auto_allowed(igsid)
             if auto:
