@@ -242,6 +242,20 @@ def run():
           and auto_reply.is_short("Krasivo") and auto_reply.is_short("Zo'r 👍"),
           "Faqat mahsulot nomi yozilgan komment qisqa maqtov deb tejalmaydi")
 
+    print("\n5) Kuzatuvda topilgan xato (22.11): har javob bir xil savol bilan tugadi")
+    rec = ["Qarsaklar uchun rahmat! Aksiyamizdan sizga qaysi biri ko'proq yoqdi?",
+           "Aksiyamiz haroratini oshirib yubordingiz-ku! Sizga ko'proq qaysi biri kerak?"]
+    d = auto_reply.drop_repeated_tail("Yonib turgan kayfiyatingizga gap yo'q! Qaysi biri sizga ko'proq yoqdi?", rec)
+    check(d == "Yonib turgan kayfiyatingizga gap yo'q!", "Takroriy yakuniy savol olib tashlandi")
+    d = auto_reply.drop_repeated_tail("@ali Rahmat, kayfiyat zo'r! Qaysi mahsulotimiz sizga ko'proq yoqdi? 🔥", rec)
+    check(d == "@ali Rahmat, kayfiyat zo'r! 🔥", "Belgilash va emoji saqlanadi, savol ketadi")
+    fresh = "Rahmat! Bolangiz nechchi yoshda?"
+    check(auto_reply.drop_repeated_tail(fresh, rec) == fresh, "Yangi savol tegilmaydi")
+    check(auto_reply.drop_repeated_tail("Qaysi biri sizga yoqdi?", rec) == "Qaysi biri sizga yoqdi?",
+          "Bitta savoldan iborat javob bo'sh qolmaydi")
+    check(auto_reply.drop_repeated_tail("Qaysi biri yoqdi? Rahmat.", rec) == "Qaysi biri yoqdi? Rahmat.",
+          "Savol bilan tugamagan javob tegilmaydi")
+
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 
 

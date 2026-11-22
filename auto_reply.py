@@ -126,6 +126,7 @@ YOZUV USLUBI (jonli odam yozganday)
 - "Ajoyib", "mukammal", "betakror", "bebaho" kabi shishirilgan so'zlar va reklama ohangi yo'q.
 - Hashtag, link, @ belgisi yo'q. Ortiqcha undov belgisi yo'q.
 - Har safar bir xil ibora takrorlama.
+- Yakuniy savolni ham har safar boshqacha qil yoki umuman yozma: "qaysi biri ko'proq yoqdi?" kabi bitta savol har javobda chiqmasin.
 
 KATEGORIYALAR
 1. price: narx, necha pul, qancha, stoim, цена so'ralsa, yoki faqat mahsulot nomi yozilgan bo'lsa
@@ -415,6 +416,34 @@ def too_similar(reply, recent, ratio=0.72):
     # bir xil jumla bilan boshlanish ham takror hisoblanadi
     first = _norm_reply(re.split(r"[.!?]", strip_mentions(reply or ""))[0])
     return len(first) > 20 and any(_norm_reply(r).startswith(first) for r in recent)
+
+
+def _q_words(sentence):
+    return set(re.findall(r"[^\W\d_]{3,}", re.sub(r"[ʻʼ'‘’`]", "", (sentence or "").lower())))
+
+
+def drop_repeated_tail(reply, recent, last_n=6):
+    """Oxirgi javoblar ham xuddi shunday savol bilan tugagan bo'lsa ("Qaysi biri sizga ko'proq yoqdi?"
+    har javobda), shu yakuniy savolni olib tashlaymiz: javob qolip bo'lib qolmasin."""
+    text = (reply or "").strip()
+    m = re.search(r"[\s\U0001F300-\U0001FAFF☀-➿⭐️‍]+$", text)
+    tail_emoji = m.group(0).strip() if m else ""
+    body = text[:m.start()] if m else text
+    parts = re.split(r"(?<=[.!?])\s+", body)
+    if len(parts) < 2 or not parts[-1].endswith("?"):
+        return reply
+    q = _q_words(parts[-1])
+    if len(q) < 2:
+        return reply
+    for r in list(recent)[-last_n:]:
+        r_parts = re.split(r"(?<=[.!?])\s+", strip_mentions(r or "").strip())
+        rq = _q_words(r_parts[-1]) if r_parts and "?" in r_parts[-1] else set()
+        if rq and len(q & rq) / len(q | rq) >= 0.5:
+            rest = " ".join(parts[:-1]).strip()
+            if len(_norm_reply(rest)) < 10:
+                return reply
+            return f"{rest} {tail_emoji}".strip() if tail_emoji and not EMOJI_RE.search(rest) else rest
+    return reply
 
 
 def mentions_in(text, me="", author=""):
@@ -983,6 +1012,8 @@ class CommentResponder:
                             SAFE_FALLBACK.get(verdict["category"]) or [verdict["reply"]])
                 if verdict["action"] == "auto":
                     verdict = survey_answer(verdict, text, catalog.post_facts(post).get("survey"), self._recent)
+                    if verdict["reply"]:
+                        verdict["reply"] = drop_repeated_tail(verdict["reply"], self._recent)
                 if verdict["action"] == "auto" and too_similar(verdict["reply"], self._recent):
                     # Takror: boshqa xavfsiz javob tanlaymiz, bo'lmasa (maqtov/belgilash) javobsiz qoldiramiz
                     alts = [x for x in SAFE_FALLBACK.get(verdict["category"], [])
