@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bolalar Dunyosi · Bloger kabineti</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFF8EF; --surface:#FFFFFF; --surface2:#FDEBDC; --ink:#1F2A3C; --soft:#5B6475; --line:#F0E2D3;
+  --accent:#F07A3A; --accent-ink:#B04E1A; --ok:#2E7D5B; --ok-bg:#E3F4EA; --warn:#9A6700; --warn-bg:#FFF1CC;
+  --bad:#B3261E; --bad-bg:#FBE4E2; --info:#2D5DA8; --info-bg:#E4ECFA; --shadow:0 6px 24px rgba(31,42,60,.08);
+}
+body.dark{
+  --bg:#141B27; --surface:#1E2838; --surface2:#283548; --ink:#F4EEE6; --soft:#A9B3C4; --line:#2E3B50;
+  --accent:#F59A62; --accent-ink:#F59A62; --ok:#7BD3A6; --ok-bg:#1F3A2E; --warn:#F3CC6B; --warn-bg:#3A3220;
+  --bad:#F2A49E; --bad-bg:#3D2422; --info:#9BB8F0; --info-bg:#22304A; --shadow:none;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Nunito Sans',system-ui,sans-serif;font-size:15px}
+.app{max-width:560px;margin:0 auto;padding:16px 16px calc(96px + env(safe-area-inset-bottom))}
+h1,h2,h3,.num{font-family:'Fredoka',system-ui,sans-serif;font-weight:600;margin:0}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#1F2A3C;display:grid;place-items:center;
+  font-family:'Fredoka',system-ui,sans-serif;font-size:18px;overflow:hidden;flex:none}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.hello{flex:1;min-width:0}.hello small{color:var(--soft);display:block;font-size:13px}
+.hello b{font-family:'Fredoka',system-ui,sans-serif;font-weight:600;font-size:19px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,125,91,.45)}70%{box-shadow:0 0 0 8px rgba(46,125,91,0)}100%{box-shadow:0 0 0 0 rgba(46,125,91,0)}}
+.banner{background:var(--info-bg);color:var(--info);padding:10px 14px;border-radius:12px;font-size:13px;margin-bottom:14px}
+.hero{background:linear-gradient(135deg,#F07A3A,#F59A62);color:#1F2A3C;border-radius:24px;padding:20px;box-shadow:var(--shadow)}
+.hero .lbl{font-size:13px;font-weight:700;opacity:.85;text-transform:uppercase;letter-spacing:.06em}
+.hero .num{font-size:38px;margin:6px 0 2px}
+.hero .sub{font-size:14px;font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.card{background:var(--surface);border-radius:20px;padding:16px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.card .lbl{font-size:12px;color:var(--soft);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.card .num{font-size:22px;margin-top:6px;white-space:nowrap}
+.card .hint{font-size:12px;color:var(--soft);margin-top:4px;line-height:1.35}
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:22px 2px 10px}
+.sec h2{font-size:20px}.sec a{color:var(--accent-ink);font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
+.reel{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.reel .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.reel .code{font-weight:800;font-size:15px}
+.chip{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.c-mon{background:var(--info-bg);color:var(--info)}.c-wait{background:var(--warn-bg);color:var(--warn)}
+.c-ok{background:var(--ok-bg);color:var(--ok)}.c-bad{background:var(--bad-bg);color:var(--bad)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stats .v{font-family:'Fredoka',system-ui,sans-serif;font-size:22px}.stats .k{font-size:12px;color:var(--soft)}
+.bar{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.meta{display:flex;justify-content:space-between;font-size:12px;color:var(--soft);margin-top:6px}
+.note{font-size:13px;color:var(--soft);margin-top:10px;line-height:1.4}
+.note b{color:var(--ink)}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:14px;font:700 15px 'Nunito Sans',system-ui,sans-serif;cursor:pointer;
+  background:var(--accent);color:#1F2A3C;margin-top:12px}
+.btn.ghost{background:var(--surface2);color:var(--ink)}
+.ticket{background:var(--ink);color:#FFF8EF;border-radius:24px;padding:20px;position:relative;overflow:hidden}
+body.dark .ticket{background:#F4EEE6;color:#1F2A3C}
+.ticket .lbl{font-size:12px;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:.06em}
+.ticket .amount{font-family:'Fredoka',system-ui,sans-serif;font-size:34px;margin:4px 0 14px}
+.ticket .codebox{display:flex;align-items:center;justify-content:space-between;border:2px dashed rgba(255,248,239,.45);
+  border-radius:14px;padding:12px 14px;font-family:'Fredoka',system-ui,sans-serif;font-size:22px;letter-spacing:.08em;cursor:pointer}
+body.dark .ticket .codebox{border-color:rgba(31,42,60,.4)}
+.ticket .codebox small{font:700 12px 'Nunito Sans',system-ui,sans-serif;letter-spacing:0;opacity:.8}
+.ticket .exp{margin-top:12px;font-size:14px;font-weight:600}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:20px;padding:20px;text-align:center;color:var(--soft)}
+label{font-size:13px;font-weight:700;color:var(--soft);display:block;margin-bottom:6px}
+input[type=number]{width:100%;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;
+  padding:12px 14px;font:700 18px 'Nunito Sans',system-ui,sans-serif;outline:none}
+input[type=number]:focus{border-color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.res{display:grid;gap:8px;margin-top:12px}
+.res div{display:flex;justify-content:space-between;font-size:14px}.res b{font-family:'Fredoka',system-ui,sans-serif;font-weight:600;font-size:17px}
+.list .it{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);gap:10px}
+.list .it:last-child{border-bottom:0}.list small{color:var(--soft);display:block;font-size:12px}
+.profile-head{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;margin:8px 0 16px}
+.profile-head .avatar{width:84px;height:84px;font-size:32px}
+.profile-head h2{font-size:24px}.profile-head p{margin:0;color:var(--soft)}
+.kv .it span:first-child{color:var(--soft);font-size:14px}.kv .it span:last-child{font-weight:700;text-align:right;word-break:break-all}
+.level{display:flex;gap:6px;margin-top:10px}
+.level div{flex:1;text-align:center;padding:8px 4px;border-radius:12px;background:var(--surface2);font-size:12px;font-weight:700;color:var(--soft)}
+.level div.on{background:var(--accent);color:#1F2A3C}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+  display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:5}
+nav .in{display:flex;max-width:560px;width:100%}
+nav button{flex:1;background:none;border:0;color:var(--soft);font:700 11px 'Nunito Sans',system-ui,sans-serif;display:flex;flex-direction:column;
+  align-items:center;gap:4px;padding:6px 0;cursor:pointer}
+nav button svg{width:24px;height:24px}
+nav button.on{color:var(--accent-ink)}
+.view{display:none}.view.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;
+  border-radius:12px;font-weight:700;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.on{opacity:1}
+.err{background:var(--bad-bg);color:var(--bad);padding:14px;border-radius:14px;margin-top:20px;text-align:center}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="avatar" id="av"></div>
+    <div class="hello"><small>Bolalar Dunyosi · Bloger kabineti</small><b id="hello">…</b></div>
+    <div class="live"><span class="dot"></span><span id="upd">jonli</span></div>
+  </div>
+  <div id="demo" class="banner" hidden>Namuna ma'lumotlar: kabinet Telegram botdan ochilganda haqiqiy raqamlaringiz ko'rinadi.</div>
+  <div id="error" class="err" hidden></div>
+
+  <!-- ASOSIY -->
+  <section class="view on" id="v-home">
+    <div class="hero">
+      <div class="lbl">Asosiy balans</div>
+      <div class="num" id="bal-av">—</div>
+      <div class="sub" id="bal-av-sub"></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="lbl">Kutilayotgan</div><div class="num" id="bal-pe">—</div>
+        <div class="hint">Kuzatuvdagi videolar bo'yicha. 30 kun tugab, tasdiqlangach tushadi.</div></div>
+      <div class="card"><div class="lbl">Jami topilgan</div><div class="num" id="bal-ea">—</div>
+        <div class="hint" id="bal-ea-sub">Barcha tasdiqlangan mukofotlar</div></div>
+    </div>
+    <div class="sec"><h2>Videolarim</h2><a data-go="reels">Hammasi</a></div>
+    <div id="home-reels"></div>
+  </section>
+
+  <!-- VIDEOLAR -->
+  <section class="view" id="v-reels">
+    <div class="sec" style="margin-top:4px"><h2>Har bir video qancha topyapti</h2></div>
+    <div id="reels"></div>
+    <button class="btn ghost" id="btn-shot">📸 Skrinshot yuborish (botda)</button>
+  </section>
+
+  <!-- VAUCHER -->
+  <section class="view" id="v-voucher">
+    <div id="ticket"></div>
+    <div class="sec"><h2>Xarid kalkulyatori</h2></div>
+    <div class="card">
+      <label for="buy">Xarid summasi (so'm)</label>
+      <input type="number" id="buy" inputmode="numeric" placeholder="Masalan: 250000">
+      <div class="res" id="buy-res"></div>
+    </div>
+    <div class="sec"><h2>Mukofot kalkulyatori</h2></div>
+    <div class="card">
+      <label for="views">Ko'rishlar: <span id="views-val">25 000</span></label>
+      <input type="range" id="views" min="0" max="120000" step="1000" value="25000">
+      <div class="res" id="views-res"></div>
+    </div>
+    <div class="sec"><h2>Vaucherlar tarixi</h2></div>
+    <div class="card list" id="vhist"></div>
+  </section>
+
+  <!-- PROFIL -->
+  <section class="view" id="v-profile">
+    <div class="profile-head">
+      <div class="avatar" id="pav"></div>
+      <h2 id="pname">—</h2>
+      <p id="puser"></p>
+      <span class="chip" id="pstatus"></span>
+    </div>
+    <div class="card">
+      <div class="lbl">Daraja</div>
+      <div class="level" id="plevel"></div>
+      <div class="hint" id="plevel-hint" style="margin-top:8px"></div>
+    </div>
+    <div class="sec"><h2>Ma'lumotlarim</h2></div>
+    <div class="card list kv" id="pinfo"></div>
+    <div class="sec"><h2>Qoidalar qisqacha</h2></div>
+    <div class="card note" id="prules" style="margin-top:0"></div>
+    <button class="btn" id="btn-chat">✉️ Administratorga yozish</button>
+  </section>
+</div>
+
+<nav><div class="in">
+  <button class="on" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Asosiy</button>
+  <button data-go="reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Videolar</button>
+  <button data-go="voucher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>Vaucher</button>
+  <button data-go="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profil</button>
+</div></nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+const initData = tg ? tg.initData : "";
+const DEMO = !initData || new URLSearchParams(location.search).has("demo");
+let DATA = null, lastLoad = 0;
+
+if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+if (tg && tg.colorScheme === "dark") document.body.classList.add("dark");
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const som = n => fmt(n) + " so'm";
+const dt = (iso, time) => { if (!iso) return "—"; const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", {timeZone:"Asia/Tashkent", day:"2-digit", month:"2-digit", year:"numeric"}).replace(/\//g, ".") +
+    (time ? " " + d.toLocaleTimeString("en-GB", {timeZone:"Asia/Tashkent", hour:"2-digit", minute:"2-digit"}) : ""); };
+const daysLeft = iso => Math.max(0, Math.ceil((new Date(iso) - Date.now()) / 864e5));
+function toast(t){ const el=$("toast"); el.textContent=t; el.classList.add("on"); setTimeout(()=>el.classList.remove("on"),1600); }
+
+function rewardFor(v, r){ v = Number(v)||0; if (v < r.min_views) return 0;
+  return r.base + Math.floor((Math.min(v, r.cap_views) - r.min_views) / r.step_views) * r.step_reward; }
+
+const STATUS = {
+  monitoring:["Kuzatuvda","c-mon"], awaiting_final:["Yakuniy skrinshot","c-wait"], awaiting_approval:["Tasdiq kutilmoqda","c-wait"],
+  rewarded:["Vaucher berildi","c-ok"], no_reward:["10 000 ga yetmadi","c-bad"], rejected:["Rad etildi","c-bad"], blocked:["To'xtatilgan","c-bad"]};
+const CSTATUS = {approved:["Tasdiqlangan","c-ok"], pending:["Ko'rib chiqilmoqda","c-wait"], draft:["Ro'yxatdan o'tmoqda","c-mon"],
+  rejected:["Rad etilgan","c-bad"], blocked:["To'xtatilgan","c-bad"]};
+const VSTATUS = {active:"Faol", used:"Ishlatilgan", merged:"Keyingisiga qo'shilgan", expired:"Muddati tugagan"};
+
+function avatar(el, p){
+  const initials = ((p.first_name||"?")[0] + (p.last_name||"")[0]||"").toUpperCase();
+  el.innerHTML = p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc(initials);
+}
+
+function reelCard(r, rules){
+  const st = STATUS[r.status] || [r.status, "c-mon"];
+  const pct = Math.min(100, Math.round(r.day / rules.tracking_days * 100));
+  let next = "";
+  if (r.status === "monitoring" || r.status === "awaiting_final") {
+    next = r.next_step === null ? "Eng yuqori mukofotga yetdingiz 🎉"
+      : r.views < rules.min_views ? `Mukofot boshlanishiga yana <b>${fmt(r.next_step)}</b> ko'rish`
+      : `Keyingi <b>+${fmt(rules.step_reward)} so'm</b> uchun yana <b>${fmt(r.next_step)}</b> ko'rish`;
+    if (r.next_screenshot_day) next += `<br>Keyingi skrinshot: <b>${r.next_screenshot_day}-kun</b>`;
+  }
+  return `<div class="reel">
+    <div class="row"><a class="code" href="${esc(r.url)}" target="_blank" style="color:inherit;text-decoration:none">🎬 ${esc(r.shortcode)}</a>
+      <span class="chip ${st[1]}">${st[0]}</span></div>
+    <div class="stats"><div><div class="v">${fmt(r.views)}</div><div class="k">tasdiqlangan ko'rish</div></div>
+      <div><div class="v">${som(r.reward)}</div><div class="k">${r.status==="rewarded"?"berilgan mukofot":"taxminiy mukofot"}</div></div></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="meta"><span>${r.day}/${rules.tracking_days} kun</span><span>${dt(r.posted_at)} → ${dt(r.ends_at)}</span></div>
+    ${next ? `<div class="note">${next}</div>` : ""}
+  </div>`;
+}
+
+function render(){
+  const d = DATA, p = d.profile, t = d.telegram || {}, b = d.balance, rules = d.rules;
+  const person = {first_name: t.first_name || p.first_name, last_name: t.last_name || p.last_name, photo_url: t.photo_url || p.photo_url};
+  $("hello").textContent = `Salom, ${person.first_name || "bloger"}!`;
+  avatar($("av"), person); avatar($("pav"), person);
+
+  // Asosiy
+  $("bal-av").textContent = som(b.available);
+  const v = d.voucher;
+  $("bal-av-sub").textContent = v ? `Vaucher ${v.code} · ${daysLeft(v.expires_at)} kun qoldi`
+    : d.carry ? `Qoldiq keyingi vaucherga qo'shiladi · ${daysLeft(d.carry.expires_at)} kun` : "Hozircha faol vaucher yo'q";
+  $("bal-pe").textContent = som(b.pending);
+  $("bal-ea").textContent = som(b.earned_total);
+  $("bal-ea-sub").textContent = `${d.successful_reels} ta muvaffaqiyatli video`;
+  const reels = d.reels || [];
+  $("home-reels").innerHTML = reels.length ? reels.slice(0, 2).map(r => reelCard(r, rules)).join("")
+    : `<div class="empty">Hali video yo'q. Do'konda video olib, botga Reels havolasini yuboring.</div>`;
+  $("reels").innerHTML = reels.length ? reels.map(r => reelCard(r, rules)).join("")
+    : `<div class="empty">Hali video yo'q.</div>`;
+
+  // Vaucher
+  $("ticket").innerHTML = v ? `<div class="ticket">
+      <div class="lbl">Faol vaucher</div><div class="amount">${som(v.nominal)}</div>
+      <div class="codebox" id="copy-code"><span>${esc(v.code)}</span><small>nusxalash</small></div>
+      <div class="exp">⏳ ${daysLeft(v.expires_at)} kun qoldi · ${dt(v.expires_at, true)} gacha</div>
+      ${v.carried_in ? `<div class="note" style="color:inherit;opacity:.8">Shundan ${som(v.carried_in)} — oldingi qoldiq</div>` : ""}
+    </div>` : `<div class="ticket"><div class="lbl">Faol vaucher</div><div class="amount">Yo'q</div>
+      <div class="exp">${d.carry ? `Qoldiq: ${som(d.carry.amount)} — keyingi vaucheringizga qo'shiladi (${dt(d.carry.expires_at)} gacha)` : "Video 30 kunni yakunlab, tasdiqlangach vaucher shu yerda paydo bo'ladi."}</div></div>`;
+  const cc = $("copy-code");
+  if (cc) cc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(v.code); toast("Kod nusxalandi"); };
+  calcBuy(); calcViews();
+  const hist = d.vouchers || [];
+  $("vhist").innerHTML = hist.length ? hist.map(h => `<div class="it"><div><b>${esc(h.code)}</b>
+      <small>${dt(h.issued_at)} · ${VSTATUS[h.status] || h.status}${h.used_amount ? " · ishlatildi " + som(h.used_amount) : ""}</small></div>
+      <b>${som(h.nominal)}</b></div>`).join("") : `<div class="note" style="margin:0">Hali vaucher yo'q.</div>`;
+
+  // Profil
+  $("pname").textContent = [person.first_name, person.last_name].filter(Boolean).join(" ") || "—";
+  $("puser").textContent = (t.username || p.username) ? "@" + (t.username || p.username) : "";
+  const cs = CSTATUS[p.status] || [p.status, "c-mon"];
+  $("pstatus").className = "chip " + cs[1]; $("pstatus").textContent = cs[0];
+  const levels = ["Yangi", "Faol", "Hamkor"];
+  $("plevel").innerHTML = levels.map(l => `<div class="${l === d.level ? "on" : ""}">${l}</div>`).join("");
+  const n = d.successful_reels;
+  $("plevel-hint").textContent = n >= 5 ? "Uyda suratga olish va yetkazib berish imkoniyati ochiq (administrator tasdig'i bilan)."
+    : `Hamkor darajasigacha yana ${5 - n} ta muvaffaqiyatli video.`;
+  const rows = [
+    ["Telegram ID", t.id || p.tg_id], ["Telegram", (t.username || p.username) ? "@" + (t.username || p.username) : "—"],
+    ["Telefon", p.phone || "—"], ["Instagram", p.instagram ? `<a href="https://instagram.com/${esc(p.instagram)}" target="_blank" style="color:var(--accent-ink)">@${esc(p.instagram)}</a>` : "—"],
+    ["Promo-kod", p.promo_code ? `<span id="copy-promo" style="cursor:pointer">${esc(p.promo_code)} 📋</span>` : "—"],
+    ["Ro'yxatdan o'tgan", dt(p.created_at)], ["Tasdiqlangan", dt(p.approved_at)]];
+  $("pinfo").innerHTML = rows.map(([k, val]) => `<div class="it"><span>${k}</span><span>${String(val).startsWith("<") ? val : esc(val)}</span></div>`).join("");
+  const cp = $("copy-promo");
+  if (cp) cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(p.promo_code); toast("Promo-kod nusxalandi"); };
+  $("prules").innerHTML = `• <b>${fmt(rules.min_views)}</b> ko'rish = <b>${som(rules.base)}</b>, keyin har ${fmt(rules.step_views)} ko'rishga <b>+${som(rules.step_reward)}</b>, eng ko'pi <b>${som(rules.max_reward)}</b><br>
+    • Ko'rishlar ${rules.tracking_days} kun hisoblanadi, video doimiy turadi<br>
+    • Vaucher ${rules.voucher_days} kun amal qiladi, kod bir marta ishlatiladi, qoldiq keyingi vaucherga o'tadi<br>
+    • Vaucher faqat do'konda, naqd pulga almashtirilmaydi`;
+}
+
+function calcBuy(){
+  if (!DATA) return;
+  const bal = DATA.balance.available, sum = Number($("buy").value) || 0;
+  if (!sum) { $("buy-res").innerHTML = `<div><span>Mavjud balans</span><b>${som(bal)}</b></div>`; return; }
+  const fromV = Math.min(sum, DATA.voucher ? DATA.voucher.nominal : 0);
+  const cash = sum - fromV, left = (DATA.voucher ? DATA.voucher.nominal : 0) - fromV;
+  $("buy-res").innerHTML = DATA.voucher ? `<div><span>Vaucherdan</span><b>${som(fromV)}</b></div>
+    <div><span>Naqd/karta bilan to'lanadi</span><b>${som(cash)}</b></div>
+    <div><span>Keyingi vaucherga o'tadi</span><b>${som(left)}</b></div>`
+    : `<div><span>Faol vaucher yo'q</span><b>${som(sum)} to'lanadi</b></div>`;
+}
+function calcViews(){
+  if (!DATA) return;
+  const v = Number($("views").value);
+  $("views-val").textContent = fmt(v) + (v >= 120000 ? "+" : "");
+  const r = rewardFor(v, DATA.rules);
+  $("views-res").innerHTML = `<div><span>Mukofot</span><b>${som(r)}</b></div>
+    <div><span>1 000 ko'rish uchun</span><b>${v >= DATA.rules.min_views ? som(r / Math.min(v, DATA.rules.cap_views) * 1000) : "—"}</b></div>`;
+}
+$("buy").addEventListener("input", calcBuy);
+$("views").addEventListener("input", calcViews);
+
+document.querySelectorAll("[data-go]").forEach(el => el.addEventListener("click", () => go(el.dataset.go)));
+function go(name){
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + name));
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.go === name));
+  window.scrollTo({top: 0}); if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+}
+const toBot = () => { if (tg) tg.close(); else toast("Telegram botda davom eting"); };
+$("btn-shot").onclick = toBot; $("btn-chat").onclick = toBot;
+
+function demoData(){
+  const now = Date.now(), iso = d => new Date(now + d * 864e5).toISOString();
+  return {
+    telegram: {id: 123456789, first_name: "Madina", last_name: "Karimova", username: "madina_blog"},
+    profile: {tg_id: 123456789, first_name: "Madina", last_name: "Karimova", username: "madina_blog", phone: "+998 90 123 45 67",
+      instagram: "madina_blog", status: "approved", promo_code: "MADINABL", created_at: iso(-60), approved_at: iso(-59)},
+    level: "Faol", successful_reels: 3,
+    balance: {available: 300000, pending: 444000, earned_total: 720000},
+    voucher: {code: "BD-7K92-QX4M", nominal: 300000, carried_in: 80000, expires_at: iso(21)}, carry: null,
+    vouchers: [{code: "BD-7K92-QX4M", nominal: 300000, status: "active", issued_at: iso(-9)},
+      {code: "BD-H3TP-9WLA", nominal: 260000, status: "used", used_amount: 180000, issued_at: iso(-40)},
+      {code: "BD-M2RX-5ZKD", nominal: 240000, status: "used", used_amount: 240000, issued_at: iso(-55)}],
+    reels: [
+      {id: 3, url: "#", shortcode: "DfzXgaOtx34", status: "monitoring", views: 47250, reward: 248000, next_step: 750, day: 12,
+        posted_at: iso(-12), ends_at: iso(18), next_screenshot_day: 14},
+      {id: 2, url: "#", shortcode: "Df4d4VZK-U0", status: "monitoring", views: 8400, reward: 0, next_step: 1600, day: 5,
+        posted_at: iso(-5), ends_at: iso(25), next_screenshot_day: 7},
+      {id: 1, url: "#", shortcode: "DfwrT0BtJrI", status: "awaiting_approval", views: 34100, reward: 196000, next_step: null, day: 30,
+        posted_at: iso(-31), ends_at: iso(-1), next_screenshot_day: null}],
+    rules: {min_views: 10000, base: 100000, step_views: 1000, step_reward: 4000, cap_views: 100000, max_reward: 460000,
+      tracking_days: 30, voucher_days: 30}};
+}
+
+async function load(){
+  try {
+    if (DEMO) { DATA = demoData(); $("demo").hidden = false; }
+    else {
+      const res = await fetch("/creator/api/me", {headers: {"X-Init-Data": initData}});
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Ma'lumot olinmadi");
+      DATA = await res.json();
+    }
+    $("error").hidden = true; lastLoad = Date.now(); render();
+  } catch (e) { $("error").hidden = false; $("error").textContent = e.message; }
+}
+setInterval(() => { const s = Math.round((Date.now() - lastLoad) / 1000);
+  $("upd").textContent = lastLoad ? (s < 5 ? "hozir yangilandi" : s + " s oldin") : "yuklanmoqda"; }, 1000);
+setInterval(() => { if (!DEMO && document.visibilityState === "visible") load(); }, 20000);
+document.addEventListener("visibilitychange", () => { if (!DEMO && document.visibilityState === "visible") load(); });
+load();
+</script>
+</body>
+</html>

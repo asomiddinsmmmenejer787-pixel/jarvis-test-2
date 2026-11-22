@@ -26,6 +26,8 @@ import catalog
 import instagram_api as ig
 import webapp
 import youtube_bot
+from creator_rewards import bot as creator_bot
+from creator_rewards import web as creator_web
 from auto_reply import CATEGORY_NAMES, CommentResponder
 from dm_chat import DirectChat
 from instagram_api import InstagramError
@@ -175,6 +177,7 @@ chat = DirectChat(jarvis.ai_provider) if responder is not None else None
 
 web.include_router(webapp.router)
 web.include_router(youtube_bot.router)
+web.include_router(creator_web.router)
 
 
 # ---------- bot egasi ----------
@@ -1433,6 +1436,15 @@ async def instagram_loop(app):
         await asyncio.sleep(CHECK_EVERY_SEC)
 
 
+def creator_admin_ids():
+    """Blogerlar botining administratorlari: Jarvis egasi + CREATOR_ADMIN_IDS (vergul bilan)."""
+    ids = {get_owner_id()}
+    for part in (os.environ.get("CREATOR_ADMIN_IDS") or "").split(","):
+        if part.strip().lstrip("-").isdigit():
+            ids.add(int(part.strip()))
+    return {i for i in ids if i}
+
+
 async def post_init(app):
     try:
         await app.bot.set_my_commands([
@@ -1471,6 +1483,11 @@ async def post_init(app):
         except Exception:
             logger.exception("Mini ilova tugmasini o'rnatib bo'lmadi.")
     app.bot_data["instagram_task"] = asyncio.create_task(instagram_loop(app))
+    # Blogerlar boti (Creator Rewards) — CREATOR_BOT_TOKEN bo'lsa ishga tushadi, aks holda hech narsa qilmaydi
+    try:
+        app.bot_data["creator_app"] = await creator_bot.start_bot(creator_admin_ids)
+    except Exception:
+        logger.exception("Blogerlar botini ishga tushirib bo'lmadi.")
     logger.info(
         "Instagram fon jarayoni ishga tushdi | instagram=%s | autoreply=%s",
         "ulangan" if ig.is_configured() else "ulanmagan",
