@@ -42,7 +42,8 @@ TERMS_VERSION = "1.0"
 RULES_TEXT = (
     "Asosiy shartlar (to'liq matn — «Shartlarni o'qish» tugmasida):\n"
     "• 18 yoshdan katta bo'lishingiz, Instagram akkauntingiz professional va ochiq bo'lishi kerak.\n"
-    "• Instagram akkauntni bot orqali ulash majburiy (parolingiz bizga kelmaydi, faqat statistika o'qiladi).\n"
+    "• Instagram akkauntni bot orqali ulash tavsiya etiladi (parolingiz bizga kelmaydi, faqat statistika o'qiladi); "
+    "ulanmasa, ko'rishlar skrinshot bilan yuboriladi.\n"
     "• Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi va do'kon xodimi bilan kelishiladi.\n"
     "• Video do'konda olinadi, 30–45 soniya, 9:16, reklama sifatida belgilanadi.\n"
     "• Reels Bolalar Dunyosi bilan Collab qilib joylanadi, havola 24 soat ichida botga yuboriladi, video o'chirilmaydi.\n"
@@ -91,8 +92,9 @@ def consent_keyboard():
 
 
 def ig_required():
-    """Instagram ulanishi majburiy (ulash sozlangan bo'lsa)."""
-    return ig.configured()
+    """Instagram ulanishi majburiymi. Meta App Review'gacha o'chiq: ulanmaganlar skrinshot bilan ishlaydi.
+    Yoqish: Railway'da CREATOR_IG_REQUIRED=1."""
+    return ig.configured() and os.environ.get("CREATOR_IG_REQUIRED", "").strip() == "1"
 
 
 def ig_ok(tg_id):
@@ -383,7 +385,9 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "Endi Instagram akkauntingizni ulang. Instagram o'zi ruxsat so'raydi — parolingiz bizga kelmaydi, "
             "ruxsatni istalgan vaqtda Instagram sozlamalaridan bekor qilasiz. Ulangan akkauntda ko'rishlar "
-            "avtomatik hisoblanadi, skrinshot yuborish shart emas.\n\nDasturda qatnashish uchun Instagram'ni ulash majburiy.",
+            "avtomatik hisoblanadi, skrinshot yuborish shart emas.\n\n"
+            + ("Dasturda qatnashish uchun Instagram'ni ulash majburiy." if ig_required() else
+               "Ulay olmasangiz, username'ingizni yozing (masalan: @madina_blog) — unda ko'rishlarni skrinshot bilan yuborasiz."),
             reply_markup=ig_keyboard(u.id))
     else:
         await update.message.reply_text("Rahmat! Endi Instagram username'ingizni yozing (masalan: @madina_blog).",
