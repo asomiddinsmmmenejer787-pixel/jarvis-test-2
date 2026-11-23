@@ -130,10 +130,14 @@ def _result_page(ok, title, text):
     color = "#2E7D5B" if ok else "#B3261E"
     return HTMLResponse(
         "<!DOCTYPE html><html lang='uz'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<title>{h.escape(title)}</title></head><body style=\"font:17px/1.5 system-ui,sans-serif;background:#FFF8EF;color:#1F2A3C;"
+        f"<title>{h.escape(title)}</title><script src='https://telegram.org/js/telegram-web-app.js'></script></head><body style=\"font:17px/1.5 system-ui,sans-serif;background:#FFF8EF;color:#1F2A3C;"
         "display:flex;min-height:90vh;align-items:center;justify-content:center;padding:24px;text-align:center\"><div>"
         f"<div style='font-size:56px'>{'✅' if ok else '⚠️'}</div><h2 style='color:{color}'>{h.escape(title)}</h2>"
-        f"<p>{h.escape(text)}</p><p style='color:#5B6475'>Bu oynani yopib, Telegram'dagi botga qayting.</p></div></body></html>",
+        f"<p>{h.escape(text)}</p>"
+        "<p><a href='/creator/app' style='display:inline-block;background:#1F2A3C;color:#fff;padding:12px 22px;border-radius:12px;"
+        "text-decoration:none;font-weight:600'>Kabinetga qaytish</a></p>"
+        "<p><a href='#' onclick=\"try{Telegram.WebApp.close()}catch(e){};return false\" style='color:#5B6475'>Yopish</a></p>"
+        "</div></body></html>",
         status_code=200 if ok else 400)
 
 

@@ -212,6 +212,7 @@ if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 if (tg && tg.colorScheme === "dark") document.body.classList.add("dark");
 
 const $ = id => document.getElementById(id);
+const AUTO_IG = new URLSearchParams(location.search).has("ig");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 const som = n => fmt(n) + " so'm";
@@ -384,9 +385,11 @@ async function connectIG(){
   try {
     const res = await fetch("/creator/api/ig/link", {headers: {"X-Init-Data": initData}});
     const r = await res.json(); if (!res.ok) throw new Error(r.detail || "Xato");
-    if (tg && tg.openLink) tg.openLink(r.url); else location.href = r.url;
+    // Telegram ichida ochiladi: tashqi brauzer yoki Instagram ilovasiga o'tib ketmaydi
+    location.href = r.url;
   } catch (e) { toast(e.message); }
 }
+if (AUTO_IG && !DEMO) setTimeout(connectIG, 300);
 const toBot = () => { if (tg) tg.close(); else toast("Telegram botda davom eting"); };
 $("btn-chat").onclick = toBot;
 

@@ -334,6 +334,11 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def ig_keyboard(tg_id):
+    # Kabinet ichida ochiladi: Telegram'dan chiqmaydi, Instagram ilovasi ruxsat oynasini buzmaydi
+    url = hud_url()
+    if url:
+        return InlineKeyboardMarkup([[InlineKeyboardButton(
+            "🔗 Instagram'ni ulash", web_app=WebAppInfo(url=url + ("&" if "?" in url else "?") + "ig=1"))]])
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Instagram'ni ulash", url=ig.auth_url(tg_id))]])
 
 
