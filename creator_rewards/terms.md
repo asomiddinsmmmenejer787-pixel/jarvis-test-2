@@ -4,7 +4,7 @@
 
 ## 1. Umumiy qoidalar
 
-1.1. Ushbu hujjat [F.I.Sh.] yakka tartibdagi tadbirkori (STIR: [...], manzil: [...]; keyingi o‘rinlarda — «Tashkilotchi») tomonidan «Bolalar Dunyosi» savdo belgisi ostida o‘tkaziladigan Creator Rewards dasturida (keyingi o‘rinlarda — «Dastur») ishtirok etish shartlarini belgilaydi.
+1.1. Ushbu hujjat «Bolalar Dunyosi» bolalar do‘koni (keyingi o‘rinlarda — «Tashkilotchi») tomonidan o‘tkaziladigan Creator Rewards dasturida (keyingi o‘rinlarda — «Dastur») ishtirok etish shartlarini belgilaydi.
 
 1.2. Hujjat O‘zbekiston Respublikasi Fuqarolik kodeksining 367 va 369-moddalariga muvofiq ommaviy oferta hisoblanadi.
 
@@ -191,10 +191,10 @@
 
 17.2. Muzokara natija bermasa, nizo O‘zbekiston Respublikasi qonunchiligiga muvofiq Tashkilotchi joylashgan yerdagi sudda ko‘rib chiqiladi.
 
-## 18. Yakuniy qoidalar va rekvizitlar
+## 18. Yakuniy qoidalar va aloqa
 
 18.1. Har bir Tomon Dasturdagi ishtirokni istalgan vaqtda to‘xtatishi mumkin. Qoidabuzarlik bo‘lmasa, ungacha tasdiqlangan mukofotlar va amaldagi vaucherlar o‘z muddati tugaguncha saqlanadi.
 
 18.2. Ushbu shartlarning biror bandi haqiqiy emas deb topilsa, qolgan bandlar kuchini saqlaydi.
 
-18.3. Tashkilotchi rekvizitlari: [F.I.Sh.] YaTT, STIR: [...], manzil: [...], bank: [...], h/r: [...], telefon: [...], Telegram bot: [@bot_nomi].
+18.3. Tashkilotchi bilan aloqa: Dastur Telegram boti orqali.

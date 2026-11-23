@@ -81,6 +81,41 @@ def terms_url():
     return url.rsplit("/app", 1)[0] + "/terms" if url else ""
 
 
+def consent_keyboard():
+    rows = []
+    if terms_url():
+        rows.append([InlineKeyboardButton("📄 To'liq shartlarni o'qish", url=terms_url())])
+    rows.append([InlineKeyboardButton("✅ Shartlarga roziman — boshlash", callback_data="cr|agree")])
+    return InlineKeyboardMarkup(rows)
+
+
+def has_consent(c):
+    return bool(c and c.get("terms_accepted_at") and c.get("terms_version") == TERMS_VERSION)
+
+
+async def finish_registration(b, tg_id):
+    """Instagram aniqlangach: rozilik berilgan bo'lsa ariza darhol yuboriladi."""
+    c = store().creator(tg_id)
+    if not has_consent(c):
+        await safe_send(b, tg_id, f"Instagram: @{c['instagram']}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+        return
+    await send_application(b, tg_id)
+
+
+async def send_application(b, tg_id):
+    c = store().submit_application(tg_id, TERMS_VERSION)
+    await safe_send(b, tg_id, f"Instagram: @{c['instagram']}\n\n✅ Arizangiz yuborildi. Administrator tasdiqlagach xabar beraman.")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"cr|ca|{tg_id}"),
+                                InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|cx|{tg_id}")]])
+    rep = (json.loads(c["vet_report"]) if c.get("vet_report") else None) or {}
+    await notify_admins(b, f"🆕 Yangi ariza\n{c['first_name']} {c['last_name']} (@{c['username']})\n"
+                           f"Tel: {c['phone']}\nInstagram: https://instagram.com/{c['instagram']}\n"
+                           f"Shartlar qabul qilindi: v{TERMS_VERSION}\n\n"
+                           + (rep.get("text") or "📊 Avtomatik baho yo'q — profilni o'zingiz ko'ring"),
+                        reply_markup=kb)
+    return c
+
+
 def terms_keyboard():
     rows = []
     if terms_url():
@@ -109,10 +144,9 @@ def main_keyboard():
     first = [KeyboardButton(BTN_HUD)] if url else []
     if products_enabled():
         rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_PRODUCT), KeyboardButton(BTN_REEL)],
-                [KeyboardButton(BTN_SHOT), KeyboardButton(BTN_CHAT)]]
-    else:
-        rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_REEL), KeyboardButton(BTN_SHOT)],
                 [KeyboardButton(BTN_CHAT)]]
+    else:
+        rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_REEL), KeyboardButton(BTN_CHAT)]]
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
@@ -308,18 +342,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Arizangiz ko'rib chiqilmoqda. Tasdiqlangach shu yerga xabar keladi.")
     elif c["status"] == "blocked":
         await update.message.reply_text("Hisobingiz to'xtatilgan. Savollar bo'lsa, shu yerga yozing.")
-    else:
-        kb = ReplyKeyboardMarkup([[KeyboardButton("📞 Telefon raqamni yuborish", request_contact=True)]],
-                                 resize_keyboard=True, one_time_keyboard=True)
+    elif not has_consent(c):
         await update.message.reply_text(
             f"Assalomu alaykum, {u.first_name}! Bolalar Dunyosi Creator Rewards dasturiga xush kelibsiz.\n\n"
-            "Ro'yxatdan o'tish uchun telefon raqamingizni yuboring.", reply_markup=kb)
+            f"{RULES_TEXT}\n\nBotdan foydalanish uchun shartlarga roziligingiz kerak. «Roziman» tugmasini bosish "
+            "ommaviy ofertani to'liq qabul qilish hisoblanadi.", reply_markup=consent_keyboard())
+    else:
+        await ask_phone(update.message)
+
+
+async def ask_phone(msg):
+    kb = ReplyKeyboardMarkup([[KeyboardButton("📞 Telefon raqamni yuborish", request_contact=True)]],
+                             resize_keyboard=True, one_time_keyboard=True)
+    await msg.reply_text("Ro'yxatdan o'tish uchun telefon raqamingizni yuboring.", reply_markup=kb)
 
 
 async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u, contact = update.effective_user, update.message.contact
     if contact.user_id != u.id:
         await update.message.reply_text("Iltimos, o'zingizning raqamingizni tugma orqali yuboring.")
+        return
+    if not has_consent(store().creator(u.id)) and not is_admin(u.id):
+        await update.message.reply_text("Avval shartlarga rozilik bering: /start")
         return
     store().set_phone(u.id, contact.phone_number)
     context.user_data["await"] = "instagram"
@@ -357,7 +401,7 @@ async def on_ig_connected(b, tg_id):
     c = st.creator(tg_id)
     await safe_send(b, tg_id, f"✅ Instagram ulandi: @{link['username']}")
     if c["status"] in ("draft", "rejected"):
-        await safe_send(b, tg_id, f"Instagram: @{c['instagram']}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+        await finish_registration(b, tg_id)
     elif c["status"] == "approved":
         await safe_send(b, tg_id, "Endi videolaringiz statistikasi avtomatik olinadi — skrinshot yuborish shart emas.",
                         reply_markup=main_keyboard())
@@ -446,7 +490,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Instagram profilingizning Reels bo'limidan skrinshot yuboring: obunachilar soni va videolar "
                     "ustidagi ko'rishlar ko'rinib tursin.")
                 return
-            await update.message.reply_text(f"Instagram: @{ig}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+            await finish_registration(context.bot, u.id)
             return
         if state == "product":
             req_id = st.request_product(u.id, text)
@@ -539,11 +583,11 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         metrics = await asyncio.to_thread(vet.read_profile_screenshot, data)
         await run_vetting(context.bot, u.id, metrics or {"source": "screenshot", "followers": None, "posts": []})
         context.user_data.pop("await", None)
-        c = store().creator(u.id)
-        await update.message.reply_text(f"Instagram: @{c['instagram']}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+        await finish_registration(context.bot, u.id)
         return
     if not state.startswith("photo:"):
-        await update.message.reply_text(f"Skrinshot yuborish uchun avval «{BTN_SHOT}» tugmasini bosing.")
+        await update.message.reply_text("Skrinshotni Kabinet'dagi «Videolar» bo'limidan yoki bot so'raganda "
+                                        "xabar ostidagi tugma orqali yuboring.")
         return
     rid = int(state.split(":")[1])
     f = await update.message.photo[-1].get_file()
@@ -572,18 +616,21 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = q.from_user
     st = store()
     try:
+        if action == "agree":
+            st.accept_terms(u.id, TERMS_VERSION)
+            await q.answer("Rahmat!")
+            await q.edit_message_reply_markup(None)
+            c = st.creator(u.id)
+            if c["status"] in ("draft", "rejected") and not c["phone"]:
+                await ask_phone(q.message)
+            else:
+                await q.message.reply_text("✅ Rozilik qabul qilindi.", reply_markup=main_keyboard() if c["status"] == "approved" else None)
+            return
         if action == "apply":
-            c = st.submit_application(u.id, TERMS_VERSION)
+            st.accept_terms(u.id, TERMS_VERSION)
             await q.answer("Ariza yuborildi")
-            await q.edit_message_text("✅ Arizangiz yuborildi. Administrator tasdiqlagach xabar beraman.")
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"cr|ca|{u.id}"),
-                                        InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|cx|{u.id}")]])
-            rep = (json.loads(c["vet_report"]) if c.get("vet_report") else None) or {}
-            await notify_admins(context.bot, f"🆕 Yangi ariza\n{c['first_name']} {c['last_name']} (@{c['username']})\n"
-                                             f"Tel: {c['phone']}\nInstagram: https://instagram.com/{c['instagram']}\n"
-                                             f"Shartlar qabul qilindi: v{TERMS_VERSION}\n\n"
-                                             + (rep.get("text") or "📊 Avtomatik baho yo'q — profilni o'zingiz ko'ring"),
-                                reply_markup=kb)
+            await q.edit_message_reply_markup(None)
+            await send_application(context.bot, u.id)
             return
         if action == "preq":
             p = next((x for x in st.products(active_only=True) if x["id"] == int(arg)), None)
@@ -798,7 +845,9 @@ async def tick(b):
         await notify_admins(b, f"⏱ 30 kun tugadi, yakuniy skrinshot kutilmoqda: {r['url']}")
     for r, day in st.due_reminders():
         if r["tg_id"] not in linked:  # ulangan akkauntlardan skrinshot so'ralmaydi
-            await safe_send(b, r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring — «{BTN_SHOT}».")
+            await safe_send(b, r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring.",
+                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                                "📸 Skrinshot yuborish", callback_data=f"cr|shot|{r['id']}")]]))
         st.mark_reminded(r["id"], day)
     for tg_id, kind, code, amount, expires_at, days in st.expiry_reminders():
         what = f"{code} vaucheringiz ({R.som(amount)})" if kind == "voucher" else f"{R.som(amount)} qoldig'ingiz"

@@ -178,6 +178,14 @@ class Store:
             db.execute("UPDATE creators SET instagram=? WHERE tg_id=?", (name, tg_id))
         return name
 
+    def accept_terms(self, tg_id, terms_version="1.0"):
+        """Botni ishlatishdan oldingi rozilik (aksept): vaqt, versiya va Telegram ID jurnalga yoziladi."""
+        now = R.to_iso(R.utcnow())
+        with self.tx() as db:
+            db.execute("UPDATE creators SET terms_version=?, terms_accepted_at=? WHERE tg_id=?", (terms_version, now, tg_id))
+            self._audit(db, tg_id, "terms_accepted", version=terms_version, at=now)
+        return self.creator(tg_id)
+
     def submit_application(self, tg_id, terms_version="1.0"):
         """Ariza + shartlarni qabul qilish (aksept): vaqt, versiya va Telegram ID jurnalga yoziladi."""
         c = self.creator(tg_id)

@@ -604,6 +604,17 @@ def test_ig_callback_endpoint():
             os.environ.pop(k, None)
 
 
+def test_consent_recorded_before_registration():
+    from creator_rewards import bot as cb
+    s = new_store()
+    s.upsert_telegram(500, "Ali", "", "ali")
+    assert not cb.has_consent(s.creator(500))
+    s.accept_terms(500, cb.TERMS_VERSION)
+    c = s.creator(500)
+    assert cb.has_consent(c) and c["status"] == "draft"
+    assert not cb.has_consent({**c, "terms_version": "0.9"})
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
