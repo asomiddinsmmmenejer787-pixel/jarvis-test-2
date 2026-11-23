@@ -316,7 +316,9 @@ SAFE_FALLBACK = {
               "Ma'lumotni direktingizga yubordik, ko'rib chiqing 😊", "Direktingizni tekshiring, javob yozdik 😊",
               "Sizga direktda batafsil yozdik 😊", "Narxini shaxsiy xabarda aytdik, direktga qarang 😊"],
     "question": ["Direktga yozing, batafsil javob beramiz 😊", "Yaxshi savol, direktga yozing, aniqlab aytamiz 😊"],
-    "positive": ["Rahmat, bizga ham yoqdi 😊", "Iliq so'zlaringiz uchun rahmat 😊", "Kayfiyatimizni ko'tardingiz, rahmat 😊"],
+    "positive": ["Rahmat, bizga ham yoqdi 😊", "Iliq so'zlaringiz uchun rahmat 😊", "Kayfiyatimizni ko'tardingiz, rahmat 😊",
+                 "Rahmat 🤍", "Sizga ham rahmat, doim xursand bo'ling 😊", "Xursand bo'ldik, rahmat 🙌",
+                 "Rahmat, yangi videolarni ham kutib qoling 😊"],
     "tag": TAG_FALLBACKS,
 }
 
@@ -1065,10 +1067,12 @@ class CommentResponder:
                     # Takror: boshqa xavfsiz javob tanlaymiz, bo'lmasa (maqtov/belgilash) javobsiz qoldiramiz
                     alts = [x for x in SAFE_FALLBACK.get(verdict["category"], [])
                             if not too_similar(x, self._recent)]
-                    if verdict["category"] in ("price", "question", "complaint"):
-                        # muhim komment javobsiz qolmaydi: muqobil bo'lmasa ham yuboriladi
-                        if alts:
-                            verdict["reply"] = random.choice(alts)
+                    if alts and verdict["category"] in ("price", "question", "complaint", "positive"):
+                        # 23.11 egasi: "komentga javob yozmayapdi" - takror maqtovga ("👏") javobsiz qolish
+                        # o'rniga boshqa qisqa javob yoziladi; muqobil qolmasagina javobsiz qoladi
+                        verdict["reply"] = random.choice(alts)
+                    elif verdict["category"] in ("price", "question", "complaint"):
+                        pass  # muhim komment javobsiz qolmaydi: muqobil bo'lmasa ham yuboriladi
                     else:
                         A("duplicate", category=verdict["category"], reply=verdict["reply"])
                         stats["budget"] = stats.get("budget", 0) + 1

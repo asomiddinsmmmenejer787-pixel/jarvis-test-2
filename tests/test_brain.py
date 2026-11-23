@@ -256,6 +256,29 @@ def run():
     check(auto_reply.drop_repeated_tail("Qaysi biri yoqdi? Rahmat.", rec) == "Qaysi biri yoqdi? Rahmat.",
           "Savol bilan tugamagan javob tegilmaydi")
 
+    print("\n6) Kuzatuvda topilgan xato (23.11): takror maqtov javobi tufayli komment javobsiz qoldi")
+    r.state.done.clear()
+    r.state.daily = {"date": "", "count": 0}
+    r.set_policy(skip=[], saving=False)
+    r._recent.clear()
+    r._recent.append("Rahmat, qaysi biri yoqdi?")  # AI har maqtovga shu javobni beradi
+    fake.comments["m1"] = [{"id": "dup1", "text": "👏", "username": "xl_1", "timestamp": ts(1)}]
+    fake.comments["m2"] = []
+    r._counts.clear()
+    n = len(fake.replies)
+    r.run_once()
+    sent = dict(fake.replies[n:])
+    check("dup1" in sent and sent["dup1"] in auto_reply.SAFE_FALLBACK["positive"],
+          "Takror javob o'rniga boshqa qisqa javob yozildi, komment javobsiz qolmadi")
+    r._recent.clear()
+    r._recent.extend(auto_reply.SAFE_FALLBACK["positive"] + ["Rahmat, qaysi biri yoqdi?"])
+    fake.comments["m1"] = [{"id": "dup2", "text": "🔥", "username": "xl_2", "timestamp": ts(1)}]
+    r._counts.clear()
+    n = len(fake.replies)
+    r.run_once()
+    check("dup2" not in dict(fake.replies[n:]) and r.state.done.get("dup2") == "budget",
+          "Muqobil javoblar ham ishlatilgan bo'lsa takror yozilmaydi")
+
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 
 
