@@ -24,6 +24,8 @@ _lock = threading.Lock()
 SNAP_EVERY = 900         # 15 daqiqa
 MAX_REELS = 8            # oxirgi nechta reels kuzatiladi (API so'rovlarini tejash)
 KEEP_DAYS = 3
+RATE_LIMIT_PAUSE = 3600  # Instagram limiti to'lsa, bu statistika 1 soat so'ralmaydi
+_next_try = 0            # keyingi urinish vaqti (xato bo'lsa ham keyingi urinish kutadi)
 
 
 def _path():
@@ -72,16 +74,30 @@ def record(views, meta=None, now=None):
 
 def snapshot(now=None, min_interval=SNAP_EVERY):
     """Oxirgi reelslarning ko'rishlarini Instagram'dan o'qib yozadi (min_interval'dan tez emas)."""
+    global _next_try
     now = int(now or time.time())
     snaps = _load()["snaps"]
     if snaps and now - snaps[-1][0] < min_interval:
         return False
-    reels = [m for m in ig.get_recent_posts(20) if ig.media_kind(m) == "REELS"][:MAX_REELS]
+    # Muvaffaqiyatsiz urinish ham kutadi: aks holda har daqiqada 9+ so'rov ketib, Instagram limiti
+    # to'lib, komentlarga javob to'xtaydi (23.11).
+    if now < _next_try:
+        return False
+    _next_try = now + min_interval
+    try:
+        posts = ig.get_recent_posts(20)
+    except ig.InstagramError as e:
+        if e.rate_limited:
+            _next_try = now + RATE_LIMIT_PAUSE
+        raise
+    reels = [m for m in posts if ig.media_kind(m) == "REELS"][:MAX_REELS]
     views, meta = {}, {}
     for m in reels:
         try:
             v = ig.get_reel_views(m["id"])
         except ig.InstagramError as e:
+            if e.rate_limited:
+                _next_try = now + RATE_LIMIT_PAUSE
             if e.fatal or e.rate_limited:
                 raise
             continue

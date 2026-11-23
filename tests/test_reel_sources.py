@@ -55,6 +55,45 @@ def run():
     finally:
         ig.get_recent_posts, ig.get_reel_views = orig_posts, orig_views
 
+    # 23.11: ko'rishlarni o'qib bo'lmasa har daqiqada qayta so'ralmaydi (Instagram limiti to'lib,
+    # komentlarga javob to'xtagan edi)
+    later = now + 100000
+    post_calls = []
+
+    def no_views(mid):
+        calls.append(mid)
+        return None
+
+    ig.get_recent_posts = lambda n=10: post_calls.append(n) or [
+        {"id": "r10", "media_product_type": "REELS"}]
+    ig.get_reel_views = no_views
+    try:
+        calls.clear()
+        rs.snapshot(later)
+        n_posts, n_views = len(post_calls), len(calls)
+        check(n_posts == 1 and n_views == 1, "Birinchi urinish so'rov yuboradi")
+        rs.snapshot(later + 60)
+        rs.snapshot(later + 120)
+        check(len(post_calls) == 1 and len(calls) == 1, "Ko'rish o'qilmasa ham 15 daqiqa kutiladi")
+        rs.snapshot(later + 1000)
+        check(len(post_calls) == 2, "15 daqiqadan keyin yana urinadi")
+
+        def limited(n=10):
+            post_calls.append(n)
+            raise ig.InstagramError("limit", rate_limited=True)
+
+        ig.get_recent_posts = limited
+        try:
+            rs.snapshot(later + 2000)
+        except ig.InstagramError:
+            pass
+        k = len(post_calls)
+        rs.snapshot(later + 2000 + 1800)
+        check(len(post_calls) == k, "Limit to'lsa 1 soat so'ralmaydi")
+    finally:
+        ig.get_recent_posts, ig.get_reel_views = orig_posts, orig_views
+        rs._next_try = 0
+
     # API javobida reels bloki bor
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
