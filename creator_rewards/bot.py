@@ -12,6 +12,7 @@ Admin:   arizani, skrinshotni va mukofotni tasdiqlash; /ishlat KOD SUMMA [chek];
 
 import asyncio
 import io
+import json
 import logging
 import os
 
@@ -20,8 +21,10 @@ from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton
 from telegram.ext import (ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
+from . import fx
 from . import rewards as R
 from . import screens
+from . import vet
 from .store import LEVELS, Store, StoreError
 
 log = logging.getLogger("creator_bot")
@@ -32,16 +35,19 @@ BTN_REEL = "➕ Reels qo'shish"
 BTN_SHOT = "📸 Skrinshot yuborish"
 BTN_VOUCHER = "🎟 Vaucherim"
 BTN_CHAT = "✉️ Administratorga yozish"
+BTN_PRODUCT = "🧸 Mahsulot so'rash"
+TERMS_VERSION = "1.0"
 
 RULES_TEXT = (
-    "Hamkorlik qoidalari:\n"
-    "• Instagram akkauntingiz professional (Biznes yoki Avtor) va ochiq bo'lsin.\n"
-    "• Video do'konda olinadi, 30–45 soniya, 9:16.\n"
-    "• Reels Bolalar Dunyosi bilan Collab qilib joylanadi va doimiy turadi.\n"
-    "• Videoni joylagan kuningiz havolasini botga yuboring: 30 kun shu paytdan hisoblanadi.\n"
-    "• Mukofot: 10 000 ko'rish = 100 000 so'm, keyin har 1 000 ko'rishga +4 000 so'm, eng ko'pi 460 000 so'm.\n"
-    "• Vaucher faqat do'konda, naqd pulga almashtirilmaydi, 30 kun amal qiladi.\n"
-    "• Sun'iy ko'rish yoki soxta skrinshot aniqlansa, hisob to'xtatiladi."
+    "Asosiy shartlar (to'liq matn — «Shartlarni o'qish» tugmasida):\n"
+    "• 18 yoshdan katta bo'lishingiz, Instagram akkauntingiz professional va ochiq bo'lishi kerak.\n"
+    "• Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi: avval botda mahsulotga ruxsat olasiz.\n"
+    "• Video do'konda olinadi, 30–45 soniya, 9:16, reklama sifatida belgilanadi.\n"
+    "• Reels Bolalar Dunyosi bilan Collab qilib joylanadi, havola 24 soat ichida botga yuboriladi, video o'chirilmaydi.\n"
+    "• Mukofot 30 kun ichidagi ko'rishlar uchun: 10 000 ko'rish = 100 000 so'm, keyin har 1 000 ko'rishga +4 000 so'm, "
+    "100 000 dan 460 000 so'm; 1 000 000 va undan ko'p ko'rish — 200$ (MB kursi bo'yicha so'mda).\n"
+    "• Mukofot faqat vaucher: naqd pulga almashtirilmaydi, 30 kun amal qiladi, kod bir marta ishlatiladi.\n"
+    "• Sun'iy ko'rish, soxta skrinshot yoki brend obro'siga zarar — hisob to'xtatiladi va vaucherlar bekor qilinadi."
 )
 
 _ctx = {"store": None, "admins": lambda: set(), "app": None, "loop": None}
@@ -69,6 +75,19 @@ def hud_url():
     return f"https://{domain}/creator/app" if domain else ""
 
 
+def terms_url():
+    url = hud_url()
+    return url.rsplit("/app", 1)[0] + "/terms" if url else ""
+
+
+def terms_keyboard():
+    rows = []
+    if terms_url():
+        rows.append([InlineKeyboardButton("📄 Shartlarni o'qish", url=terms_url())])
+    rows.append([InlineKeyboardButton("✅ Shartlarni o'qidim va qabul qilaman", callback_data="cr|apply")])
+    return InlineKeyboardMarkup(rows)
+
+
 def run_in_bot(coro, timeout=90):
     """Web-server oqimidan bot amalini bajarish (masalan, HUD'dan tasdiqlash)."""
     loop, app = _ctx["loop"], _ctx["app"]
@@ -85,8 +104,8 @@ def bot():
 def main_keyboard():
     url = hud_url()
     first = [KeyboardButton(BTN_HUD, web_app=WebAppInfo(url=url))] if url else []
-    rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_REEL), KeyboardButton(BTN_SHOT)],
-            [KeyboardButton(BTN_CHAT)]]
+    rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_PRODUCT), KeyboardButton(BTN_REEL)],
+            [KeyboardButton(BTN_SHOT), KeyboardButton(BTN_CHAT)]]
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
@@ -187,7 +206,10 @@ async def act_decide_reward(b, reward_id, approve, admin_id, note=""):
     if not rw:
         raise StoreError("Hisob-kitob topilmadi.")
     reel = st.reel(rw["reel_id"])
-    v = st.decide_reward(int(reward_id), approve, admin_id, note)
+    rate = None
+    if approve and rw["views"] >= R.MILLION_VIEWS:
+        rate, _ = await asyncio.to_thread(fx.usd_rate, True)
+    v = st.decide_reward(int(reward_id), approve, admin_id, note, usd_rate=rate)
     if v:
         extra = f"\n(Oldingi qoldiq {R.som(v['carried_in'])} ham qo'shildi.)" if v["carried_in"] else ""
         await safe_send(b, reel["tg_id"], f"🎟 Yangi vaucher!\nKod: {v['code']}\nQiymati: {R.som(v['nominal'])}{extra}\n"
@@ -216,6 +238,37 @@ async def act_promo(b, code, amount, admin_id, receipt=""):
     return c
 
 
+async def act_decide_product(b, req_id, approve, admin_id, note=""):
+    req = store().decide_product_request(int(req_id), approve, admin_id, note)
+    if approve:
+        await safe_send(b, req["tg_id"], f"✅ Ruxsat berildi: {req['product']}\nDo'konga kelib suratga olishingiz mumkin. "
+                                         f"Videoni joylagach, «{BTN_REEL}» orqali havolasini yuboring.")
+    else:
+        await safe_send(b, req["tg_id"], f"❌ {req['product']} uchun ruxsat berilmadi." + (f"\nSabab: {note}" if note else ""))
+    return req
+
+
+async def notify_product_request(b, req_id):
+    st = store()
+    req = st.product_request(req_id)
+    c = st.creator(req["tg_id"])
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Ruxsat berish", callback_data=f"cr|pa|{req_id}"),
+                                InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|px|{req_id}")]])
+    await notify_admins(b, f"🧸 Mahsulot so'rovi: @{c['instagram']}\n{req['product']}", reply_markup=kb)
+
+
+async def run_vetting(b, tg_id, metrics=None):
+    """Akkauntni baholaydi va natijani saqlaydi. Ochiq ma'lumot bo'lmasa None qaytaradi."""
+    st = store()
+    c = st.creator(tg_id)
+    if metrics is None:
+        metrics = await asyncio.to_thread(vet.fetch_business_discovery, c["instagram"])
+    result = vet.evaluate(c["instagram"], metrics)
+    if result:
+        st.set_vetting(tg_id, result["score"], result)
+    return result
+
+
 async def act_set_level(b, tg_id, level, admin_id):
     st = store()
     st.set_level(tg_id, level, admin_id)
@@ -239,6 +292,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/arizalar — kutilayotgan arizalar\n/ishlat KOD SUMMA [chek] — vaucherni ishlatish\n"
             "/promo KOD SUMMA [chek] — promo-kod bilan xarid\n/daraja @instagram Hamkor|Faol|Yangi|avto\n"
             "/brif matn — blogerlar uchun joriy topshiriq\n/tekshir KOD — vaucher holati\n"
+            "/mahsulot nomi — ruxsat ro'yxatiga mahsulot qo'shish\n/baho @instagram — akkauntni qayta baholash\n"
             "Blogerga javob berish uchun uning xabariga Reply qiling.")
         return
     if c["status"] == "approved":
@@ -294,17 +348,31 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state == "instagram":
             ig = st.set_instagram(u.id, text)
             context.user_data.pop("await", None)
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Roziman, ariza yuborish", callback_data="cr|apply")]])
-            await update.message.reply_text(f"Instagram: @{ig}\n\n{RULES_TEXT}", reply_markup=kb)
+            await update.message.reply_text(f"🔎 @{ig} akkauntini tekshiryapman...")
+            result = await run_vetting(context.bot, u.id)
+            if result is None:
+                context.user_data["await"] = "profile_shot"
+                await update.message.reply_text(
+                    "Instagram profilingizning Reels bo'limidan skrinshot yuboring: obunachilar soni va videolar "
+                    "ustidagi ko'rishlar ko'rinib tursin.")
+                return
+            await update.message.reply_text(f"Instagram: @{ig}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
             return
-        if state == "reel":
-            rid = st.add_reel(u.id, text)
+        if state == "product":
+            req_id = st.request_product(u.id, text)
+            context.user_data.pop("await", None)
+            await update.message.reply_text("So'rovingiz yuborildi. Ruxsat berilsa, shu yerga xabar keladi.",
+                                            reply_markup=main_keyboard())
+            await notify_product_request(context.bot, req_id)
+            return
+        if state.startswith("reel:"):
+            rid = st.add_reel(u.id, text, request_id=int(state.split(":")[1]))
             context.user_data.pop("await", None)
             r = st.reel(rid)
             await update.message.reply_text(
                 f"✅ Video ro'yxatga olindi.\nKuzatuv {R.tashkent_str(r['ends_at'])} gacha davom etadi.\n"
                 "1, 7, 14 va 30-kunlarda Insights skrinshotini so'rayman.", reply_markup=main_keyboard())
-            await notify_admins(context.bot, f"🎬 Yangi Reels: @{c['instagram']}\n{r['url']}")
+            await notify_admins(context.bot, f"🎬 Yangi Reels: @{c['instagram']} — {r['product']}\n{r['url']}")
             return
         if state.startswith("views:"):
             _, rid, path = state.split(":", 2)
@@ -323,11 +391,24 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if c["status"] != "approved":
         await start(update, context)
         return
-    if text == BTN_REEL:
-        context.user_data["await"] = "reel"
+    if text == BTN_PRODUCT:
+        products = st.products(active_only=True)
+        kb = [[InlineKeyboardButton(p["name"], callback_data=f"cr|preq|{p['id']}")] for p in products[:20]]
+        kb.append([InlineKeyboardButton("✏️ Boshqa mahsulot (yozib yuborish)", callback_data="cr|pother")])
         brief = st.get_setting("brief", "")
         await update.message.reply_text(("📝 Joriy topshiriq: " + brief + "\n\n" if brief else "")
-                                        + "Instagram'da joylagan Collab Reels havolasini yuboring.")
+                                        + "Qaysi mahsulotni suratga olmoqchisiz? Ruxsatni Bolalar Dunyosi beradi.",
+                                        reply_markup=InlineKeyboardMarkup(kb))
+    elif text == BTN_REEL:
+        approved = st.approved_requests(u.id)
+        if not approved:
+            await update.message.reply_text(f"Avval mahsulotga ruxsat oling: «{BTN_PRODUCT}».")
+        elif len(approved) == 1:
+            context.user_data["await"] = f"reel:{approved[0]['id']}"
+            await update.message.reply_text(f"Mahsulot: {approved[0]['product']}\nInstagram'da joylagan Collab Reels havolasini yuboring.")
+        else:
+            kb = [[InlineKeyboardButton(a["product"], callback_data=f"cr|rq|{a['id']}")] for a in approved[:10]]
+            await update.message.reply_text("Videoda qaysi mahsulot bor?", reply_markup=InlineKeyboardMarkup(kb))
     elif text == BTN_SHOT:
         reels = [r for r in st.reels_of(u.id) if r["status"] in ("monitoring", "awaiting_final")]
         if not reels:
@@ -351,6 +432,16 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     state = context.user_data.get("await") or ""
+    if state == "profile_shot":
+        f = await update.message.photo[-1].get_file()
+        data = bytes(await f.download_as_bytearray())
+        await update.message.reply_text("🔎 Jarvis profilingizni o'qiyapti...")
+        metrics = await asyncio.to_thread(vet.read_profile_screenshot, data)
+        await run_vetting(context.bot, u.id, metrics or {"source": "screenshot", "followers": None, "posts": []})
+        context.user_data.pop("await", None)
+        c = store().creator(u.id)
+        await update.message.reply_text(f"Instagram: @{c['instagram']}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+        return
     if not state.startswith("photo:"):
         await update.message.reply_text(f"Skrinshot yuborish uchun avval «{BTN_SHOT}» tugmasini bosing.")
         return
@@ -382,14 +473,41 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     st = store()
     try:
         if action == "apply":
-            c = st.submit_application(u.id)
+            c = st.submit_application(u.id, TERMS_VERSION)
             await q.answer("Ariza yuborildi")
             await q.edit_message_text("✅ Arizangiz yuborildi. Administrator tasdiqlagach xabar beraman.")
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"cr|ca|{u.id}"),
                                         InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|cx|{u.id}")]])
+            rep = (json.loads(c["vet_report"]) if c.get("vet_report") else None) or {}
             await notify_admins(context.bot, f"🆕 Yangi ariza\n{c['first_name']} {c['last_name']} (@{c['username']})\n"
-                                             f"Tel: {c['phone']}\nInstagram: https://instagram.com/{c['instagram']}",
+                                             f"Tel: {c['phone']}\nInstagram: https://instagram.com/{c['instagram']}\n"
+                                             f"Shartlar qabul qilindi: v{TERMS_VERSION}\n\n"
+                                             + (rep.get("text") or "📊 Avtomatik baho yo'q — profilni o'zingiz ko'ring"),
                                 reply_markup=kb)
+            return
+        if action == "preq":
+            p = next((x for x in st.products(active_only=True) if x["id"] == int(arg)), None)
+            if not p:
+                await q.answer("Bu mahsulot endi ro'yxatda yo'q", show_alert=True)
+                return
+            req_id = st.request_product(u.id, p["name"])
+            await q.answer("So'rov yuborildi")
+            await q.edit_message_text(f"🧸 {p['name']} — so'rov yuborildi. Ruxsat berilsa, xabar keladi.")
+            await notify_product_request(context.bot, req_id)
+            return
+        if action == "pother":
+            context.user_data["await"] = "product"
+            await q.answer()
+            await q.message.reply_text("Mahsulot nomini yozing (masalan: rolikli krossovka, qizil, 32-o'lcham):")
+            return
+        if action == "rq":
+            req = st.product_request(int(arg))
+            if not req or req["tg_id"] != u.id or req["status"] != "approved":
+                await q.answer("Ruxsat topilmadi", show_alert=True)
+                return
+            context.user_data["await"] = f"reel:{req['id']}"
+            await q.answer()
+            await q.message.reply_text(f"Mahsulot: {req['product']}\nInstagram'da joylagan Collab Reels havolasini yuboring.")
             return
         if action == "shot":
             context.user_data["await"] = f"photo:{int(arg)}"
@@ -411,6 +529,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["await"] = f"fix:{int(arg)}"
             await q.answer()
             await q.message.reply_text("Skrinshotdagi to'g'ri ko'rishlar sonini yozing:")
+        elif action in ("pa", "px"):
+            await act_decide_product(context.bot, int(arg), action == "pa", u.id)
+            await q.answer("Saqlandi")
+            await q.edit_message_text(q.message.text + ("\n\n✅ Ruxsat berildi" if action == "pa" else "\n\n❌ Rad etildi"))
         elif action in ("ra", "rx"):
             v = await act_decide_reward(context.bot, int(arg), action == "ra", u.id)
             await q.answer("Saqlandi")
@@ -444,7 +566,7 @@ async def admin_text(update, context, text):
     except ValueError:
         await update.message.reply_text("Faqat raqam yozing.")
         return
-    await update.message.reply_text("Buyruqlar: /arizalar, /ishlat, /promo, /daraja, /brif, /tekshir")
+    await update.message.reply_text("Buyruqlar: /arizalar, /ishlat, /promo, /daraja, /brif, /mahsulot, /baho, /tekshir")
 
 
 def admin_only(fn):
@@ -490,6 +612,32 @@ async def cmd_level(update, context):
     level = a[1].capitalize() if a[1].lower() not in ("avto", "auto") else None
     lv = await act_set_level(context.bot, c["tg_id"], level, update.effective_user.id)
     await update.message.reply_text(f"✅ @{c['instagram']} darajasi: {lv}" + (" (qo'lda)" if level else " (avtomatik)"))
+
+
+@admin_only
+async def cmd_product(update, context):
+    """/mahsulot Rolikli krossovka — ruxsat ro'yxatiga qo'shadi; /mahsulot (bo'sh) — ro'yxat."""
+    name = " ".join(context.args).strip()
+    if name:
+        store().add_product(name, update.effective_user.id)
+        await update.message.reply_text(f"✅ Ro'yxatga qo'shildi: {name}")
+        return
+    rows = store().products(active_only=True)
+    await update.message.reply_text("Ruxsat ro'yxati:\n" + ("\n".join("• " + p["name"] for p in rows) or "bo'sh")
+                                    + "\n\nQo'shish: /mahsulot nomi. O'chirish — HUD'dagi Blogerlar bo'limida.")
+
+
+@admin_only
+async def cmd_vet(update, context):
+    if not context.args:
+        await update.message.reply_text("Ishlatish: /baho @instagram")
+        return
+    c = store().creator_by_instagram(context.args[0])
+    if not c:
+        await update.message.reply_text("Bunday bloger yo'q.")
+        return
+    res = await run_vetting(context.bot, c["tg_id"])
+    await update.message.reply_text(res["text"] if res else "Ochiq ma'lumotlarni olib bo'lmadi (IG_BD_TOKEN sozlanmagan yoki akkaunt yopiq).")
 
 
 @admin_only
@@ -566,6 +714,8 @@ def build_app(token):
     app.add_handler(CommandHandler("brif", cmd_brief))
     app.add_handler(CommandHandler("tekshir", cmd_check))
     app.add_handler(CommandHandler("arizalar", cmd_pending))
+    app.add_handler(CommandHandler("mahsulot", cmd_product))
+    app.add_handler(CommandHandler("baho", cmd_vet))
     app.add_handler(CallbackQueryHandler(on_callback, pattern=r"^cr\|"))
     app.add_handler(MessageHandler(filters.CONTACT & filters.ChatType.PRIVATE, on_contact))
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, on_photo))
@@ -580,6 +730,8 @@ async def start_bot(get_admin_ids):
         log.info("CREATOR_BOT_TOKEN yo'q — blogerlar boti o'chiq.")
         return None
     _ctx["admins"] = get_admin_ids
+    store().usd_rate = fx.cached_rate
+    asyncio.get_running_loop().run_in_executor(None, fx.usd_rate)  # kursni oldindan yuklab qo'yamiz
     app = build_app(token)
     await app.initialize()
     await app.start()

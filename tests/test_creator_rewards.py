@@ -35,8 +35,15 @@ def approved_creator(s, tg=100, ig="madina_blog"):
     return tg
 
 
+def req(s, tg, product="Rolikli krossovka"):
+    """Mahsulotga ruxsat (har bir video uchun alohida so'rov)."""
+    rid = s.request_product(tg, f"{product} {len(s.approved_requests(tg))}-{os.urandom(2).hex()}")
+    s.decide_product_request(rid, True, ADMIN)
+    return rid
+
+
 def finished_reel(s, tg, code, views):
-    rid = s.add_reel(tg, f"https://www.instagram.com/reel/{code}/", posted_at=R.utcnow() - timedelta(days=31))
+    rid = s.add_reel(tg, f"https://www.instagram.com/reel/{code}/", posted_at=R.utcnow() - timedelta(days=31), request_id=req(s, tg))
     s.close_due_reels()
     snap = s.add_snapshot(rid, views, "screenshot", file_id="f")
     return rid, s.verify_snapshot(snap, ADMIN)
@@ -50,7 +57,11 @@ def test_formula():
     assert R.MAX_REWARD == 460_000
     assert R.views_to_next_step(9_500) == 500
     assert R.views_to_next_step(12_300) == 700
-    assert R.views_to_next_step(100_000) is None
+    assert R.views_to_next_step(100_000) == 900_000  # endi maqsad — 1 000 000
+    assert R.views_to_next_step(1_000_000) is None
+    # 1 000 000 ko'rish: 200$ MB kursi bo'yicha, 460 000 o'rniga
+    assert R.reward_for_views(1_000_000, 12_650.43) == 2_530_000
+    assert R.reward_for_views(999_999, 12_650.43) == 460_000
 
 
 def test_registration_rules():
@@ -80,9 +91,9 @@ def test_reel_needs_approval_and_unique():
     except StoreError:
         pass
     tg = approved_creator(s)
-    s.add_reel(tg, "https://www.instagram.com/reel/AAAAA1/?igsh=xyz")
+    s.add_reel(tg, "https://www.instagram.com/reel/AAAAA1/?igsh=xyz", request_id=req(s, tg))
     try:
-        s.add_reel(tg, "https://instagram.com/reel/AAAAA1")
+        s.add_reel(tg, "https://instagram.com/reel/AAAAA1", request_id=req(s, tg))
         raise AssertionError("bir video ikki marta qo'shilmasligi kerak")
     except StoreError:
         pass
@@ -102,6 +113,57 @@ def test_reward_requires_admin_and_is_idempotent():
         raise AssertionError("bitta hisob-kitobga ikki vaucher chiqmasligi kerak")
     except StoreError:
         pass
+
+
+def test_million_views_uses_rate_on_approval_day():
+    s = new_store()
+    tg = approved_creator(s)
+    s.usd_rate = lambda: 12_500.0
+    _, rw = finished_reel(s, tg, "MMMMM1", 1_250_000)
+    assert rw["amount"] == 2_500_000
+    s.usd_rate = lambda: None
+    try:
+        s.decide_reward(rw["id"], True, ADMIN)
+        raise AssertionError("kurs bo'lmasa 200$ vaucheri chiqmasligi kerak")
+    except StoreError:
+        pass
+    v = s.decide_reward(rw["id"], True, ADMIN, usd_rate=12_700.0)  # tasdiqlangan kundagi kurs
+    assert v["nominal"] == 2_540_000 and s.reward(rw["id"])["usd_rate"] == 12_700.0
+
+
+def test_product_permission_required():
+    s = new_store()
+    tg = approved_creator(s)
+    try:
+        s.add_reel(tg, "https://www.instagram.com/reel/PPPPP1/")
+        raise AssertionError("ruxsatsiz video qo'shilmasligi kerak")
+    except StoreError:
+        pass
+    r1 = s.request_product(tg, "Dron X5")
+    try:
+        s.add_reel(tg, "https://www.instagram.com/reel/PPPPP1/", request_id=r1)
+        raise AssertionError("tasdiqlanmagan so'rov bilan video qo'shilmasligi kerak")
+    except StoreError:
+        pass
+    s.decide_product_request(r1, True, ADMIN)
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/PPPPP1/", request_id=r1)
+    assert s.reel(rid)["product"] == "Dron X5" and s.product_request(r1)["status"] == "used"
+    try:
+        s.add_reel(tg, "https://www.instagram.com/reel/PPPPP2/", request_id=r1)
+        raise AssertionError("bitta ruxsat ikki videoga ishlatilmasligi kerak")
+    except StoreError:
+        pass
+    other = approved_creator(s, 101, "other_blog")
+    r2 = req(s, other)
+    try:
+        s.add_reel(tg, "https://www.instagram.com/reel/PPPPP3/", request_id=r2)
+        raise AssertionError("boshqa blogerning ruxsati ishlamasligi kerak")
+    except StoreError:
+        pass
+    r3 = s.request_product(tg, "Qo'g'irchoq")
+    s.decide_product_request(r3, False, ADMIN, "Hozir aksiyada emas")
+    assert s.product_request(r3)["status"] == "rejected"
+    assert s.creator(tg)["terms_version"] == "1.0" and s.creator(tg)["terms_accepted_at"]
 
 
 def test_below_minimum_no_reward():
@@ -186,7 +248,7 @@ def test_concurrent_redeem_only_once():
 def test_pending_balance_and_reminders():
     s = new_store()
     tg = approved_creator(s)
-    rid = s.add_reel(tg, "https://www.instagram.com/reel/HHHHH1/", posted_at=R.utcnow() - timedelta(days=8))
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/HHHHH1/", posted_at=R.utcnow() - timedelta(days=8), request_id=req(s, tg))
     s.verify_snapshot(s.add_snapshot(rid, 25_000, "screenshot"), ADMIN)
     ov = s.overview(tg)
     assert ov["balance"]["pending"] == R.reward_for_views(25_000) == 160_000
@@ -202,7 +264,7 @@ def test_restart_keeps_state():
     path = os.path.join(tempfile.mkdtemp(prefix="cr-"), "t.db")
     s = Store(path)
     tg = approved_creator(s)
-    rid = s.add_reel(tg, "https://www.instagram.com/reel/IIIII1/", posted_at=R.utcnow() - timedelta(days=3))
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/IIIII1/", posted_at=R.utcnow() - timedelta(days=3), request_id=req(s, tg))
     ends = s.reel(rid)["ends_at"]
     s2 = Store(path)  # qayta ishga tushish
     assert s2.reel(rid)["ends_at"] == ends
@@ -301,7 +363,7 @@ def test_screenshot_flow_with_jarvis_reading():
     cb._ctx["store"] = s
     cb._ctx["admins"] = lambda: {ADMIN}
     tg = approved_creator(s)
-    rid = s.add_reel(tg, "https://www.instagram.com/reel/KKKKK1/", posted_at=R.utcnow() - timedelta(days=7))
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/KKKKK1/", posted_at=R.utcnow() - timedelta(days=7), request_id=req(s, tg))
     fb = FakeBot()
     orig = screens.read_insights
     try:
@@ -364,6 +426,71 @@ def test_admin_api_owner_only():
     assert client.get("/creator/admin/api/creator/777", headers={"X-Init-Data": owner}).json()["profile"]["instagram"] == "admin_view"
     assert client.get("/creator/shot/1?sig=bad").status_code == 403
     assert client.get("/creator/admin.js").status_code == 200
+
+
+def test_vetting_score():
+    from datetime import datetime, timedelta as td, timezone
+    from creator_rewards import vet
+    now = datetime(2026, 11, 23, tzinfo=timezone.utc)
+    good = {"source": "instagram_api", "followers": 30_000, "posts": [
+        {"at": (now - td(days=i * 3)).isoformat(), "views": 9_000 + i * 300, "likes": 500, "comments": 40, "reel": True}
+        for i in range(10)]}
+    v, parts, warns = vet.score(good, now)
+    assert v >= 8 and not warns, (v, warns)
+    bought = {"source": "instagram_api", "followers": 80_000, "posts": [
+        {"at": (now - td(days=40 + i * 10)).isoformat(), "views": 60_000, "likes": 40, "comments": 1, "reel": True}
+        for i in range(6)]}
+    v2, _, w2 = vet.score(bought, now)
+    assert v2 < v and any("sun'iy" in w for w in w2) and any("faol emas" in w for w in w2)
+    dead = {"source": "screenshot", "followers": 90_000, "posts": [{"views": 900, "reel": True} for _ in range(8)]}
+    v3, _, w3 = vet.score(dead, now)
+    assert v3 < 5 and any("nofaol" in w for w in w3)
+    assert vet.evaluate("x", None) is None
+    assert "/ 10" in vet.evaluate("madina", good)["text"]
+
+
+def test_bot_product_and_terms_flow():
+    import asyncio
+    from creator_rewards import bot as cb
+    s = new_store()
+    cb._ctx["store"] = s
+    cb._ctx["admins"] = lambda: {ADMIN}
+    fb = FakeBot()
+    tg = approved_creator(s, 300, "flow_blog")
+    s.add_product("Dron X5", ADMIN)
+    rid = s.request_product(tg, "Dron X5")
+    asyncio.run(cb.notify_product_request(fb, rid))
+    assert any("Dron X5" in t for c, t in fb.sent if c == ADMIN)
+    asyncio.run(cb.act_decide_product(fb, rid, True, ADMIN))
+    assert any("Ruxsat berildi" in t for c, t in fb.sent if c == tg)
+    assert [r["product"] for r in s.overview(tg)["product_requests"]] == ["Dron X5"]
+    res = asyncio.run(cb.run_vetting(fb, tg, {"source": "screenshot", "followers": 20_000,
+                                              "posts": [{"views": 6_000, "reel": True}] * 6}))
+    assert res and s.creator(tg)["vet_score"] == res["score"]
+
+
+def test_terms_page_and_admin_products_api():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import webapp
+    from creator_rewards import bot as cb, web as cw
+    s = new_store()
+    cb._ctx["store"] = s
+    webapp.init(None, None, lambda: 42, "555:MAIN")
+    app = FastAPI()
+    app.include_router(cw.router)
+    client = TestClient(app)
+    page = client.get("/creator/terms")
+    assert page.status_code == 200 and "Ommaviy oferta" in page.text and "200 (ikki yuz) AQSh dollari" in page.text
+    assert "<table>" in page.text and "<script" not in page.text
+    owner = _signed_init_data("555:MAIN", {"id": 42, "first_name": "Asomiddin"})
+    h = {"X-Init-Data": owner}
+    assert client.post("/creator/admin/api/action", headers=h, json={"action": "product_add", "name": "Rolikli krossovka"}).status_code == 200
+    d = client.get("/creator/admin/api/overview", headers=h).json()
+    assert d["products"][0]["name"] == "Rolikli krossovka" and d["product_requests"] == []
+    pid = d["products"][0]["id"]
+    client.post("/creator/admin/api/action", headers=h, json={"action": "product_active", "product_id": pid, "active": False})
+    assert s.products(active_only=True) == []
 
 
 if __name__ == "__main__":
