@@ -15,6 +15,7 @@ from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from . import bot as creator_bot
+from . import igconnect as ig
 from . import screens
 from .store import Store, StoreError
 
@@ -121,6 +122,60 @@ def terms():
             "vertical-align:top}th{background:#FDEBDC}blockquote{margin:0;padding:10px 14px;background:#FDEBDC;border-radius:10px}"
             "</style></head><body>" + body + "</body></html>")
     return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
+
+
+def _result_page(ok, title, text):
+    import html as h
+    from fastapi.responses import HTMLResponse
+    color = "#2E7D5B" if ok else "#B3261E"
+    return HTMLResponse(
+        "<!DOCTYPE html><html lang='uz'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>{h.escape(title)}</title></head><body style=\"font:17px/1.5 system-ui,sans-serif;background:#FFF8EF;color:#1F2A3C;"
+        "display:flex;min-height:90vh;align-items:center;justify-content:center;padding:24px;text-align:center\"><div>"
+        f"<div style='font-size:56px'>{'✅' if ok else '⚠️'}</div><h2 style='color:{color}'>{h.escape(title)}</h2>"
+        f"<p>{h.escape(text)}</p><p style='color:#5B6475'>Bu oynani yopib, Telegram'dagi botga qayting.</p></div></body></html>",
+        status_code=200 if ok else 400)
+
+
+@router.get("/api/ig/link")
+def ig_link(x_init_data: str = Header(default="")):
+    user = _verify_creator(x_init_data)
+    if not ig.configured():
+        raise HTTPException(status_code=503, detail="Instagram ulash hali sozlanmagan")
+    link = _store().ig_link(int(user["id"]))
+    return {"url": ig.auth_url(int(user["id"])),
+            "connected": bool(link and link["status"] == "ok"), "username": link["username"] if link else None}
+
+
+@router.get("/ig/callback")
+def ig_callback(code: str = "", state: str = "", error: str = "", error_reason: str = ""):
+    """Instagram ruxsatdan keyin shu manzilga qaytaradi."""
+    tg_id = ig.read_state(state)
+    if tg_id is None:
+        return _result_page(False, "Havola eskirgan", "Botdagi «Instagram'ni ulash» tugmasini qayta bosing.")
+    if error or not code:
+        return _result_page(False, "Ruxsat berilmadi", "Instagram'ni ulamasangiz ham bo'ladi — unda skrinshot yuborasiz.")
+    st = _store()
+    if not st.creator(tg_id):
+        return _result_page(False, "Avval botda ro'yxatdan o'ting", "Botga /start yozing.")
+    try:
+        token, ig_user_id, expires = ig.exchange_code(code)
+        me = ig.profile(token)
+    except ig.IGError as e:
+        return _result_page(False, "Ulab bo'lmadi", f"Instagram javobi: {e}")
+    if me.get("account_type") not in ("BUSINESS", "MEDIA_CREATOR"):
+        return _result_page(False, "Akkaunt professional emas",
+                            "Instagram sozlamalarida akkauntni Biznes yoki Avtor turiga o'tkazib, qayta ulang.")
+    try:
+        st.save_ig_link(tg_id, token, me.get("user_id") or ig_user_id, me.get("username"), expires,
+                        me.get("followers_count"), me.get("account_type"))
+    except StoreError as e:
+        return _result_page(False, "Ulab bo'lmadi", str(e))
+    try:
+        creator_bot.run_in_bot(creator_bot.on_ig_connected(creator_bot.bot(), tg_id), timeout=60)
+    except Exception:
+        pass  # ulanish saqlandi; xabar keyin ham ketishi mumkin
+    return _result_page(True, f"@{me.get('username')} ulandi", "Endi ko'rishlaringiz avtomatik hisoblanadi.")
 
 
 @router.get("/api/me")

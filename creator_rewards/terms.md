@@ -19,7 +19,8 @@
 | Bot | Tashkilotchining Dastur uchun Telegram boti va undagi mini ilova («Kabinet») |
 | Video | Ishtirokchi o‘z Instagram sahifasida Collab formatida joylagan Reels video |
 | Collab | Instagram’ning hamkorlikdagi post formati, unda Tashkilotchining sahifasi hammuallif sifatida ko‘rsatiladi |
-| Kuzatuv davri | Video Botda ro‘yxatga olingan paytdan boshlab 30 (o‘ttiz) kalendar kun |
+| Kuzatuv davri | Video Instagram’da joylangan paytdan (Instagram ulangan bo‘lsa) yoki Botda ro‘yxatga olingan paytdan — qaysi biri oldin bo‘lsa — boshlab 30 (o‘ttiz) kalendar kun |
+| Instagram ulanishi | Ishtirokchi Instagram’ning rasmiy ruxsat oynasi orqali Tashkilotchining ilovasiga o‘z akkaunti statistikasini ko‘rishga bergan ruxsati |
 | Ko‘rishlar | Instagram statistikasida (Insights) videoning «Ko‘rishlar / Views / Просмотры» ko‘rsatkichi |
 | Kelishilgan mahsulot | Tashkilotchi aynan shu video uchun belgilagan va do‘kon xodimi bilan kelishilgan mahsulot |
 | Vaucher | Faqat Tashkilotchining do‘konida tovar olish uchun ishlatiladigan, bir martalik kodli elektron guvohnoma |
@@ -86,7 +87,7 @@
 
 8.1. Mukofot faqat Kuzatuv davri ichida yig‘ilgan ko‘rishlar uchun hisoblanadi. Kuzatuv davri tugagandan keyingi ko‘rishlar hisobga olinmaydi.
 
-8.2. Ishtirokchi Kuzatuv davrining 1, 7, 14 va 30-kunlarida videoning Insights ekrani skrinshotini Botga yuboradi. Yakuniy skrinshot Kuzatuv davri tugaganidan keyin 24 soat ichida yuboriladi.
+8.2. Instagram ulanishi bo‘lsa, ko‘rishlar soni Instagram’dan avtomatik olinadi va Kuzatuv davri tugagan paytdagi qiymat yakuniy hisoblanadi; bu holda skrinshot talab qilinmaydi. Instagram ulanishi bo‘lmasa yoki uzilsa, Ishtirokchi Kuzatuv davrining 1, 7, 14 va 30-kunlarida videoning Insights ekrani skrinshotini Botga yuboradi. Yakuniy skrinshot Kuzatuv davri tugaganidan keyin 24 soat ichida yuboriladi.
 
 8.3. Skrinshotdagi raqamlarni Tashkilotchining dasturiy ta’minoti o‘qiydi va ochiq ma’lumotlar bilan solishtiradi. Yakuniy ko‘rishlar sonini Tashkilotchi tasdiqlaydi.
 
@@ -158,7 +159,9 @@
 
 ## 14. Shaxsga doir ma’lumotlar
 
-14.1. Ishtirokchi «Shaxsga doir ma’lumotlar to‘g‘risida»gi qonunga muvofiq quyidagi ma’lumotlarga ishlov berilishiga rozilik beradi: ism-familiya, Telegram identifikatori va foydalanuvchi nomi, telefon raqami, Instagram akkaunti va uning ochiq ko‘rsatkichlari, yuborilgan skrinshotlar, vaucher va xaridlar tarixi.
+14.1. Ishtirokchi «Shaxsga doir ma’lumotlar to‘g‘risida»gi qonunga muvofiq quyidagi ma’lumotlarga ishlov berilishiga rozilik beradi: ism-familiya, Telegram identifikatori va foydalanuvchi nomi, telefon raqami, Instagram akkaunti va uning ochiq ko‘rsatkichlari, yuborilgan skrinshotlar, vaucher va xaridlar tarixi. Instagram ulanishi bo‘lsa — akkaunt ma’lumotlari (obunachilar, postlar) va postlar statistikasi (ko‘rishlar, qamrov, saqlash, ulashish).
+
+14.1-1. Instagram ulanishida Ishtirokchining paroli Tashkilotchiga berilmaydi. Tashkilotchi faqat statistikani o‘qiydi: post joylamaydi, xabar yubormaydi va akkauntga o‘zgartirish kiritmaydi. Ishtirokchi ruxsatni istalgan vaqtda Instagram sozlamalarida bekor qiladi; bunda 8.2-banddagi skrinshot tartibi qo‘llanadi.
 
 14.2. Ma’lumotlar faqat Dasturni o‘tkazish, mukofotni hisoblash, firibgarlikning oldini olish va qonunchilik talablarini bajarish uchun ishlatiladi. Ular sotilmaydi va uchinchi shaxslarga reklama maqsadida berilmaydi.
 

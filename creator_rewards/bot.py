@@ -22,6 +22,7 @@ from telegram.ext import (ApplicationBuilder, CallbackQueryHandler, CommandHandl
                           MessageHandler, filters)
 
 from . import fx
+from . import igconnect as ig
 from . import rewards as R
 from . import screens
 from . import vet
@@ -320,8 +321,86 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     store().set_phone(u.id, contact.phone_number)
     context.user_data["await"] = "instagram"
-    await update.message.reply_text("Rahmat! Endi Instagram username'ingizni yozing (masalan: @madina_blog).",
-                                    reply_markup=ReplyKeyboardRemove())
+    if ig.configured():
+        await update.message.reply_text("Rahmat!", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(
+            "Endi Instagram akkauntingizni ulang. Instagram o'zi ruxsat so'raydi — parolingiz bizga kelmaydi, "
+            "ruxsatni istalgan vaqtda Instagram sozlamalaridan bekor qilasiz. Ulangan akkauntda ko'rishlar "
+            "avtomatik hisoblanadi, skrinshot yuborish shart emas.\n\nUlay olmasangiz, username'ingizni yozing (masalan: @madina_blog).",
+            reply_markup=ig_keyboard(u.id))
+    else:
+        await update.message.reply_text("Rahmat! Endi Instagram username'ingizni yozing (masalan: @madina_blog).",
+                                        reply_markup=ReplyKeyboardRemove())
+
+
+def ig_keyboard(tg_id):
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Instagram'ni ulash", url=ig.auth_url(tg_id))]])
+
+
+async def on_ig_connected(b, tg_id):
+    """Web callback'dan keyin: akkauntni baholaydi va blogerga keyingi qadamni yuboradi."""
+    st = store()
+    link = st.ig_link(tg_id)
+    try:
+        metrics = await asyncio.to_thread(ig.account_metrics, link["token"])
+    except ig.IGError:
+        metrics = None
+    if metrics:
+        await run_vetting(b, tg_id, metrics)
+    c = st.creator(tg_id)
+    await safe_send(b, tg_id, f"✅ Instagram ulandi: @{link['username']}")
+    if c["status"] in ("draft", "rejected"):
+        await safe_send(b, tg_id, f"Instagram: @{c['instagram']}\n\n{RULES_TEXT}", reply_markup=terms_keyboard())
+    elif c["status"] == "approved":
+        await safe_send(b, tg_id, "Endi videolaringiz statistikasi avtomatik olinadi — skrinshot yuborish shart emas.",
+                        reply_markup=main_keyboard())
+    await notify_admins(b, f"🔗 @{link['username']} Instagram'ini ulab berdi.")
+    return c
+
+
+async def sync_creator(b, link):
+    """Ulangan blogerning kuzatuvdagi videolari ko'rishlarini Instagram'dan oladi."""
+    st = store()
+    token = link["token"]
+    try:
+        left = (R.from_iso(link["expires_at"]) - R.utcnow()).days
+        if left < 15:
+            token, exp = await asyncio.to_thread(ig.refresh, token)
+            st.update_ig_token(link["tg_id"], token, exp)
+        reels = [r for r in st.reels_of(link["tg_id"]) if r["status"] in ("monitoring", "awaiting_final")]
+        for r in reels:
+            m = await asyncio.to_thread(ig.find_reel, token, r["shortcode"])
+            if not m:
+                continue
+            ins = await asyncio.to_thread(ig.media_insights, token, m["id"])
+            if ins.get("views") is not None:
+                st.apply_api_views(r["id"], ins["views"], m.get("timestamp"),
+                                   extra={k: v for k, v in ins.items() if k != "views"})
+        st.mark_ig(link["tg_id"], synced=True)
+    except ig.IGError as e:
+        if e.token_bad:
+            st.mark_ig(link["tg_id"], status="broken")
+            await safe_send(b, link["tg_id"], "⚠️ Instagram ulanishi uzildi (ruxsat bekor qilingan yoki muddati o'tgan). "
+                                              "Qayta ulang, aks holda skrinshot yuborishingiz kerak bo'ladi.",
+                            reply_markup=ig_keyboard(link["tg_id"]) if ig.configured() else None)
+        else:
+            log.warning("Instagram sinxronlashda xato | tg=%s: %s", link["tg_id"], e)
+
+
+async def finalize_linked(b, reel):
+    """30 kun tugagan, Instagram'i ulangan blogerning videosi: yakuniy raqam API'dan, mukofot tasdiqqa."""
+    st = store()
+    reward = st.create_reward(reel["id"])
+    if reward:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Vaucher chiqarish", callback_data=f"cr|ra|{reward['id']}"),
+                                    InlineKeyboardButton("❌ Rad etish", callback_data=f"cr|rx|{reward['id']}")]])
+        c = st.creator(reel["tg_id"])
+        await notify_admins(b, f"💰 Yakuniy hisob-kitob (Instagram'dan avtomatik)\n@{c['instagram']} — {reel['url']}\n"
+                               f"30 kunlik ko'rishlar: {fmt(reward['views'])}\nMukofot: {R.som(reward['amount'])}",
+                            reply_markup=kb)
+        await safe_send(b, reel["tg_id"], f"⏱ 30 kun yakunlandi: {fmt(reward['views'])} ko'rish. Mukofot administrator tasdig'ida.")
+    else:
+        await safe_send(b, reel["tg_id"], "30 kun yakunlandi. Afsuski, 10 000 ko'rishga yetmadi, bu video uchun mukofot yo'q.")
 
 
 async def voucher_text(tg_id):
@@ -624,6 +703,16 @@ async def cmd_level(update, context):
     await update.message.reply_text(f"✅ @{c['instagram']} darajasi: {lv}" + (" (qo'lda)" if level else " (avtomatik)"))
 
 
+async def cmd_connect(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bloger: Instagram'ni ulash havolasi."""
+    if not ig.configured():
+        await update.message.reply_text("Instagram ulash hozircha mavjud emas — skrinshot orqali davom etamiz.")
+        return
+    store().upsert_telegram(update.effective_user.id, update.effective_user.first_name)
+    await update.message.reply_text("Instagram'ni ulash uchun tugmani bosing. Parolingiz bizga kelmaydi.",
+                                    reply_markup=ig_keyboard(update.effective_user.id))
+
+
 @admin_only
 async def cmd_product(update, context):
     """/mahsulot Rolikli krossovka — ruxsat ro'yxatiga qo'shadi; /mahsulot (bo'sh) — ro'yxat."""
@@ -686,11 +775,19 @@ async def cmd_pending(update, context):
 
 async def tick(b):
     st = store()
+    linked = {l["tg_id"]: l for l in st.ig_links("ok")}
+    for link in linked.values():
+        await sync_creator(b, link)
+    linked = {l["tg_id"]: l for l in st.ig_links("ok")}  # uzilganlar chiqib ketadi
     for r in st.close_due_reels():
+        if r["tg_id"] in linked:
+            await finalize_linked(b, st.reel(r["id"]))
+            continue
         await safe_send(b, r["tg_id"], f"⏱ 30 kun yakunlandi: {r['url']}\nYakuniy Insights skrinshotini 24 soat ichida yuboring.")
         await notify_admins(b, f"⏱ 30 kun tugadi, yakuniy skrinshot kutilmoqda: {r['url']}")
     for r, day in st.due_reminders():
-        await safe_send(b, r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring — «{BTN_SHOT}».")
+        if r["tg_id"] not in linked:  # ulangan akkauntlardan skrinshot so'ralmaydi
+            await safe_send(b, r["tg_id"], f"📸 {day}-kun: {r['url']}\nInsights skrinshotini yuboring — «{BTN_SHOT}».")
         st.mark_reminded(r["id"], day)
     for tg_id, kind, code, amount, expires_at, days in st.expiry_reminders():
         what = f"{code} vaucheringiz ({R.som(amount)})" if kind == "voucher" else f"{R.som(amount)} qoldig'ingiz"
@@ -725,6 +822,7 @@ def build_app(token):
     app.add_handler(CommandHandler("tekshir", cmd_check))
     app.add_handler(CommandHandler("arizalar", cmd_pending))
     app.add_handler(CommandHandler("mahsulot", cmd_product))
+    app.add_handler(CommandHandler("ulash", cmd_connect))
     app.add_handler(CommandHandler("baho", cmd_vet))
     app.add_handler(CallbackQueryHandler(on_callback, pattern=r"^cr\|"))
     app.add_handler(MessageHandler(filters.CONTACT & filters.ChatType.PRIVATE, on_contact))

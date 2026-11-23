@@ -183,6 +183,8 @@ nav button.on{color:var(--accent-ink)}
       <div class="level" id="plevel"></div>
       <div class="hint" id="plevel-hint" style="margin-top:8px"></div>
     </div>
+    <div class="sec"><h2>Instagram ulanishi</h2></div>
+    <div class="card" id="igcard"></div>
     <div class="sec"><h2>Ma'lumotlarim</h2></div>
     <div class="card list kv" id="pinfo"></div>
     <div class="sec"><h2>Qoidalar qisqacha</h2></div>
@@ -204,7 +206,7 @@ nav button.on{color:var(--accent-ink)}
 const tg = window.Telegram && window.Telegram.WebApp;
 const initData = tg ? tg.initData : "";
 const DEMO = !initData || new URLSearchParams(location.search).has("demo");
-let DATA = null, lastLoad = 0;
+let DATA = null, lastLoad = 0, IGOK = false;
 
 if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 if (tg && tg.colorScheme === "dark") document.body.classList.add("dark");
@@ -256,12 +258,24 @@ function reelCard(r, rules){
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="meta"><span>${r.day}/${rules.tracking_days} kun</span><span>${dt(r.posted_at)} → ${dt(r.ends_at)}</span></div>
     ${next ? `<div class="note">${next}</div>` : ""}
-    ${(r.status === "monitoring" || r.status === "awaiting_final") ? `<button class="btn small ghost" data-shot="${r.id}">📸 Skrinshot yuklash</button>` : ""}
+    ${(r.status === "monitoring" || r.status === "awaiting_final") ? (IGOK
+      ? `<div class="note">📡 Ko'rishlar Instagram'dan avtomatik olinadi</div>`
+      : `<button class="btn small ghost" data-shot="${r.id}">📸 Skrinshot yuklash</button>`) : ""}
   </div>`;
 }
 
 function render(){
   const d = DATA, p = d.profile, t = d.telegram || {}, b = d.balance, rules = d.rules;
+  IGOK = !!(d.ig_link && d.ig_link.status === "ok");
+  $("igcard").innerHTML = IGOK
+    ? `<div class="row" style="display:flex;justify-content:space-between;align-items:center"><b>@${esc(d.ig_link.username)}</b>
+        <span class="chip c-ok">Ulangan</span></div>
+       <div class="hint">Ko'rishlar va statistika Instagram'dan avtomatik olinadi${d.ig_link.last_sync_at ? " · oxirgi yangilanish " + dt(d.ig_link.last_sync_at, true) : ""}. Ruxsatni istalgan vaqtda Instagram sozlamalaridan bekor qilasiz.</div>`
+    : `${d.ig_link && d.ig_link.status !== "ok" ? `<div class="alert" style="margin:0 0 10px">Ulanish uzilgan — qayta ulang.</div>` : ""}
+       <div class="hint" style="margin:0">Instagram'ni ulasangiz, skrinshot yuborish shart bo'lmaydi: ko'rishlar avtomatik hisoblanadi. Parolingiz bizga kelmaydi.</div>
+       <button class="btn" id="igconnect">🔗 Instagram'ni ulash</button>`;
+  const igb = $("igconnect");
+  if (igb) igb.onclick = connectIG;
   const person = {first_name: t.first_name || p.first_name, last_name: t.last_name || p.last_name, photo_url: t.photo_url || p.photo_url};
   $("hello").textContent = `Salom, ${person.first_name || "bloger"}!`;
   avatar($("av"), person); avatar($("pav"), person);
@@ -364,6 +378,14 @@ function go(name){
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + name));
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.go === name));
   window.scrollTo({top: 0}); if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+}
+async function connectIG(){
+  if (DEMO) { toast("Namuna rejimi"); return; }
+  try {
+    const res = await fetch("/creator/api/ig/link", {headers: {"X-Init-Data": initData}});
+    const r = await res.json(); if (!res.ok) throw new Error(r.detail || "Xato");
+    if (tg && tg.openLink) tg.openLink(r.url); else location.href = r.url;
+  } catch (e) { toast(e.message); }
 }
 const toBot = () => { if (tg) tg.close(); else toast("Telegram botda davom eting"); };
 $("btn-chat").onclick = toBot;
