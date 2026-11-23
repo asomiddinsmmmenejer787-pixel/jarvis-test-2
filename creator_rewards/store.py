@@ -615,7 +615,7 @@ class Store:
         rewards = self._all(
             "SELECT w.*, r.url, r.shortcode, r.tg_id, c.instagram FROM rewards w JOIN reels r ON r.id=w.reel_id "
             "JOIN creators c ON c.tg_id=r.tg_id WHERE w.status='pending' ORDER BY w.id")
-        creators = self._all("SELECT * FROM creators WHERE status<>'draft' ORDER BY created_at DESC")
+        creators = self._all("SELECT * FROM creators ORDER BY (status='draft'), created_at DESC")
         for c in creators:
             succ = count("SELECT COUNT(*) n FROM reels WHERE tg_id=? AND status='rewarded'", (c["tg_id"],))
             c["level"] = self.level_of(c, succ)

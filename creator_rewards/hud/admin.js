@@ -6,7 +6,7 @@
   const day = iso => iso ? new Date(iso).toLocaleDateString('ru-RU', {timeZone:'Asia/Tashkent'}) : '—';
   const RS = {monitoring:'Kuzatuvda', awaiting_final:'Yakuniy skrinshot', awaiting_approval:'Tasdiq kutilmoqda',
     rewarded:'Vaucher berildi', no_reward:"10 000 ga yetmadi", rejected:'Rad etildi', blocked:"To'xtatilgan"};
-  const CS = {approved:'Tasdiqlangan', pending:'Ariza', rejected:'Rad etilgan', blocked:"To'xtatilgan"};
+  const CS = {draft:"Ro'yxatdan o'tmoqda", approved:'Tasdiqlangan', pending:'Ariza', rejected:'Rad etilgan', blocked:"To'xtatilgan"};
   const VS = {active:'Faol', used:'Ishlatilgan', merged:"Keyingisiga qo'shilgan", expired:'Muddati tugagan'};
   let tool = 'redeem', current = null;
 
@@ -38,7 +38,7 @@
     box().innerHTML = `
       ${d.bot_running === false ? `<div class="err">Blogerlar boti ishlamayapti: Railway'da CREATOR_BOT_TOKEN qo'shing.</div>` : ''}
       <div class="card"><div class="grid">
-        <div class="tile"><div class="k">👥 Blogerlar</div><div class="v">${fmt(s.creators)}</div><div class="d">${s.applications ? s.applications + ' ta yangi ariza' : 'tasdiqlangan'}</div></div>
+        <div class="tile" id="crAllTile" style="cursor:pointer"><div class="k">👥 Blogerlar ›</div><div class="v">${fmt(d.creators.length)}</div><div class="d">${s.creators} tasdiqlangan${s.applications ? ' · ' + s.applications + ' ariza' : ''} · ro'yxat</div></div>
         <div class="tile"><div class="k">🎬 Kuzatuvdagi video</div><div class="v">${fmt(s.active_reels)}</div><div class="d">30 kunlik hisobda</div></div>
         <div class="tile"><div class="k">🎟 Vaucher · 30 kun</div><div class="v">${som(s.issued_30d)}</div><div class="d">chiqarilgan mukofot</div></div>
         <div class="tile"><div class="k">📌 Ishlatilmagan</div><div class="v">${som(s.outstanding)}</div><div class="d">do'kon majburiyati</div></div>
@@ -87,7 +87,7 @@
         <div id="crTool"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="crList">
         <div class="ch"><h3>Blogerlar</h3><span class="s">${d.creators.length} ta</span></div>
         ${d.creators.length ? d.creators.map(c => `<div class="need" style="cursor:pointer" data-open="${c.tg_id}">
           <div class="t">${c.ig_connected ? '🔗 ' : ''}@${esc(c.instagram||'—')} <small>${esc(c.first_name)} · ${c.level} · ${CS[c.status]||c.status} · ${c.active_reels} faol video · promo ${c.promo.count} ta</small></div>
@@ -105,6 +105,8 @@
     box().querySelectorAll('#crTools button').forEach(b => b.onclick = () => { tool = b.dataset.t;
       box().querySelectorAll('#crTools button').forEach(x => x.classList.toggle('on', x === b)); renderTool(d.brief, d.products) });
     box().querySelectorAll('[data-open]').forEach(el => el.onclick = () => openCreator(+el.dataset.open));
+    const allTile = document.getElementById('crAllTile');
+    if (allTile) allTile.onclick = () => { haptic && haptic(); document.getElementById('crList').scrollIntoView({behavior:'smooth', block:'start'}); };
   }
 
   function vetBlock(c){
