@@ -21,7 +21,7 @@
 | Collab | Instagram’ning hamkorlikdagi post formati, unda Tashkilotchining sahifasi hammuallif sifatida ko‘rsatiladi |
 | Kuzatuv davri | Video Botda ro‘yxatga olingan paytdan boshlab 30 (o‘ttiz) kalendar kun |
 | Ko‘rishlar | Instagram statistikasida (Insights) videoning «Ko‘rishlar / Views / Просмотры» ko‘rsatkichi |
-| Ruxsat etilgan mahsulot | Tashkilotchi Botda aynan shu Ishtirokchi va shu video uchun ruxsat bergan mahsulot |
+| Kelishilgan mahsulot | Tashkilotchi aynan shu video uchun belgilagan va do‘kon xodimi bilan kelishilgan mahsulot |
 | Vaucher | Faqat Tashkilotchining do‘konida tovar olish uchun ishlatiladigan, bir martalik kodli elektron guvohnoma |
 | Qoldiq | Vaucherning ishlatilmay qolgan qismi |
 | Promo-kod | Ishtirokchining obunachilari xarid paytida aytadigan shaxsiy kod |
@@ -48,9 +48,9 @@
 
 ## 5. Mahsulotni tanlash va unga ruxsat
 
-5.1. Videoda qaysi mahsulot ko‘rsatilishini faqat Tashkilotchi belgilaydi. Ishtirokchi suratga olishdan oldin Botda mahsulotni so‘raydi; Tashkilotchi so‘rovni tasdiqlaydi yoki rad etadi.
+5.1. Videoda qaysi mahsulot ko‘rsatilishini faqat Tashkilotchi belgilaydi. Mahsulot suratga olishdan oldin Tashkilotchining do‘kon xodimi bilan kelishiladi.
 
-5.2. Ruxsat etilmagan mahsulot ko‘rsatilgan video uchun mukofot hisoblanmaydi va Tashkilotchi videoni o‘chirishni talab qilishga haqli.
+5.2. Kelishilmagan mahsulot ko‘rsatilgan video uchun mukofot hisoblanmaydi va Tashkilotchi videoni o‘chirishni talab qilishga haqli.
 
 5.3. Suratga olish Tashkilotchining do‘konida, uning xodimi ishtirokida o‘tkaziladi. Suratga olish uchun berilgan mahsulotlar Tashkilotchining mulki bo‘lib qoladi va suratga olishdan so‘ng qaytariladi. Ishtirokchi aybi bilan shikastlangan mahsulot qiymati Ishtirokchidan undiriladi.
 
@@ -136,7 +136,7 @@
 
 ## 12. Qoidabuzarlik va javobgarlik
 
-12.1. Quyidagilar qoidabuzarlik hisoblanadi: sotib olingan yoki sun’iy ko‘rishlar, obunachilar va faollik; soxta yoki tahrirlangan skrinshot; boshqa videoning statistikasini yuborish; ruxsat etilmagan mahsulotni reklama qilish; 6-bo‘lim talablarini buzish; videoni 7.3-bandga zid ravishda o‘chirish yoki yashirish; Tashkilotchi yoki «Bolalar Dunyosi» brendining ishchanlik obro‘siga zarar yetkazuvchi bayonotlar.
+12.1. Quyidagilar qoidabuzarlik hisoblanadi: sotib olingan yoki sun’iy ko‘rishlar, obunachilar va faollik; soxta yoki tahrirlangan skrinshot; boshqa videoning statistikasini yuborish; kelishilmagan mahsulotni reklama qilish; 6-bo‘lim talablarini buzish; videoni 7.3-bandga zid ravishda o‘chirish yoki yashirish; Tashkilotchi yoki «Bolalar Dunyosi» brendining ishchanlik obro‘siga zarar yetkazuvchi bayonotlar.
 
 12.2. Qoidabuzarlik aniqlansa yoki unga asosli shubha bo‘lsa, Tashkilotchi o‘z xohishiga ko‘ra: (a) tegishli video bo‘yicha hisob-kitobni to‘xtatadi; (b) tasdiqlanmagan mukofotlarni, ishlatilmagan vaucher va Qoldiqni bekor qiladi; (c) keyingi mukofotlardan yetkazilgan zarar miqdorini ushlab qoladi; (d) Ishtirokchini Dasturdan chiqaradi; (e) qonunchilikka muvofiq yetkazilgan zararni undirishni talab qiladi.
 

@@ -330,7 +330,7 @@ function render(){
   if (cp) cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(p.promo_code); toast("Promo-kod nusxalandi"); };
   $("prules").innerHTML = `• <b>${fmt(rules.min_views)}</b> ko'rish = <b>${som(rules.base)}</b>, keyin har ${fmt(rules.step_views)} ko'rishga <b>+${som(rules.step_reward)}</b>, 100 000 dan <b>${som(rules.max_reward)}</b><br>
     • <b>1 000 000</b> va undan ko'p ko'rish = <b>${rules.million_usd}$</b> (Markaziy bank kursi bo'yicha so'mda)<br>
-    • Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi: avval botda mahsulotga ruxsat olasiz<br>
+    • Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi<br>
     • Ko'rishlar ${rules.tracking_days} kun hisoblanadi, video doimiy turadi<br>
     • Vaucher ${rules.voucher_days} kun amal qiladi, kod bir marta ishlatiladi, qoldiq keyingi vaucherga o'tadi<br>
     • Vaucher faqat do'konda, naqd pulga almashtirilmaydi`;

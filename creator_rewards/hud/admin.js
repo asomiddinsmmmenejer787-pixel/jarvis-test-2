@@ -32,7 +32,7 @@
     let d; try{ d = await call('/creator/admin/api/overview') }
     catch(e){ box().innerHTML = `<div class="err">${esc(e.message)}</div>`; return }
     const s = d.stats;
-    const preq = d.product_requests || [];
+    const preq = d.products_enabled ? (d.product_requests || []) : [];
     const pend = d.applications.length + d.screenshots.length + d.rewards.length + preq.length;
     setBadge(pend);
     box().innerHTML = `
@@ -82,7 +82,7 @@
         <div class="seg" id="crTools">
           <button data-t="redeem" class="${tool==='redeem'?'on':''}">Vaucher</button>
           <button data-t="promo" class="${tool==='promo'?'on':''}">Promo-kod</button>
-          <button data-t="products" class="${tool==='products'?'on':''}">Mahsulot</button>
+          ${d.products_enabled ? `<button data-t="products" class="${tool==='products'?'on':''}">Mahsulot</button>` : ''}
           <button data-t="brief" class="${tool==='brief'?'on':''}">Topshiriq</button></div>
         <div id="crTool"></div>
       </div>
@@ -192,7 +192,7 @@
   // ---------- namuna (?demo) ----------
   function demo(path){
     const now = Date.now(), iso = d => new Date(now + d*864e5).toISOString();
-    if (path.endsWith('/overview')) return {bot_running:true, brief:"Shu hafta rolikli krossovka va dronlarni suratga oling",
+    if (path.endsWith('/overview')) return {bot_running:true, products_enabled:false, brief:"Shu hafta rolikli krossovka va dronlarni suratga oling",
       stats:{creators:12, applications:1, active_reels:9, issued_30d:2340000, outstanding:1180000, promo_30d:4650000},
       applications:[{tg_id:7, instagram:'zarina_mama', first_name:'Zarina', last_name:'', username:'zarina', phone:'+998 93 000 00 00', created_at:iso(-1),
         vet_report: JSON.stringify({score:7.4, parts:[{name:'Auditoriya hajmi', points:10, detail:'38 400 obunachi'}, {name:"Ko'rishlar / obunachi", points:6, detail:"o'rtacha (mediana) 7 900 ko'rish — obunachilarning 21%"},
