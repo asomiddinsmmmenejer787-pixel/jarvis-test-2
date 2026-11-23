@@ -357,6 +357,25 @@ def run():
     ok = auto_reply.assess({"category": "question", "confidence": 0.9,
                             "reply": "Videodagi samokat 3 yoshdan mos. Qaysi rangi yoqdi?"}, "Necha yoshga?")
     check("3 yoshdan" in ok["reply"], "Oddiy 'videodagi' so'zi xato deb hisoblanmadi")
+
+    # Kuzatuv 23.11: sovg'a so'ragan mijozga "Keyingi safar albatta o'zingizniki bo'ladi",
+    # "Hamma uchun yetadi", "nima kerak bo'lsa topib beramiz" kabi qilinmaydigan va'dalar yozildi
+    for comment, bad in [
+            ("Menga ham bering aka iltimos❤", "Hamma uchun yetadi, xavotir olmang 😄 Qaysi biri ko'proq qiziqtirmoqda?"),
+            ("osha bolaga berganizdan bering lichkadan yozvoring", "Keyingi safar albatta o'zingizniki bo'ladi, omadingizni sinab ko'ring!"),
+            ("Bermasez bermayman deb ayting", "Xafa bo'lmang, nima kerak bo'lsa topib beramiz 😄")]:
+        v = auto_reply.assess({"category": "positive", "confidence": 0.9, "reply": bad}, comment)
+        check(v["reply"] and not auto_reply.PROMISE_RE.search(v["reply"]) and v["reply"] != bad,
+              f"Va'dali javob almashtirildi: {v['reply']}")
+    v = auto_reply.assess({"category": "positive", "confidence": 0.9,
+                           "reply": "Albatta sizniki bo'ladi 😄"}, "Menga ham bering")
+    check(v["reply"] in auto_reply.GIFT_SAFE_REPLIES, "Sovg'a so'roviga xavfsiz, va'dasiz javob tanlandi")
+    for fine in ["Hozir bu postda o'yin o'tkazilmayapti, keyingilarini o'tkazib yubormang.",
+                 "Sizga mos bo'ladi, direktga yozing 😊", "Rahmat, bizga ham yoqdi 😊"]:
+        check(not auto_reply.PROMISE_RE.search(fine), f"Oddiy javob va'da deb hisoblanmadi: {fine}")
+    check(not any(humanizer_uz_bad in x.lower() for x in auto_reply.SAFE_FALLBACK["question"]
+                  for humanizer_uz_bad in ("yaxshi savol", "ajoyib savol", "albatta")),
+          "Zaxira savol javoblarida qolip ibora ('Yaxshi savol') yo'q")
     check(auto_reply.drop_tag_cta("Sizga qaysi biri kerak? Narxini direktga yozsangiz shaxsan aytamiz. "
                                   "Do'stingizni ham kommentda belgilashni unutmang!")
           == "Sizga qaysi biri kerak? Narxini direktga yozsangiz shaxsan aytamiz.",

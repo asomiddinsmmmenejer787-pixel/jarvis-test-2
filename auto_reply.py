@@ -98,6 +98,19 @@ FIXED_CLAIM_RE = re.compile(
     r"исправили|исправлено|тузатдик|тузатилди",
     re.IGNORECASE,
 )
+# Komentda qilinmaydigan va'da (kuzatuv 23.11: sovg'a so'ragan mijozga "Keyingi safar albatta o'zingizniki
+# bo'ladi", "Hamma uchun yetadi, xavotir olmang", "nima kerak bo'lsa topib beramiz" deb yozildi)
+PROMISE_RE = re.compile(
+    r"albatta\s+(siz(ni|ga)\w*|o['’`ʻ]?zingiz\w*)\s+(ham\s+)?(bo['’`ʻ]?ladi|tegadi|beramiz|yutasiz)"
+    r"|(siz(ni|ga)\w*|o['’`ʻ]?zingiz\w*)\s+(ham\s+)?(bo['’`ʻ]?ladi|tegadi)\b"
+    r"|hamma(ga|si|\s+uchun)\s+(ham\s+)?yetadi|albatta\s+yutasiz|sizga\s+ham\s+beramiz|tekin(ga)?\s+beramiz"
+    r"|nima\s+kerak\s+bo['’`ʻ]?lsa,?\s+(ham\s+)?topib\s+beramiz",
+    re.IGNORECASE,
+)
+GIFT_ASK_RE = re.compile(r"\bber(ing|inglar|asiz|vor|vo['’`ʻ]?ring|ib\s+yubor)|yutaman|orzu|sovg['’`ʻ]?a|lichka", re.I)
+GIFT_SAFE_REPLIES = ["Istagingizni ko'rdik 😊 O'yin va aksiyalar sahifada e'lon qilinadi, kuzatib boring",
+                     "Omad sizga 😊 Yangi o'yinlarni sahifada e'lon qilamiz, o'tkazib yubormang",
+                     "Sahifani kuzatib boring, o'yin bo'lsa birinchi bo'lib bilasiz 😊"]
 EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF☀-➿⭐]")
 
 BRAND = os.environ.get(
@@ -315,7 +328,7 @@ SAFE_FALLBACK = {
     "price": ["Narxi va batafsil ma'lumotni direktga yozdik 😊", "Direktga qarang, hammasini yozib qo'ydik 😊",
               "Ma'lumotni direktingizga yubordik, ko'rib chiqing 😊", "Direktingizni tekshiring, javob yozdik 😊",
               "Sizga direktda batafsil yozdik 😊", "Narxini shaxsiy xabarda aytdik, direktga qarang 😊"],
-    "question": ["Direktga yozing, batafsil javob beramiz 😊", "Yaxshi savol, direktga yozing, aniqlab aytamiz 😊"],
+    "question": ["Direktga yozing, batafsil javob beramiz 😊", "Direktga yozing, aniqlab aytamiz 😊"],
     "positive": ["Rahmat, bizga ham yoqdi 😊", "Iliq so'zlaringiz uchun rahmat 😊", "Kayfiyatimizni ko'tardingiz, rahmat 😊",
                  "Rahmat 🤍", "Sizga ham rahmat, doim xursand bo'ling 😊", "Xursand bo'ldik, rahmat 🙌",
                  "Rahmat, yangi videolarni ham kutib qoling 😊"],
@@ -371,6 +384,9 @@ def assess(result, comment_text):
     reply = safe_reply(result.get("reply"))
     if cat in ("question", "price") and reply and EVASION_RE.search(reply):
         reply = ""  # savoldan qochgan javob o'rniga pastda xavfsiz javob tanlanadi
+    if reply and PROMISE_RE.search(reply):
+        # FAKTLARda yo'q va'da: sovg'a so'roviga xavfsiz javob, boshqasiga pastdagi xavfsiz javob
+        reply = random.choice(GIFT_SAFE_REPLIES) if GIFT_ASK_RE.search(comment_text or "") else ""
     try:
         conf = float(result.get("confidence", 0))
     except (TypeError, ValueError):
