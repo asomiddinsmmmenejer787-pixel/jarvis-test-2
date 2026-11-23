@@ -205,7 +205,9 @@ nav button.on{color:var(--accent-ink)}
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
 const initData = tg ? tg.initData : "";
-const DEMO = !initData || new URLSearchParams(location.search).has("demo");
+// Namuna rejimi faqat ?demo bilan (dizayn ko'rinishi uchun). Telegram ma'lumoti bo'lmasa — soxta raqamlar emas, tushuntirish.
+const DEMO = new URLSearchParams(location.search).has("demo");
+const NO_TG = !initData && !DEMO;
 let DATA = null, lastLoad = 0, IGOK = false;
 
 if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
@@ -455,6 +457,12 @@ function demoData(){
 async function load(){
   try {
     if (DEMO) { DATA = demoData(); $("demo").hidden = false; }
+    else if (NO_TG) {
+      document.body.innerHTML = `<div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;font:17px/1.5 system-ui,sans-serif">
+        <div><div style="font-size:52px">📱</div><h2>Kabinet Telegram ichida ochiladi</h2>
+        <p>Botda xabar yozish maydonining chap tomonidagi <b>«Kabinet»</b> tugmasini bosing yoki botga <b>📱 Kabinet</b> deb yozing.</p></div></div>`;
+      return;
+    }
     else {
       const res = await fetch("/creator/api/me", {headers: {"X-Init-Data": initData}});
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Ma'lumot olinmadi");
