@@ -22,6 +22,7 @@ import analytics
 import audit
 import brain
 import followers_live
+import reel_sources
 import catalog
 import instagram_api as ig
 import webapp
@@ -1366,6 +1367,15 @@ async def instagram_tick(app):
             if e.fatal:
                 raise
             logger.warning("Obunachilar sonini o'qib bo'lmadi: %s", e)
+
+        try:
+            await asyncio.to_thread(reel_sources.snapshot)
+        except InstagramError as e:
+            if e.fatal:
+                raise
+            logger.warning("Reels ko'rishlarini o'qib bo'lmadi: %s", e)
+        except Exception as e:  # noqa: BLE001 - qo'shimcha statistika asosiy ishni to'xtatmasin
+            logger.warning("Reels manbasi: %s", e)
 
         if responder is not None:
             try:

@@ -244,6 +244,13 @@ nav .dotc.show{display:flex}
 .feedf .it.new{animation:slidein .5s ease}
 .feedf .t,.feedf .n{color:var(--dim)}.feedf .n{text-align:right}
 .feedf .d.up{color:var(--green)}.feedf .d.down{color:var(--red)}
+.rsrc .it{display:grid;grid-template-columns:22px 48px 1fr auto;gap:10px;align-items:center;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer}
+.rsrc .rk{font-weight:800;color:var(--dim);text-align:center}
+.rsrc img,.rsrc .noimg{width:48px;height:64px;object-fit:cover;border-radius:10px;background:#2a2015}
+.rsrc .cap{font-size:13.5px;line-height:1.3;max-height:2.6em;overflow:hidden;overflow-wrap:anywhere}
+.rsrc .bar{height:4px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}.rsrc .bar i{display:block;height:100%;background:var(--green)}
+.rsrc .v{font-size:12px;color:var(--dim);margin-top:3px}
+.rsrc .f{text-align:right;font-weight:800;color:var(--green);white-space:nowrap}.rsrc .f small{display:block;font-weight:500;font-size:11px;color:var(--dim)}
 .lock{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;align-items:center;justify-content:center;text-align:center;padding:30px}
 .lock.show{display:flex}
 .lock h2{color:var(--gold)}
@@ -488,6 +495,9 @@ nav .dotc.show{display:flex}
   <div class="bigd" id="folDelta">yangilanmoqda...</div>
   <div class="card"><div class="ch"><h3>Bugun</h3><span class="s" id="folSince"></span></div><div class="grid" id="folToday"></div></div>
   <div class="card"><div class="ch"><h3>Oxirgi 24 soat</h3><span class="s" id="folHour"></span></div><canvas id="folChart"></canvas></div>
+  <div class="card"><div class="ch"><h3>Qaysi reelsdan</h3><span class="s" id="rsrcSub">Top 5 · 24 soat</span></div>
+    <div class="rsrc" id="rsrcList"><div class="muted">Ma'lumot yig'ilmoqda...</div></div>
+    <div class="muted" style="font-size:12px;margin-top:8px">Taxminiy: Instagram reels uchun kim qaysi videodan obuna bo'lganini aytmaydi. Jarvis har 15 daqiqada reelslar ko'rishini yozadi va yangi obunachilarni o'sha paytda ko'p ko'rilgan reelslarga bo'lib hisoblaydi.</div></div>
   <div class="card"><div class="ch"><h3>O'zgarishlar</h3><span class="s">real vaqtda</span></div>
     <div class="feedf" id="folFeed"><div class="muted">Hali o'zgarish yozilmagan. Jarvis har daqiqada tekshiradi.</div></div></div>
   <div class="muted" style="padding:0 4px">Instagram kim obuna bo'lganini ko'rsatmaydi, faqat umumiy sonni beradi. Jarvis sonni har daqiqada tekshirib, har o'zgarishni vaqti bilan yozib boradi.</div>
@@ -888,11 +898,22 @@ async function loadFollowers(){
     + tile('Instagram hisobi', ins?`<span class="up">+${fmt(ins.follows||0)}</span> <span class="down">−${fmt(ins.unfollows||0)}</span>`:'—', ins?'kechikish bilan yangilanadi':'hozircha ma\'lumot yo\'q');
   $('#folHour').textContent = r.series?.length>1 ? sign(r.series.at(-1)[1]-r.series[0][1])+' / 24 soat' : '';
   drawFolChart(r.series||[]);
+  renderReelSources(r.reels);
   const feed=$('#folFeed');
   if (r.changes?.length){
     feed.innerHTML = r.changes.map(x=>{ const k=x.t+':'+x.delta, isNew=fol.seen.size&&!fol.seen.has(k); return `<div class="it${isNew?' new':''}"><div class="t">${hhmm(x.t)}</div><div class="d ${x.delta>0?'up':'down'}">${x.delta>0?'▲':'▼'} ${sign(x.delta)} ${x.delta>0?'qo\'shildi':'chiqib ketdi'}</div><div class="n">${fmt(x.count)}</div></div>` }).join('');
     r.changes.forEach(x=>fol.seen.add(x.t+':'+x.delta));
   }
+}
+function renderReelSources(rs){
+  const box=$('#rsrcList'); if(!box) return;
+  if (!rs || !rs.items || !rs.items.length){ box.innerHTML=`<div class="muted">${rs&&rs.snaps>1?'Oxirgi 24 soatda reelslar ko\'rishi o\'zgarmadi.':'Ma\'lumot yig\'ilmoqda: Jarvis har 15 daqiqada reelslar ko\'rishini yozadi, 1 soatcha ichida chiqadi.'}</div>`; $('#rsrcSub').textContent='Top 5 · 24 soat'; return }
+  $('#rsrcSub').textContent = rs.attributed ? `+${fmt(rs.attributed)} obunachi · 24 soat` : 'Top 5 · 24 soat';
+  box.innerHTML = rs.items.map((x,i)=>`<div class="it" data-u="${esc(x.link)}" onclick="this.dataset.u&&openLink(this.dataset.u)">
+      <div class="rk">${i+1}</div>
+      ${x.thumb?`<img src="${esc(x.thumb)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=noimg></div>'">`:'<div class="noimg"></div>'}
+      <div><div class="cap">${esc(x.caption||'(opisaniya yo\'q)')}</div><div class="bar"><i style="width:${Math.max(2,Math.min(100,x.share||0))}%"></i></div><div class="v">+${fmt(x.views)} ko'rish</div></div>
+      <div class="f">~+${fmt(x.followers)}<small>${x.share||0}%</small></div></div>`).join('');
 }
 function drawFolChart(pts){
   const cv=$('#folChart'), dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; cv.width=w*dpr; cv.height=h*dpr;
@@ -1196,6 +1217,7 @@ let demoApi=function(path, opts){
   if (path==='/api/followers'){ const now=Math.floor(Date.now()/1000); demoApi.fc=(demoApi.fc||105069)+[0,0,1,2,-1,3][Math.floor(Math.random()*6)];
     const series=[]; let v=104900; for(let i=96;i>=0;i--){ v+=Math.round(Math.random()*4-1); series.push([now-i*900,v]) } series.push([now,demoApi.fc]);
     return Promise.resolve({connected:true,now,count:demoApi.fc,updated:now,series,hour:+38,today:{gained:214,lost:41,net:173,since:now-60000,tracked_from:now-60000},instagram_today:{follows:231,unfollows:47},
+      reels:{hours:24,gained:214,attributed:198,snaps:90,items:[{caption:'Rolikli krasofka 28-37 razmer, chiroqli g\'ildirak',thumb:'',link:'',followers:84,views:31200,share:42},{caption:'Yadea G100 samokat sinov',thumb:'',link:'',followers:51,views:20100,share:26},{caption:'Bolalar velosipedi yashil',thumb:'',link:'',followers:33,views:14800,share:17},{caption:'Dron qanday uchadi',thumb:'',link:'',followers:19,views:9100,share:10},{caption:'Yangi kelgan o\'yinchoqlar',thumb:'',link:'',followers:11,views:5200,share:5}]},
       changes:[{t:now-60,delta:2,count:demoApi.fc},{t:now-240,delta:-1,count:demoApi.fc-2},{t:now-420,delta:3,count:demoApi.fc-1},{t:now-700,delta:1,count:demoApi.fc-4}]}) }
   if (path.startsWith('/api/stock')){
     demoApi.stock = demoApi.stock || [{name:'Kugoo G2 elektr samokat',type:'Elektr samokat',price:'2 500 000 so\'m',sizes:'',in_stock:false},

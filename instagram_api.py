@@ -349,6 +349,15 @@ def get_media_insights(media):
     return _fetch_metrics(f"{media['id']}/insights", kind, INSIGHT_METRICS[kind])
 
 
+def get_reel_views(media_id):
+    """Reelsning ko'rishlar soni (bitta so'rov). Ma'lumot bo'lmasa None."""
+    v = _fetch_metrics(f"{media_id}/insights", "REELS", ["views"]).get("views")
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def get_account_insights(days=7):
     until = int(time.time())
     since = until - days * 86400

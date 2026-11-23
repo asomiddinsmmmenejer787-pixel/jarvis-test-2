@@ -31,6 +31,7 @@ import analytics
 import audit
 import brain
 import followers_live
+import reel_sources
 import catalog
 from ai.base import is_error_text
 import config
@@ -618,6 +619,10 @@ def api_followers(x_init_data: str = Header(default="")):
     except InstagramError as e:
         out["error"] = _ig_error(e)
     out.update(followers_live.view())
+    try:
+        out["reels"] = reel_sources.top()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Reels manbasi: %s", e)
     out["now"] = int(time.time())
     return JSONResponse(_jsonable(out))
 
