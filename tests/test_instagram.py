@@ -126,6 +126,12 @@ class FakeInstagram:
                 return FakeResponse({"data": self.posts[2:]})
             return FakeResponse({"data": self.posts[:2], "paging": {
                 "next": "https://graph.instagram.com/v23.0/me/media?after=P2&access_token=ENV_TOKEN_1"}})
+        if path == "me/collaborative_media":
+            if getattr(self, "collab", None) is None:
+                return self.error(100, "Tried accessing nonexisting field (collaborative_media)")
+            for p in self.collab:
+                p["comments_count"] = len(self.comments.get(p["id"], []))
+            return FakeResponse({"data": self.collab})
         if path == "me/conversations":
             return FakeResponse({"data": self.conversations})
         if path == "me/stories":

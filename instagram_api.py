@@ -278,6 +278,15 @@ def get_recent_posts(limit=10):
     return _paged("me/media", {"fields": MEDIA_FIELDS, "limit": min(limit, 50)}, limit)
 
 
+COLLAB_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,comments_count,username"
+
+
+def get_collab_posts(limit=5):
+    """Boshqa akkaunt joylagan, bizni hammuallif (collab) qilib qo'shgan postlar.
+    Ular me/media'da chiqmaydi."""
+    return _paged("me/collaborative_media", {"fields": COLLAB_FIELDS, "limit": min(limit, 25)}, limit)
+
+
 def get_media(media_id):
     return _request("GET", str(media_id), {"fields": MEDIA_FIELDS})
 

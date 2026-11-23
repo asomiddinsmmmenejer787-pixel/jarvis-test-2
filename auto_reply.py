@@ -781,6 +781,8 @@ class CommentResponder:
         self._upcoming_checked = 0       # kelayotgan post (21.11) oxirgi tekshirilgan vaqt
         self._me = ""
         self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
+        self._collab = []                 # collab postlar (boshqa akkauntda turgan, biz hammuallif)
+        self._collab_next = 0             # collab ro'yxatini keyingi o'qish vaqti
         self._recent = deque(maxlen=20)   # oxirgi javoblar (takrorlamaslik uchun)
         self._run_lock = threading.Lock()  # fon tekshiruvi va qayta tekshiruv bir vaqtda ishlamasin
         if self.state.mode is None:
@@ -969,7 +971,11 @@ class CommentResponder:
 
         recent_posts = ig.get_recent_posts(posts_to_check) or []
         latest_id = latest_post_id(recent_posts)
-        for post in recent_posts:
+        own_ids = {str(p.get("id")) for p in recent_posts}
+        collab = [p for p in self._collab_posts() if str(p.get("id")) not in own_ids]
+        if collab:
+            stats["collab"] = len(collab)
+        for post in recent_posts + collab:
             stats["posts"] += 1
             if not post.get("comments_count"):
                 continue
@@ -1003,6 +1009,10 @@ class CommentResponder:
                     stats["old"] += 1
                     continue
                 if (c.get("username") or "").lower() == me:
+                    stats["mine"] += 1
+                    continue
+                if post.get("_collab") and (c.get("username") or "").lower() == post["_collab"]:
+                    # collab postni joylagan blogerning o'z komenti: unga sotuv javobi kerak emas
                     stats["mine"] += 1
                     continue
                 if any((r.get("username") or "").lower() == me
@@ -1205,6 +1215,30 @@ class CommentResponder:
         if stats["comments"]:
             self._log_stats(stats)
         return events
+
+    COLLAB_EVERY = 600            # collab postlar ro'yxati 10 daqiqada bir yangilanadi
+    COLLAB_RETRY = 6 * 3600       # Instagram bermasa, 6 soatdan keyin yana urinadi
+
+    def _collab_posts(self):
+        """23.11: collab qilingan video boshqa akkauntda turadi va me/media'da chiqmaydi,
+        shuning uchun uning komentlariga javob yozilmas edi. Ro'yxat alohida o'qiladi;
+        Instagram bermasa asosiy ish to'xtamaydi."""
+        now = time.time()
+        if now < self._collab_next:
+            return self._collab
+        self._collab_next = now + self.COLLAB_EVERY
+        try:
+            posts = ig.get_collab_posts(5) or []
+        except InstagramError as e:
+            self._collab_next = now + (3600 if e.rate_limited else self.COLLAB_RETRY)
+            log.warning("Collab postlarni o'qib bo'lmadi (Instagram bermadi): %s", e)
+            return self._collab
+        prev = {str(p.get("id")) for p in self._collab}
+        self._collab = [{**p, "_collab": (p.get("username") or "?").lower()} for p in posts if p.get("id")]
+        if {str(p["id"]) for p in self._collab} != prev:
+            log.info("Collab postlar: %s ta (%s)", len(self._collab),
+                     ", ".join(p.get("permalink") or str(p["id"]) for p in self._collab))
+        return self._collab
 
     def _log_stats(self, stats):
         audit.record("run", **stats)
