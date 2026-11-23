@@ -4,7 +4,7 @@
 
 ## 1. Umumiy qoidalar
 
-1.1. Ushbu hujjat «Bolalar Dunyosi» bolalar do‘koni (keyingi o‘rinlarda — «Tashkilotchi») tomonidan o‘tkaziladigan Creator Rewards dasturida (keyingi o‘rinlarda — «Dastur») ishtirok etish shartlarini belgilaydi.
+1.1. Ushbu hujjat Komilov Muhammad Umar o‘g‘li (keyingi o‘rinlarda — «Tashkilotchi») tomonidan «Bolalar Dunyosi» bolalar do‘koni nomidan o‘tkaziladigan Creator Rewards dasturida (keyingi o‘rinlarda — «Dastur») ishtirok etish shartlarini belgilaydi.
 
 1.2. Hujjat O‘zbekiston Respublikasi Fuqarolik kodeksining 367 va 369-moddalariga muvofiq ommaviy oferta hisoblanadi.
 
@@ -31,7 +31,7 @@
 
 3.1. Ishtirokchi 18 yoshga to‘lgan, to‘liq muomala layoqatiga ega jismoniy shaxs bo‘lishi shart.
 
-3.2. Ishtirokchining Instagram akkaunti professional (Biznes yoki Avtor) turida, ochiq va unga shaxsan tegishli bo‘lishi shart. Bitta shaxs Dasturda faqat bitta akkaunt bilan qatnashadi.
+3.2. Ishtirokchining Instagram akkaunti professional (Biznes yoki Avtor) turida, ochiq va unga shaxsan tegishli bo‘lishi shart. Bitta shaxs Dasturda faqat bitta akkaunt bilan qatnashadi. Dasturda qatnashish uchun akkauntni Bot orqali Instagram’ning rasmiy ruxsat oynasida Tashkilotchiga ulash majburiy.
 
 3.3. Akkauntdagi obunachilar, ko‘rishlar va faollik sun’iy usullarda (sotib olingan obunachilar, botlar, «o‘zaro ko‘rish» guruhlari va shu kabilar) oshirilmagan bo‘lishi shart.
 
@@ -41,7 +41,7 @@
 
 ## 4. Ro‘yxatdan o‘tish va akkauntni baholash
 
-4.1. Ishtirokchi Botda telefon raqamini va Instagram akkaunti havolasini yuboradi hamda ushbu shartlarni qabul qiladi.
+4.1. Ishtirokchi avval ushbu shartlarni qabul qiladi, so‘ng Botda telefon raqamini yuboradi va Instagram akkauntini rasmiy ruxsat oynasi orqali ulaydi. Akkaunt ulanmaguncha ariza ko‘rib chiqilmaydi.
 
 4.2. Tashkilotchi akkauntning ochiq ma’lumotlarini (obunachilar soni, postlar soni va sanasi, ko‘rishlar, layklar, izohlar) va Ishtirokchi yuborgan skrinshotlarni tahlil qilib, akkaunt faolligini 10 ballik shkalada baholaydi. Baho Tashkilotchining ichki vositasi bo‘lib, Ishtirokchiga oshkor qilinmaydi va Tashkilotchining qarori uchun majburiy emas.
 
@@ -87,7 +87,7 @@
 
 8.1. Mukofot faqat Kuzatuv davri ichida yig‘ilgan ko‘rishlar uchun hisoblanadi. Kuzatuv davri tugagandan keyingi ko‘rishlar hisobga olinmaydi.
 
-8.2. Instagram ulanishi bo‘lsa, ko‘rishlar soni Instagram’dan avtomatik olinadi va Kuzatuv davri tugagan paytdagi qiymat yakuniy hisoblanadi; bu holda skrinshot talab qilinmaydi. Instagram ulanishi bo‘lmasa yoki uzilsa, Ishtirokchi Kuzatuv davrining 1, 7, 14 va 30-kunlarida videoning Insights ekrani skrinshotini Botga yuboradi. Yakuniy skrinshot Kuzatuv davri tugaganidan keyin 24 soat ichida yuboriladi.
+8.2. Instagram ulanishi bo‘lsa, ko‘rishlar soni Instagram’dan avtomatik olinadi va Kuzatuv davri tugagan paytdagi qiymat yakuniy hisoblanadi; bu holda skrinshot talab qilinmaydi. Ulanish uzilsa, Ishtirokchi uni darhol qayta ulaydi; ulanish tiklanmaguncha yangi video qabul qilinmaydi, kuzatuvdagi videolar bo‘yicha esa Ishtirokchi Kuzatuv davrining 1, 7, 14 va 30-kunlarida videoning Insights ekrani skrinshotini Botga yuboradi. Yakuniy skrinshot Kuzatuv davri tugaganidan keyin 24 soat ichida yuboriladi.
 
 8.3. Skrinshotdagi raqamlarni Tashkilotchining dasturiy ta’minoti o‘qiydi va ochiq ma’lumotlar bilan solishtiradi. Yakuniy ko‘rishlar sonini Tashkilotchi tasdiqlaydi.
 
@@ -161,7 +161,7 @@
 
 14.1. Ishtirokchi «Shaxsga doir ma’lumotlar to‘g‘risida»gi qonunga muvofiq quyidagi ma’lumotlarga ishlov berilishiga rozilik beradi: ism-familiya, Telegram identifikatori va foydalanuvchi nomi, telefon raqami, Instagram akkaunti va uning ochiq ko‘rsatkichlari, yuborilgan skrinshotlar, vaucher va xaridlar tarixi. Instagram ulanishi bo‘lsa — akkaunt ma’lumotlari (obunachilar, postlar) va postlar statistikasi (ko‘rishlar, qamrov, saqlash, ulashish).
 
-14.1-1. Instagram ulanishida Ishtirokchining paroli Tashkilotchiga berilmaydi. Tashkilotchi faqat statistikani o‘qiydi: post joylamaydi, xabar yubormaydi va akkauntga o‘zgartirish kiritmaydi. Ishtirokchi ruxsatni istalgan vaqtda Instagram sozlamalarida bekor qiladi; bunda 8.2-banddagi skrinshot tartibi qo‘llanadi.
+14.1-1. Instagram ulanishida Ishtirokchining paroli Tashkilotchiga berilmaydi. Tashkilotchi faqat statistikani o‘qiydi: post joylamaydi, xabar yubormaydi va akkauntga o‘zgartirish kiritmaydi. Ishtirokchi ruxsatni istalgan vaqtda Instagram sozlamalarida bekor qiladi; bunda yangi video qabul qilinmaydi va 8.2-banddagi tartib qo‘llanadi.
 
 14.2. Ma’lumotlar faqat Dasturni o‘tkazish, mukofotni hisoblash, firibgarlikning oldini olish va qonunchilik talablarini bajarish uchun ishlatiladi. Ular sotilmaydi va uchinchi shaxslarga reklama maqsadida berilmaydi.
 
@@ -197,4 +197,4 @@
 
 18.2. Ushbu shartlarning biror bandi haqiqiy emas deb topilsa, qolgan bandlar kuchini saqlaydi.
 
-18.3. Tashkilotchi bilan aloqa: Dastur Telegram boti orqali.
+18.3. Tashkilotchi: Komilov Muhammad Umar o‘g‘li. Aloqa: Dastur Telegram boti orqali.

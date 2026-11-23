@@ -42,6 +42,7 @@ TERMS_VERSION = "1.0"
 RULES_TEXT = (
     "Asosiy shartlar (to'liq matn — «Shartlarni o'qish» tugmasida):\n"
     "• 18 yoshdan katta bo'lishingiz, Instagram akkauntingiz professional va ochiq bo'lishi kerak.\n"
+    "• Instagram akkauntni bot orqali ulash majburiy (parolingiz bizga kelmaydi, faqat statistika o'qiladi).\n"
     "• Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi va do'kon xodimi bilan kelishiladi.\n"
     "• Video do'konda olinadi, 30–45 soniya, 9:16, reklama sifatida belgilanadi.\n"
     "• Reels Bolalar Dunyosi bilan Collab qilib joylanadi, havola 24 soat ichida botga yuboriladi, video o'chirilmaydi.\n"
@@ -87,6 +88,16 @@ def consent_keyboard():
         rows.append([InlineKeyboardButton("📄 To'liq shartlarni o'qish", url=terms_url())])
     rows.append([InlineKeyboardButton("✅ Shartlarga roziman — boshlash", callback_data="cr|agree")])
     return InlineKeyboardMarkup(rows)
+
+
+def ig_required():
+    """Instagram ulanishi majburiy (ulash sozlangan bo'lsa)."""
+    return ig.configured()
+
+
+def ig_ok(tg_id):
+    link = store().ig_link(tg_id)
+    return bool(link and link["status"] == "ok")
 
 
 def has_consent(c):
@@ -372,7 +383,7 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "Endi Instagram akkauntingizni ulang. Instagram o'zi ruxsat so'raydi — parolingiz bizga kelmaydi, "
             "ruxsatni istalgan vaqtda Instagram sozlamalaridan bekor qilasiz. Ulangan akkauntda ko'rishlar "
-            "avtomatik hisoblanadi, skrinshot yuborish shart emas.\n\nUlay olmasangiz, username'ingizni yozing (masalan: @madina_blog).",
+            "avtomatik hisoblanadi, skrinshot yuborish shart emas.\n\nDasturda qatnashish uchun Instagram'ni ulash majburiy.",
             reply_markup=ig_keyboard(u.id))
     else:
         await update.message.reply_text("Rahmat! Endi Instagram username'ingizni yozing (masalan: @madina_blog).",
@@ -479,10 +490,14 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     state = context.user_data.get("await") or ""
     try:
+        if state == "instagram" and ig_required():
+            await update.message.reply_text("Instagram faqat tugma orqali ulanadi — username yozish o'rniga shu tugmani bosing.",
+                                            reply_markup=ig_keyboard(u.id))
+            return
         if state == "instagram":
-            ig = st.set_instagram(u.id, text)
+            igname = st.set_instagram(u.id, text)
             context.user_data.pop("await", None)
-            await update.message.reply_text(f"🔎 @{ig} akkauntini tekshiryapman...")
+            await update.message.reply_text(f"🔎 @{igname} akkauntini tekshiryapman...")
             result = await run_vetting(context.bot, u.id)
             if result is None:
                 context.user_data["await"] = "profile_shot"
@@ -534,6 +549,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(("📝 Joriy topshiriq: " + brief + "\n\n" if brief else "")
                                         + "Qaysi mahsulotni suratga olmoqchisiz? Ruxsatni Bolalar Dunyosi beradi.",
                                         reply_markup=InlineKeyboardMarkup(kb))
+    elif text == BTN_REEL and ig_required() and not ig_ok(u.id):
+        await update.message.reply_text("Video qo'shish uchun Instagram ulangan bo'lishi kerak. Ulanish uzilgan — qayta ulang.",
+                                        reply_markup=ig_keyboard(u.id))
     elif text == BTN_REEL and not products_enabled():
         context.user_data["await"] = "reel"
         brief = st.get_setting("brief", "")
