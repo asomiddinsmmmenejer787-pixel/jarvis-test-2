@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS promo_sales(
   id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER NOT NULL REFERENCES creators(tg_id),
   code TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0), receipt TEXT, admin_id INTEGER, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS ig_links(
+  tg_id INTEGER PRIMARY KEY REFERENCES creators(tg_id), ig_user_id TEXT, username TEXT, token TEXT NOT NULL,
+  expires_at TEXT NOT NULL, connected_at TEXT NOT NULL, last_sync_at TEXT, status TEXT NOT NULL DEFAULT 'ok',
+  followers INTEGER, account_type TEXT);
 CREATE TABLE IF NOT EXISTS products(
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL);
@@ -491,6 +495,8 @@ class Store:
                       "step_reward": R.STEP_REWARD, "cap_views": R.CAP_VIEWS, "max_reward": R.MAX_REWARD,
                       "tracking_days": R.TRACKING_DAYS, "voucher_days": R.VOUCHER_DAYS,
                       "million_views": R.MILLION_VIEWS, "million_usd": R.MILLION_USD, "usd_rate": self.usd_rate()},
+            "ig_link": (lambda l: {k: l[k] for k in ("username", "status", "connected_at", "last_sync_at")} if l else None)(
+                self.ig_link(tg_id)),
             "product_requests": self._all("SELECT id, product, status, note, created_at FROM product_requests "
                                           "WHERE tg_id=? ORDER BY id DESC LIMIT 20", (tg_id,)),
         }
@@ -617,6 +623,8 @@ class Store:
             c["active_reels"] = count("SELECT COUNT(*) n FROM reels WHERE tg_id=? AND status IN "
                                       "('monitoring','awaiting_final','awaiting_approval')", (c["tg_id"],))
             c["promo"] = self.promo_stats(c["tg_id"])
+            link = self.ig_link(c["tg_id"])
+            c["ig_connected"] = bool(link and link["status"] == "ok")
         outstanding = self._one(
             "SELECT COALESCE((SELECT SUM(nominal) FROM vouchers WHERE status='active' AND expires_at>?),0) + "
             "COALESCE((SELECT SUM(amount) FROM carry WHERE expires_at>?),0) n", (now, now))["n"]
@@ -651,11 +659,85 @@ class Store:
         ov["promo_sales"] = self._all("SELECT code, amount, receipt, at FROM promo_sales WHERE tg_id=? ORDER BY id DESC "
                                       "LIMIT 30", (tg_id,))
         ov["profile"]["level_override"] = c.get("level_override")
+        link = self.ig_link(tg_id)
+        ov["ig_link"] = {k: link[k] for k in ("username", "status", "connected_at", "last_sync_at", "followers",
+                                               "expires_at")} if link else None
         ov["profile"]["terms_version"] = c.get("terms_version")
         ov["profile"]["terms_accepted_at"] = c.get("terms_accepted_at")
         ov["vetting"] = {"score": c.get("vet_score"), "report": json.loads(c.get("vet_report") or "null")}
         ov["profile"]["note"] = c.get("note")
         return ov
+
+    # ---------- Instagram ulanishi ----------
+
+    def save_ig_link(self, tg_id, token, ig_user_id, username, expires_in, followers=None, account_type=None):
+        """Bloger Instagram'ini ulaydi. Username tasdiqlangan manbadan olinadi va profilga yoziladi."""
+        name = (username or "").lower()
+        other = self._one("SELECT tg_id FROM creators WHERE instagram=? AND tg_id<>?", (name, tg_id))
+        if other:
+            raise StoreError("Bu Instagram akkaunt boshqa Telegram hisobiga ulangan.")
+        other_link = self._one("SELECT tg_id FROM ig_links WHERE ig_user_id=? AND tg_id<>?", (str(ig_user_id), tg_id))
+        if other_link:
+            raise StoreError("Bu Instagram akkaunt boshqa Telegram hisobiga ulangan.")
+        now = R.utcnow()
+        with self.tx() as db:
+            db.execute(
+                "INSERT INTO ig_links(tg_id,ig_user_id,username,token,expires_at,connected_at,status,followers,account_type) "
+                "VALUES(?,?,?,?,?,?, 'ok', ?, ?) ON CONFLICT(tg_id) DO UPDATE SET ig_user_id=excluded.ig_user_id, "
+                "username=excluded.username, token=excluded.token, expires_at=excluded.expires_at, "
+                "connected_at=excluded.connected_at, status='ok', followers=excluded.followers, "
+                "account_type=excluded.account_type",
+                (tg_id, str(ig_user_id), name, token, R.to_iso(now + timedelta(seconds=int(expires_in))), R.to_iso(now),
+                 followers, account_type))
+            if name:
+                db.execute("UPDATE creators SET instagram=? WHERE tg_id=?", (name, tg_id))
+            self._audit(db, tg_id, "ig_connected", username=name, ig_user_id=str(ig_user_id))
+
+    def ig_link(self, tg_id):
+        return self._one("SELECT * FROM ig_links WHERE tg_id=?", (tg_id,))
+
+    def ig_links(self, status="ok"):
+        return self._all("SELECT * FROM ig_links WHERE status=?", (status,))
+
+    def update_ig_token(self, tg_id, token, expires_in):
+        with self.tx() as db:
+            db.execute("UPDATE ig_links SET token=?, expires_at=?, status='ok' WHERE tg_id=?",
+                       (token, R.to_iso(R.utcnow() + timedelta(seconds=int(expires_in))), tg_id))
+
+    def mark_ig(self, tg_id, status=None, synced=False, followers=None):
+        with self.tx() as db:
+            if status:
+                db.execute("UPDATE ig_links SET status=? WHERE tg_id=?", (status, tg_id))
+                self._audit(db, None, "ig_status", tg_id=tg_id, status=status)
+            if synced:
+                db.execute("UPDATE ig_links SET last_sync_at=? WHERE tg_id=?", (R.to_iso(R.utcnow()), tg_id))
+            if followers is not None:
+                db.execute("UPDATE ig_links SET followers=? WHERE tg_id=?", (followers, tg_id))
+
+    def disconnect_ig(self, tg_id):
+        with self.tx() as db:
+            db.execute("DELETE FROM ig_links WHERE tg_id=?", (tg_id,))
+            self._audit(db, tg_id, "ig_disconnected")
+
+    def apply_api_views(self, reel_id, views, posted_at_api=None, extra=None):
+        """Instagram API'dan olingan ko'rishlar: ishonchli manba, darhol tasdiqlangan hisoblanadi.
+        Instagram'dagi haqiqiy joylangan vaqt ro'yxatdan o'tgan vaqtdan oldin bo'lsa, 30 kun shundan hisoblanadi."""
+        reel = self.reel(reel_id)
+        if not reel or reel["status"] not in ("monitoring", "awaiting_final"):
+            return None
+        with self.tx() as db:
+            if posted_at_api:
+                real = R.from_iso(posted_at_api.replace("+0000", "+00:00"))
+                if real < R.from_iso(reel["posted_at"]):
+                    db.execute("UPDATE reels SET posted_at=?, ends_at=? WHERE id=?",
+                               (R.to_iso(real), R.to_iso(real + timedelta(days=R.TRACKING_DAYS)), reel_id))
+            db.execute("INSERT INTO snapshots(reel_id,views,source,verified,created_at,flags) VALUES(?,?,?,?,?,?)",
+                       (reel_id, int(views), "instagram_api", 1, R.to_iso(R.utcnow()),
+                        json.dumps([], ensure_ascii=False)))
+            db.execute("UPDATE reels SET last_views=MAX(last_views, ?) WHERE id=?", (int(views), reel_id))
+            if extra:
+                self._audit(db, None, "api_views", reel_id=reel_id, views=int(views), **extra)
+        return self.reel(reel_id)
 
     # ---------- akkaunt bahosi ----------
 

@@ -90,7 +90,7 @@
       <div class="card">
         <div class="ch"><h3>Blogerlar</h3><span class="s">${d.creators.length} ta</span></div>
         ${d.creators.length ? d.creators.map(c => `<div class="need" style="cursor:pointer" data-open="${c.tg_id}">
-          <div class="t">@${esc(c.instagram||'—')} <small>${esc(c.first_name)} · ${c.level} · ${CS[c.status]||c.status} · ${c.active_reels} faol video · promo ${c.promo.count} ta</small></div>
+          <div class="t">${c.ig_connected ? '🔗 ' : ''}@${esc(c.instagram||'—')} <small>${esc(c.first_name)} · ${c.level} · ${CS[c.status]||c.status} · ${c.active_reels} faol video · promo ${c.promo.count} ta</small></div>
           <span style="color:var(--gold)">›</span></div>`).join('') : `<div class="muted">Hali bloger yo'q.</div>`}
       </div>
       <div id="crToast" style="position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--gold);color:#1d1306;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .2s;z-index:30;pointer-events:none"></div>`;
@@ -157,6 +157,8 @@
         <div class="muted">${esc(p.first_name)} ${esc(p.last_name||'')} · ${p.username ? '@'+esc(p.username) : ''} · ${esc(p.phone||'')}<br>
           Promo-kod: <b>${esc(p.promo_code||'—')}</b> · ${d.promo.count} ta xarid (${som(d.promo.sum)})<br>
           Balans: <b>${som(d.balance.available)}</b> · Kutilayotgan: ${som(d.balance.pending)} · Jami: ${som(d.balance.earned_total)}</div>
+        <div class="muted" style="margin-top:6px">${d.ig_link ? (d.ig_link.status === 'ok'
+          ? `🔗 Instagram ulangan · oxirgi yangilanish ${day(d.ig_link.last_sync_at)}` : `⚠️ Instagram ulanishi uzilgan`) : '📸 Instagram ulanmagan — skrinshot orqali'}</div>
         ${p.terms_accepted_at ? `<div class="muted" style="margin-top:6px">Shartlar qabul qilingan: v${esc(p.terms_version)} · ${day(p.terms_accepted_at)}</div>` : ''}
         ${vetBlock({vet_report: d.vetting && d.vetting.report ? JSON.stringify(d.vetting.report) : null})}
         <button class="btn ghost" style="margin-top:10px" id="crVet">📊 Qayta baholash</button>

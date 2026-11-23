@@ -509,6 +509,101 @@ def test_terms_page_and_admin_products_api():
     assert s.products(active_only=True) == []
 
 
+def test_ig_state_and_link_flow():
+    import asyncio
+    from creator_rewards import bot as cb, igconnect as ig
+    os.environ["IG_APP_SECRET"] = "secret-x"
+    os.environ["CREATOR_IG_REDIRECT"] = "https://jarvis.example/creator/ig/callback"
+    try:
+        st = ig.make_state(555, now=1000)
+        assert ig.read_state(st, now=1100) == 555
+        assert ig.read_state(st, now=1000 + ig.STATE_TTL + 1) is None  # eskirgan
+        assert ig.read_state(st.replace("555", "556"), now=1100) is None  # soxta
+        assert "client_id=975102868186193" in ig.auth_url(555) and "instagram_business_manage_insights" in ig.auth_url(555)
+
+        s = new_store()
+        cb._ctx["store"] = s
+        cb._ctx["admins"] = lambda: {ADMIN}
+        tg = approved_creator(s, 900, "old_name")
+        s.save_ig_link(tg, "TOKEN-1", "17841", "Real_Name", 5_184_000, 25_000, "MEDIA_CREATOR")
+        assert s.creator(tg)["instagram"] == "real_name"  # tasdiqlangan username
+        assert "token" not in str(s.overview(tg)["ig_link"]) and "TOKEN-1" not in str(s.overview(tg))
+        s.upsert_telegram(901, "Boshqa")
+        try:
+            s.save_ig_link(901, "T2", "17841", "real_name", 100)
+            raise AssertionError("bitta Instagram ikki Telegramga ulanmasligi kerak")
+        except StoreError:
+            pass
+
+        rid = s.add_reel(tg, "https://www.instagram.com/reel/APIREEL1/", posted_at=R.utcnow() - timedelta(days=5))
+        real_ts = (R.utcnow() - timedelta(days=6)).strftime("%Y-%m-%dT%H:%M:%S+0000")
+        calls = {"n": 0}
+        orig = (ig.find_reel, ig.media_insights, ig.refresh)
+        ig.find_reel = lambda token, code: {"id": "m1", "timestamp": real_ts} if code == "APIREEL1" else None
+        ig.media_insights = lambda token, mid: {"views": 52_340, "reach": 40_000}
+        fb = FakeBot()
+        try:
+            asyncio.run(cb.sync_creator(fb, s.ig_link(tg)))
+            r = s.reel(rid)
+            assert r["last_views"] == 52_340
+            assert R.from_iso(r["posted_at"]) < R.utcnow() - timedelta(days=5, hours=12)  # haqiqiy vaqt olindi
+            assert s.snapshots_of(rid)[-1]["source"] == "instagram_api"
+            # muddat tugashi: yakuniy raqam API'dan, mukofot tasdiqqa
+            with s.tx() as db:
+                db.execute("UPDATE reels SET ends_at=? WHERE id=?", (R.to_iso(R.utcnow() - timedelta(minutes=1)), rid))
+            asyncio.run(cb.tick(fb))
+            rw = s._one("SELECT * FROM rewards WHERE reel_id=?", (rid,))
+            assert rw and rw["amount"] == R.reward_for_views(52_340) and rw["status"] == "pending"
+            assert not any("skrinshot" in t.lower() and c == tg for c, t in fb.sent)
+            # ruxsat bekor qilinsa — ulanish uzilgan deb belgilanadi va blogerga xabar ketadi
+            def bad(*a):
+                raise ig.IGError("Invalid OAuth access token", token_bad=True)
+            ig.find_reel = bad
+            s.add_reel(tg, "https://www.instagram.com/reel/APIREEL2/")
+            asyncio.run(cb.sync_creator(fb, s.ig_link(tg)))
+            assert s.ig_link(tg)["status"] == "broken" and any("uzildi" in t for c, t in fb.sent if c == tg)
+        finally:
+            ig.find_reel, ig.media_insights, ig.refresh = orig
+    finally:
+        os.environ.pop("IG_APP_SECRET", None)
+        os.environ.pop("CREATOR_IG_REDIRECT", None)
+
+
+def test_ig_callback_endpoint():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from creator_rewards import bot as cb, igconnect as ig, web as cw
+    os.environ["IG_APP_SECRET"] = "secret-y"
+    os.environ["CREATOR_IG_REDIRECT"] = "https://jarvis.example/creator/ig/callback"
+    os.environ["CREATOR_BOT_TOKEN"] = "123:TEST"
+    s = new_store()
+    cb._ctx["store"] = s
+    s.upsert_telegram(950, "Madina")
+    app = FastAPI()
+    app.include_router(cw.router)
+    client = TestClient(app)
+    orig = (ig.exchange_code, ig.profile)
+    try:
+        assert "eskirgan" in client.get("/creator/ig/callback?code=x&state=bad").text
+        st = ig.make_state(950)
+        assert "berilmadi" in client.get(f"/creator/ig/callback?state={st}&error=access_denied").text
+        ig.exchange_code = lambda code: ("LONG", "178", 5_184_000)
+        ig.profile = lambda token: {"user_id": "178", "username": "madina_blog", "account_type": "PERSONAL"}
+        assert "professional emas" in client.get(f"/creator/ig/callback?code=abc%23_&state={st}").text
+        ig.profile = lambda token: {"user_id": "178", "username": "madina_blog", "account_type": "MEDIA_CREATOR",
+                                    "followers_count": 31_000}
+        r = client.get(f"/creator/ig/callback?code=abc&state={st}")
+        assert r.status_code == 200 and "@madina_blog ulandi" in r.text
+        assert s.ig_link(950)["token"] == "LONG" and s.creator(950)["instagram"] == "madina_blog"
+        good = _signed_init_data("123:TEST", {"id": 950, "first_name": "Madina"})
+        d = client.get("/creator/api/ig/link", headers={"X-Init-Data": good}).json()
+        assert d["connected"] is True and d["url"].startswith("https://www.instagram.com/oauth/authorize")
+    finally:
+        ig.exchange_code, ig.profile = orig
+        for k in ("IG_APP_SECRET", "CREATOR_IG_REDIRECT"):
+            os.environ.pop(k, None)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
