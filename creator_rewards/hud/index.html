@@ -139,6 +139,7 @@ nav button.on{color:var(--accent-ink)}
         <div class="num" id="promo-code" style="font-size:22px;cursor:pointer">—</div>
         <div style="text-align:right"><div class="num" id="promo-n" style="font-size:22px">0</div><div class="hint" style="margin:0">ta xarid</div></div></div>
       <div class="hint" id="promo-sub">Obunachilaringiz shu kod bilan xarid qilsa, shu yerda ko'rinadi.</div></div>
+    <div id="preqs"></div>
     <div class="sec"><h2>Videolarim</h2><a data-go="reels">Hammasi</a></div>
     <div id="home-reels"></div>
   </section>
@@ -218,7 +219,9 @@ const dt = (iso, time) => { if (!iso) return "—"; const d = new Date(iso);
 const daysLeft = iso => Math.max(0, Math.ceil((new Date(iso) - Date.now()) / 864e5));
 function toast(t){ const el=$("toast"); el.textContent=t; el.classList.add("on"); setTimeout(()=>el.classList.remove("on"),1600); }
 
-function rewardFor(v, r){ v = Number(v)||0; if (v < r.min_views) return 0;
+function rewardFor(v, r){ v = Number(v)||0;
+  if (r.million_views && v >= r.million_views && r.usd_rate) return Math.round(r.million_usd * r.usd_rate / 1000) * 1000;
+  if (v < r.min_views) return 0;
   return r.base + Math.floor((Math.min(v, r.cap_views) - r.min_views) / r.step_views) * r.step_reward; }
 
 const STATUS = {
@@ -238,14 +241,16 @@ function reelCard(r, rules){
   const pct = Math.min(100, Math.round(r.day / rules.tracking_days * 100));
   let next = "";
   if (r.status === "monitoring" || r.status === "awaiting_final") {
-    next = r.next_step === null ? "Eng yuqori mukofotga yetdingiz 🎉"
+    next = r.next_step === null ? `1 000 000 ko'rishga yetdingiz — ${rules.million_usd}$ mukofot 🎉`
       : r.views < rules.min_views ? `Mukofot boshlanishiga yana <b>${fmt(r.next_step)}</b> ko'rish`
+      : r.views >= rules.cap_views ? `<b>${rules.million_usd}$</b> mukofotigacha yana <b>${fmt(r.next_step)}</b> ko'rish`
       : `Keyingi <b>+${fmt(rules.step_reward)} so'm</b> uchun yana <b>${fmt(r.next_step)}</b> ko'rish`;
     if (r.next_screenshot_day) next += `<br>Keyingi skrinshot: <b>${r.next_screenshot_day}-kun</b>`;
   }
   return `<div class="reel">
     <div class="row"><a class="code" href="${esc(r.url)}" target="_blank" style="color:inherit;text-decoration:none">🎬 ${esc(r.shortcode)}</a>
       <span class="chip ${st[1]}">${st[0]}</span></div>
+    ${r.product ? `<div class="note" style="margin-top:6px">🧸 ${esc(r.product)}</div>` : ""}
     <div class="stats"><div><div class="v">${fmt(r.views)}</div><div class="k">tasdiqlangan ko'rish</div></div>
       <div><div class="v">${som(r.reward)}</div><div class="k">${r.status==="rewarded"?"berilgan mukofot":"taxminiy mukofot"}</div></div></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
@@ -277,6 +282,11 @@ function render(){
   $("promo-code").onclick = () => { if (p.promo_code && navigator.clipboard) { navigator.clipboard.writeText(p.promo_code); toast("Promo-kod nusxalandi"); } };
   $("promo-n").textContent = fmt(pr.count);
   $("promo-sub").textContent = pr.count ? `Oxirgi 30 kunda ${fmt(pr.count_30d)} ta xarid.` : "Obunachilaringiz shu kod bilan xarid qilsa, shu yerda ko'rinadi.";
+  const PS = {pending: ["Kutilmoqda", "c-wait"], approved: ["Ruxsat berildi", "c-ok"], rejected: ["Rad etildi", "c-bad"], used: ["Video qo'shilgan", "c-mon"]};
+  const preqs = (d.product_requests || []).filter(q => q.status !== "used").slice(0, 5);
+  $("preqs").innerHTML = preqs.length ? `<div class="sec"><h2>Mahsulot ruxsatlari</h2></div><div class="card list">${preqs.map(q =>
+    `<div class="it"><div><b>🧸 ${esc(q.product)}</b><small>${dt(q.created_at)}${q.note ? " · " + esc(q.note) : ""}</small></div>
+     <span class="chip ${(PS[q.status]||["",""])[1]}">${(PS[q.status]||[q.status])[0]}</span></div>`).join("")}</div>` : "";
   const reels = d.reels || [];
   $("home-reels").innerHTML = reels.length ? reels.slice(0, 2).map(r => reelCard(r, rules)).join("")
     : `<div class="empty">Hali video yo'q. Do'konda video olib, botga Reels havolasini yuboring.</div>`;
@@ -318,7 +328,9 @@ function render(){
   $("pinfo").innerHTML = rows.map(([k, val]) => `<div class="it"><span>${k}</span><span>${String(val).startsWith("<") ? val : esc(val)}</span></div>`).join("");
   const cp = $("copy-promo");
   if (cp) cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(p.promo_code); toast("Promo-kod nusxalandi"); };
-  $("prules").innerHTML = `• <b>${fmt(rules.min_views)}</b> ko'rish = <b>${som(rules.base)}</b>, keyin har ${fmt(rules.step_views)} ko'rishga <b>+${som(rules.step_reward)}</b>, eng ko'pi <b>${som(rules.max_reward)}</b><br>
+  $("prules").innerHTML = `• <b>${fmt(rules.min_views)}</b> ko'rish = <b>${som(rules.base)}</b>, keyin har ${fmt(rules.step_views)} ko'rishga <b>+${som(rules.step_reward)}</b>, 100 000 dan <b>${som(rules.max_reward)}</b><br>
+    • <b>1 000 000</b> va undan ko'p ko'rish = <b>${rules.million_usd}$</b> (Markaziy bank kursi bo'yicha so'mda)<br>
+    • Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi: avval botda mahsulotga ruxsat olasiz<br>
     • Ko'rishlar ${rules.tracking_days} kun hisoblanadi, video doimiy turadi<br>
     • Vaucher ${rules.voucher_days} kun amal qiladi, kod bir marta ishlatiladi, qoldiq keyingi vaucherga o'tadi<br>
     • Vaucher faqat do'konda, naqd pulga almashtirilmaydi`;
@@ -341,7 +353,8 @@ function calcViews(){
   $("views-val").textContent = fmt(v) + (v >= 120000 ? "+" : "");
   const r = rewardFor(v, DATA.rules);
   $("views-res").innerHTML = `<div><span>Mukofot</span><b>${som(r)}</b></div>
-    <div><span>1 000 ko'rish uchun</span><b>${v >= DATA.rules.min_views ? som(r / Math.min(v, DATA.rules.cap_views) * 1000) : "—"}</b></div>`;
+    <div><span>1 000 ko'rish uchun</span><b>${v >= DATA.rules.min_views ? som(r / Math.min(v, DATA.rules.cap_views) * 1000) : "—"}</b></div>
+    <div><span>1 000 000 ko'rish</span><b>${DATA.rules.million_usd}$${DATA.rules.usd_rate ? " ≈ " + som(rewardFor(DATA.rules.million_views, DATA.rules)) : ""}</b></div>`;
 }
 $("buy").addEventListener("input", calcBuy);
 $("views").addEventListener("input", calcViews);
@@ -403,14 +416,15 @@ function demoData(){
       {code: "BD-H3TP-9WLA", nominal: 260000, status: "used", used_amount: 180000, issued_at: iso(-40)},
       {code: "BD-M2RX-5ZKD", nominal: 240000, status: "used", used_amount: 240000, issued_at: iso(-55)}],
     reels: [
-      {id: 3, url: "#", shortcode: "DfzXgaOtx34", status: "monitoring", views: 47250, reward: 248000, next_step: 750, day: 12,
+      {id: 3, url: "#", shortcode: "DfzXgaOtx34", product: "Rolikli krossovka", status: "monitoring", views: 47250, reward: 248000, next_step: 750, day: 12,
         posted_at: iso(-12), ends_at: iso(18), next_screenshot_day: 14},
       {id: 2, url: "#", shortcode: "Df4d4VZK-U0", status: "monitoring", views: 8400, reward: 0, next_step: 1600, day: 5,
         posted_at: iso(-5), ends_at: iso(25), next_screenshot_day: 7},
       {id: 1, url: "#", shortcode: "DfwrT0BtJrI", status: "awaiting_approval", views: 34100, reward: 196000, next_step: null, day: 30,
         posted_at: iso(-31), ends_at: iso(-1), next_screenshot_day: null}],
+    product_requests: [{product: "Dron X5", status: "approved", created_at: iso(-1)}, {product: "Qo'g'irchoq uy", status: "pending", created_at: iso(0)}],
     rules: {min_views: 10000, base: 100000, step_views: 1000, step_reward: 4000, cap_views: 100000, max_reward: 460000,
-      tracking_days: 30, voucher_days: 30}};
+      tracking_days: 30, voucher_days: 30, million_views: 1000000, million_usd: 200, usd_rate: 12650}};
 }
 
 async function load(){

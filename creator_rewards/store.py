@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS promo_sales(
   id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER NOT NULL REFERENCES creators(tg_id),
   code TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0), receipt TEXT, admin_id INTEGER, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS products(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS product_requests(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER NOT NULL REFERENCES creators(tg_id),
+  product TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', note TEXT, reel_id INTEGER,
+  created_at TEXT NOT NULL, decided_at TEXT, admin_id INTEGER);
 """
 
 # Eski bazaga keyin qo'shilgan ustunlar (jadval, ustun, ta'rif)
@@ -70,6 +77,13 @@ MIGRATIONS = [
     ("snapshots", "ocr_views", "INTEGER"),
     ("snapshots", "typed_views", "INTEGER"),
     ("snapshots", "flags", "TEXT NOT NULL DEFAULT '[]'"),
+    ("rewards", "usd_rate", "REAL"),
+    ("creators", "terms_version", "TEXT"),
+    ("creators", "terms_accepted_at", "TEXT"),
+    ("creators", "vet_score", "REAL"),
+    ("creators", "vet_report", "TEXT"),
+    ("reels", "product", "TEXT"),
+    ("reels", "request_id", "INTEGER"),
 ]
 LEVELS = ("Yangi", "Faol", "Hamkor")
 EXPIRY_REMIND_DAYS = (7, 3, 1)
@@ -87,6 +101,7 @@ class Store:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.path = path
         self._lock = threading.RLock()
+        self.usd_rate = lambda: None  # MB kursi (200$ mukofoti uchun); bot fx moduli bilan almashtiradi
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys=ON")
@@ -154,12 +169,16 @@ class Store:
             db.execute("UPDATE creators SET instagram=? WHERE tg_id=?", (name, tg_id))
         return name
 
-    def submit_application(self, tg_id):
+    def submit_application(self, tg_id, terms_version="1.0"):
+        """Ariza + shartlarni qabul qilish (aksept): vaqt, versiya va Telegram ID jurnalga yoziladi."""
         c = self.creator(tg_id)
         if not c or not c["phone"] or not c["instagram"]:
             raise StoreError("Avval telefon raqam va Instagram username kiriting.")
+        now = R.to_iso(R.utcnow())
         with self.tx() as db:
-            db.execute("UPDATE creators SET status='pending' WHERE tg_id=? AND status IN ('draft','rejected')", (tg_id,))
+            db.execute("UPDATE creators SET status='pending', terms_version=?, terms_accepted_at=? "
+                       "WHERE tg_id=? AND status IN ('draft','rejected')", (terms_version, now, tg_id))
+            self._audit(db, tg_id, "terms_accepted", version=terms_version, at=now)
             self._audit(db, tg_id, "application", instagram=c["instagram"])
         return self.creator(tg_id)
 
@@ -191,10 +210,13 @@ class Store:
 
     # ---------- Reels ----------
 
-    def add_reel(self, tg_id, url, posted_at=None):
+    def add_reel(self, tg_id, url, posted_at=None, request_id=None):
         c = self.creator(tg_id)
         if not c or c["status"] != "approved":
             raise StoreError("Reels qo'shish uchun arizangiz tasdiqlangan bo'lishi kerak.")
+        req = self._one("SELECT * FROM product_requests WHERE id=? AND tg_id=?", (request_id or 0, tg_id))
+        if not req or req["status"] != "approved":
+            raise StoreError("Avval mahsulotga ruxsat oling: «🧸 Mahsulot so'rash».")
         m = REEL_RE.search(url or "")
         if not m:
             raise StoreError("Bu Instagram Reels havolasi emas. Masalan: https://www.instagram.com/reel/ABC123/")
@@ -204,10 +226,11 @@ class Store:
         start = posted_at or R.utcnow()
         with self.tx() as db:
             cur = db.execute(
-                "INSERT INTO reels(tg_id,url,shortcode,posted_at,ends_at,created_at) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO reels(tg_id,url,shortcode,posted_at,ends_at,created_at,product,request_id) VALUES(?,?,?,?,?,?,?,?)",
                 (tg_id, f"https://www.instagram.com/reel/{code}/", code, R.to_iso(start),
-                 R.to_iso(start + timedelta(days=R.TRACKING_DAYS)), R.to_iso(R.utcnow())))
-            self._audit(db, tg_id, "reel_added", shortcode=code)
+                 R.to_iso(start + timedelta(days=R.TRACKING_DAYS)), R.to_iso(R.utcnow()), req["product"], req["id"]))
+            db.execute("UPDATE product_requests SET status='used', reel_id=? WHERE id=?", (cur.lastrowid, req["id"]))
+            self._audit(db, tg_id, "reel_added", shortcode=code, product=req["product"])
             return cur.lastrowid
 
     def reel(self, reel_id):
@@ -292,14 +315,15 @@ class Store:
         if existing:
             return existing
         views = reel["last_views"]
-        amount = R.reward_for_views(views)
+        rate = self.usd_rate() if views >= R.MILLION_VIEWS else None
+        amount = R.reward_for_views(views, rate)
         with self.tx() as db:
             if amount <= 0:
                 db.execute("UPDATE reels SET status='no_reward' WHERE id=?", (reel_id,))
                 self._audit(db, actor, "no_reward", reel_id=reel_id, views=views)
                 return None
-            db.execute("INSERT INTO rewards(reel_id,views,amount,created_at) VALUES(?,?,?,?)",
-                       (reel_id, views, amount, R.to_iso(R.utcnow())))
+            db.execute("INSERT INTO rewards(reel_id,views,amount,created_at,usd_rate) VALUES(?,?,?,?,?)",
+                       (reel_id, views, amount, R.to_iso(R.utcnow()), rate))
             db.execute("UPDATE reels SET status='awaiting_approval' WHERE id=?", (reel_id,))
             self._audit(db, actor, "reward_calculated", reel_id=reel_id, views=views, amount=amount)
         return self._one("SELECT * FROM rewards WHERE reel_id=?", (reel_id,))
@@ -307,8 +331,9 @@ class Store:
     def reward(self, reward_id):
         return self._one("SELECT * FROM rewards WHERE id=?", (reward_id,))
 
-    def decide_reward(self, reward_id, approve, admin_id, note=""):
-        """Tasdiqlansa vaucher chiqaradi (oldingi qoldiq va faol vaucher unga qo'shiladi)."""
+    def decide_reward(self, reward_id, approve, admin_id, note="", usd_rate=None):
+        """Tasdiqlansa vaucher chiqaradi (oldingi qoldiq va faol vaucher unga qo'shiladi).
+        1 000 000+ ko'rish: summa tasdiqlangan kundagi MB kursi bo'yicha qayta hisoblanadi (usd_rate)."""
         with self.tx() as db:
             rw = db.execute("SELECT * FROM rewards WHERE id=?", (reward_id,)).fetchone()
             if not rw:
@@ -324,8 +349,15 @@ class Store:
                 self._audit(db, admin_id, "reward_rejected", reward_id=reward_id, note=note)
                 return None
             tg_id = reel["tg_id"]
+            amount = rw["amount"]
+            if rw["views"] >= R.MILLION_VIEWS:
+                rate = usd_rate or self.usd_rate()
+                if not rate:
+                    raise StoreError("Markaziy bank kursini olib bo'lmadi. Keyinroq urinib ko'ring yoki USD_RATE ni kiriting.")
+                amount = R.million_reward(rate)
+                db.execute("UPDATE rewards SET amount=?, usd_rate=? WHERE id=?", (amount, rate, reward_id))
             carried = self._take_balance(db, tg_id, now)
-            nominal = rw["amount"] + carried
+            nominal = amount + carried
             code = R.new_voucher_code()
             while db.execute("SELECT 1 FROM vouchers WHERE code=?", (code,)).fetchone():
                 code = R.new_voucher_code()
@@ -411,7 +443,7 @@ class Store:
         pending = 0
         for r in self.reels_of(tg_id):
             rw = self._one("SELECT * FROM rewards WHERE reel_id=?", (r["id"],))
-            est = rw["amount"] if rw else R.reward_for_views(r["last_views"])
+            est = rw["amount"] if rw else R.reward_for_views(r["last_views"], self.usd_rate())
             ends = R.from_iso(r["ends_at"])
             if r["status"] in ("monitoring", "awaiting_final", "awaiting_approval"):
                 pending += est
@@ -420,6 +452,7 @@ class Store:
             next_day = next((d for d in R.SCREENSHOT_DAYS if d not in sent), None)
             reels.append({
                 "id": r["id"], "url": r["url"], "shortcode": r["shortcode"], "status": r["status"],
+                "product": r.get("product"),
                 "views": r["last_views"], "reward": est, "next_step": R.views_to_next_step(r["last_views"]),
                 "posted_at": r["posted_at"], "ends_at": r["ends_at"],
                 "days_left": max(0, (ends - now).days), "day": min(R.TRACKING_DAYS, max(0, (now - R.from_iso(r["posted_at"])).days)),
@@ -447,7 +480,10 @@ class Store:
             "vouchers": history, "reels": reels,
             "rules": {"min_views": R.MIN_VIEWS, "base": R.BASE_REWARD, "step_views": R.STEP_VIEWS,
                       "step_reward": R.STEP_REWARD, "cap_views": R.CAP_VIEWS, "max_reward": R.MAX_REWARD,
-                      "tracking_days": R.TRACKING_DAYS, "voucher_days": R.VOUCHER_DAYS},
+                      "tracking_days": R.TRACKING_DAYS, "voucher_days": R.VOUCHER_DAYS,
+                      "million_views": R.MILLION_VIEWS, "million_usd": R.MILLION_USD, "usd_rate": self.usd_rate()},
+            "product_requests": self._all("SELECT id, product, status, note, created_at FROM product_requests "
+                                          "WHERE tg_id=? ORDER BY id DESC LIMIT 20", (tg_id,)),
         }
 
     # ---------- daraja ----------
@@ -588,6 +624,10 @@ class Store:
             },
             "applications": self.pending_creators(),
             "screenshots": shots, "rewards": rewards, "creators": creators,
+            "product_requests": self._all(
+                "SELECT p.*, c.instagram, c.first_name FROM product_requests p JOIN creators c ON c.tg_id=p.tg_id "
+                "WHERE p.status='pending' ORDER BY p.id"),
+            "products": self.products(),
             "brief": self.get_setting("brief", ""),
         }
 
@@ -601,8 +641,73 @@ class Store:
         ov["promo_sales"] = self._all("SELECT code, amount, receipt, at FROM promo_sales WHERE tg_id=? ORDER BY id DESC "
                                       "LIMIT 30", (tg_id,))
         ov["profile"]["level_override"] = c.get("level_override")
+        ov["profile"]["terms_version"] = c.get("terms_version")
+        ov["profile"]["terms_accepted_at"] = c.get("terms_accepted_at")
+        ov["vetting"] = {"score": c.get("vet_score"), "report": json.loads(c.get("vet_report") or "null")}
         ov["profile"]["note"] = c.get("note")
         return ov
+
+    # ---------- akkaunt bahosi ----------
+
+    def set_vetting(self, tg_id, score, report):
+        with self.tx() as db:
+            db.execute("UPDATE creators SET vet_score=?, vet_report=? WHERE tg_id=?",
+                       (score, json.dumps(report, ensure_ascii=False), tg_id))
+            self._audit(db, None, "vetting", tg_id=tg_id, score=score)
+
+    # ---------- mahsulotlar va ruxsat ----------
+
+    def products(self, active_only=False):
+        sql = "SELECT * FROM products" + (" WHERE active=1" if active_only else "") + " ORDER BY name"
+        return self._all(sql)
+
+    def add_product(self, name, admin_id=None):
+        name = " ".join((name or "").split())[:80]
+        if not name:
+            raise StoreError("Mahsulot nomini yozing.")
+        with self.tx() as db:
+            db.execute("INSERT INTO products(name,created_at) VALUES(?,?) ON CONFLICT(name) DO UPDATE SET active=1",
+                       (name, R.to_iso(R.utcnow())))
+            self._audit(db, admin_id, "product_added", name=name)
+
+    def set_product_active(self, product_id, active, admin_id=None):
+        with self.tx() as db:
+            db.execute("UPDATE products SET active=? WHERE id=?", (1 if active else 0, product_id))
+            self._audit(db, admin_id, "product_active", id=product_id, active=bool(active))
+
+    def request_product(self, tg_id, product):
+        c = self.creator(tg_id)
+        if not c or c["status"] != "approved":
+            raise StoreError("Arizangiz tasdiqlangan bo'lishi kerak.")
+        product = " ".join((product or "").split())[:120]
+        if not product:
+            raise StoreError("Mahsulot nomini yozing.")
+        if self._one("SELECT 1 FROM product_requests WHERE tg_id=? AND product=? AND status IN ('pending','approved')",
+                     (tg_id, product)):
+            raise StoreError("Bu mahsulot bo'yicha so'rov allaqachon bor.")
+        with self.tx() as db:
+            cur = db.execute("INSERT INTO product_requests(tg_id,product,created_at) VALUES(?,?,?)",
+                             (tg_id, product, R.to_iso(R.utcnow())))
+            self._audit(db, tg_id, "product_requested", product=product)
+            return cur.lastrowid
+
+    def product_request(self, req_id):
+        return self._one("SELECT * FROM product_requests WHERE id=?", (req_id,))
+
+    def decide_product_request(self, req_id, approve, admin_id, note=""):
+        with self.tx() as db:
+            row = db.execute("SELECT * FROM product_requests WHERE id=?", (req_id,)).fetchone()
+            if not row:
+                raise StoreError("So'rov topilmadi.")
+            if row["status"] != "pending":
+                raise StoreError("Bu so'rov bo'yicha qaror qabul qilingan.")
+            db.execute("UPDATE product_requests SET status=?, note=?, decided_at=?, admin_id=? WHERE id=?",
+                       ("approved" if approve else "rejected", note, R.to_iso(R.utcnow()), admin_id, req_id))
+            self._audit(db, admin_id, "product_" + ("approved" if approve else "rejected"), id=req_id, note=note)
+        return self.product_request(req_id)
+
+    def approved_requests(self, tg_id):
+        return self._all("SELECT * FROM product_requests WHERE tg_id=? AND status='approved' ORDER BY id", (tg_id,))
 
     # ---------- xabar almashinuvi ----------
 

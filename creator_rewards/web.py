@@ -22,6 +22,7 @@ router = APIRouter(prefix="/creator")
 HERE = os.path.dirname(os.path.abspath(__file__))
 HUD_FILE = os.path.join(HERE, "hud", "index.html")
 ADMIN_JS = os.path.join(HERE, "hud", "admin.js")
+TERMS_MD = os.path.join(HERE, "terms.md")
 
 
 def _store() -> Store:
@@ -71,6 +72,55 @@ def _decode_image(data_url):
 @router.get("/app")
 def hud():
     return FileResponse(HUD_FILE, headers={"Cache-Control": "no-store"})
+
+
+def _md_to_html(md):
+    """Shartlar matni uchun oddiy markdown: sarlavha, jadval, ro'yxat, qalin matn."""
+    import html as h
+    import re as _re
+    out, table = [], []
+
+    def inline(t):
+        t = h.escape(t)
+        return _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+
+    def flush():
+        if table:
+            rows = [r for r in table if not _re.match(r"^\|\s*-", r)]
+            cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
+            out.append("<table>" + "".join(
+                "<tr>" + "".join(f"<{'th' if i == 0 else 'td'}>{inline(c)}</{'th' if i == 0 else 'td'}>" for c in row) + "</tr>"
+                for i, row in enumerate(cells)) + "</table>")
+            table.clear()
+    for line in md.splitlines():
+        if line.startswith("|"):
+            table.append(line)
+            continue
+        flush()
+        if line.startswith("# "):
+            out.append(f"<h1>{inline(line[2:])}</h1>")
+        elif line.startswith("## "):
+            out.append(f"<h2>{inline(line[3:])}</h2>")
+        elif line.startswith("> "):
+            out.append(f"<blockquote>{inline(line[2:])}</blockquote>")
+        elif line.strip():
+            out.append(f"<p>{inline(line)}</p>")
+    flush()
+    return "\n".join(out)
+
+
+@router.get("/terms")
+def terms():
+    from fastapi.responses import HTMLResponse
+    with open(TERMS_MD, encoding="utf-8") as f:
+        body = _md_to_html(f.read())
+    page = ("<!DOCTYPE html><html lang='uz'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>Creator Rewards — Ishtirok etish shartlari</title><style>body{font:16px/1.55 system-ui,sans-serif;max-width:760px;"
+            "margin:0 auto;padding:20px;color:#1F2A3C;background:#FFF8EF}h1{font-size:24px}h2{font-size:19px;margin-top:28px}"
+            "table{border-collapse:collapse;width:100%;font-size:14.5px}td,th{border:1px solid #E8D9C8;padding:8px;text-align:left;"
+            "vertical-align:top}th{background:#FDEBDC}blockquote{margin:0;padding:10px 14px;background:#FDEBDC;border-radius:10px}"
+            "</style></head><body>" + body + "</body></html>")
+    return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/api/me")
@@ -201,6 +251,19 @@ def admin_action(payload: dict = Body(...), x_init_data: str = Header(default=""
         if a == "level":
             lv = cb.run_in_bot(cb.act_set_level(b, int(payload["tg_id"]), payload.get("level") or None, admin_id))
             return {"ok": True, "message": f"Daraja: {lv}"}
+        if a == "product_request":
+            cb.run_in_bot(cb.act_decide_product(b, int(payload["request_id"]), bool(payload.get("approve")), admin_id,
+                                                str(payload.get("note", ""))))
+            return {"ok": True, "message": "Saqlandi"}
+        if a == "product_add":
+            _store().add_product(str(payload.get("name", "")), admin_id)
+            return {"ok": True, "message": "Mahsulot ro'yxatga qo'shildi"}
+        if a == "product_active":
+            _store().set_product_active(int(payload["product_id"]), bool(payload.get("active")), admin_id)
+            return {"ok": True, "message": "Saqlandi"}
+        if a == "vet":
+            res = cb.run_in_bot(cb.run_vetting(b, int(payload["tg_id"])))
+            return {"ok": True, "message": f"Baho: {res['score']}/10" if res else "Ochiq ma'lumotni olib bo'lmadi"}
         if a == "status":
             _store().set_status(int(payload["tg_id"]), payload.get("status"), admin_id)
             return {"ok": True, "message": "Holat saqlandi"}

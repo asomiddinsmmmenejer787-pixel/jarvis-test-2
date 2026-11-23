@@ -20,6 +20,8 @@ STEP_VIEWS = 1_000
 STEP_REWARD = 4_000
 CAP_VIEWS = 100_000
 MAX_REWARD = BASE_REWARD + (CAP_VIEWS - MIN_VIEWS) // STEP_VIEWS * STEP_REWARD  # 460 000
+MILLION_VIEWS = 1_000_000
+MILLION_USD = 200          # 1 000 000 ko'rish: 200$ ekvivalenti so'mda (MB kursi), 460 000 o'rniga
 
 TRACKING_DAYS = 30
 VOUCHER_DAYS = 30
@@ -29,9 +31,17 @@ TASHKENT = timezone(timedelta(hours=5))
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 0/O, 1/I kabi chalkash belgilarsiz
 
 
-def reward_for_views(views: int) -> int:
-    """30 kunlik ko'rishlar soni uchun vaucher summasi (so'm)."""
+def million_reward(usd_rate) -> int:
+    """200$ ekvivalenti so'mda, 1 000 so'mgacha yaxlitlangan."""
+    return int(round(MILLION_USD * float(usd_rate) / 1000.0)) * 1000
+
+
+def reward_for_views(views: int, usd_rate=None) -> int:
+    """30 kunlik ko'rishlar soni uchun vaucher summasi (so'm).
+    1 000 000 va undan ko'p ko'rish: 200$ (usd_rate — MB kursi). Kurs berilmasa, 460 000 qaytadi."""
     views = int(views or 0)
+    if views >= MILLION_VIEWS and usd_rate:
+        return million_reward(usd_rate)
     if views < MIN_VIEWS:
         return 0
     steps = (min(views, CAP_VIEWS) - MIN_VIEWS) // STEP_VIEWS
@@ -43,8 +53,10 @@ def views_to_next_step(views: int):
     views = int(views or 0)
     if views < MIN_VIEWS:
         return MIN_VIEWS - views
-    if views >= CAP_VIEWS:
+    if views >= MILLION_VIEWS:
         return None
+    if views >= CAP_VIEWS:
+        return MILLION_VIEWS - views  # endi keyingi maqsad — 1 000 000 (200$)
     return STEP_VIEWS - views % STEP_VIEWS
 
 
