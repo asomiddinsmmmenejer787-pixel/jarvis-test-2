@@ -131,7 +131,23 @@ def test_million_views_uses_rate_on_approval_day():
     assert v["nominal"] == 2_540_000 and s.reward(rw["id"])["usd_rate"] == 12_700.0
 
 
+def test_products_off_by_default():
+    os.environ.pop("CREATOR_PRODUCTS", None)
+    s = new_store()
+    tg = approved_creator(s)
+    rid = s.add_reel(tg, "https://www.instagram.com/reel/NOPROD1/")
+    assert s.reel(rid)["product"] is None and s.admin_overview()["products_enabled"] is False
+
+
 def test_product_permission_required():
+    os.environ["CREATOR_PRODUCTS"] = "1"
+    try:
+        _product_permission_checks()
+    finally:
+        os.environ.pop("CREATOR_PRODUCTS", None)
+
+
+def _product_permission_checks():
     s = new_store()
     tg = approved_creator(s)
     try:

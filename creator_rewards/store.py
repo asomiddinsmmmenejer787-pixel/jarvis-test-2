@@ -86,6 +86,11 @@ MIGRATIONS = [
     ("reels", "request_id", "INTEGER"),
 ]
 LEVELS = ("Yangi", "Faol", "Hamkor")
+
+
+def products_enabled():
+    """Mahsulotga ruxsat bo'limi — keyinroq yoqiladi (CREATOR_PRODUCTS=1)."""
+    return (os.environ.get("CREATOR_PRODUCTS") or "").strip() in ("1", "true", "yes")
 EXPIRY_REMIND_DAYS = (7, 3, 1)
 
 
@@ -214,9 +219,11 @@ class Store:
         c = self.creator(tg_id)
         if not c or c["status"] != "approved":
             raise StoreError("Reels qo'shish uchun arizangiz tasdiqlangan bo'lishi kerak.")
-        req = self._one("SELECT * FROM product_requests WHERE id=? AND tg_id=?", (request_id or 0, tg_id))
-        if not req or req["status"] != "approved":
-            raise StoreError("Avval mahsulotga ruxsat oling: «🧸 Mahsulot so'rash».")
+        req = None
+        if request_id is not None or products_enabled():
+            req = self._one("SELECT * FROM product_requests WHERE id=? AND tg_id=?", (request_id or 0, tg_id))
+            if not req or req["status"] != "approved":
+                raise StoreError("Avval mahsulotga ruxsat oling: «🧸 Mahsulot so'rash».")
         m = REEL_RE.search(url or "")
         if not m:
             raise StoreError("Bu Instagram Reels havolasi emas. Masalan: https://www.instagram.com/reel/ABC123/")
@@ -228,9 +235,11 @@ class Store:
             cur = db.execute(
                 "INSERT INTO reels(tg_id,url,shortcode,posted_at,ends_at,created_at,product,request_id) VALUES(?,?,?,?,?,?,?,?)",
                 (tg_id, f"https://www.instagram.com/reel/{code}/", code, R.to_iso(start),
-                 R.to_iso(start + timedelta(days=R.TRACKING_DAYS)), R.to_iso(R.utcnow()), req["product"], req["id"]))
-            db.execute("UPDATE product_requests SET status='used', reel_id=? WHERE id=?", (cur.lastrowid, req["id"]))
-            self._audit(db, tg_id, "reel_added", shortcode=code, product=req["product"])
+                 R.to_iso(start + timedelta(days=R.TRACKING_DAYS)), R.to_iso(R.utcnow()),
+                 req["product"] if req else None, req["id"] if req else None))
+            if req:
+                db.execute("UPDATE product_requests SET status='used', reel_id=? WHERE id=?", (cur.lastrowid, req["id"]))
+            self._audit(db, tg_id, "reel_added", shortcode=code, product=req["product"] if req else None)
             return cur.lastrowid
 
     def reel(self, reel_id):
@@ -628,6 +637,7 @@ class Store:
                 "SELECT p.*, c.instagram, c.first_name FROM product_requests p JOIN creators c ON c.tg_id=p.tg_id "
                 "WHERE p.status='pending' ORDER BY p.id"),
             "products": self.products(),
+            "products_enabled": products_enabled(),
             "brief": self.get_setting("brief", ""),
         }
 

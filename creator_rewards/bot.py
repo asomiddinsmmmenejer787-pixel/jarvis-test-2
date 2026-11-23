@@ -25,7 +25,7 @@ from . import fx
 from . import rewards as R
 from . import screens
 from . import vet
-from .store import LEVELS, Store, StoreError
+from .store import LEVELS, Store, StoreError, products_enabled
 
 log = logging.getLogger("creator_bot")
 TICK_SEC = int(os.environ.get("CREATOR_TICK_SEC", "600") or 600)
@@ -41,7 +41,7 @@ TERMS_VERSION = "1.0"
 RULES_TEXT = (
     "Asosiy shartlar (to'liq matn — «Shartlarni o'qish» tugmasida):\n"
     "• 18 yoshdan katta bo'lishingiz, Instagram akkauntingiz professional va ochiq bo'lishi kerak.\n"
-    "• Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi: avval botda mahsulotga ruxsat olasiz.\n"
+    "• Qaysi mahsulot suratga olinishini Bolalar Dunyosi hal qiladi va do'kon xodimi bilan kelishiladi.\n"
     "• Video do'konda olinadi, 30–45 soniya, 9:16, reklama sifatida belgilanadi.\n"
     "• Reels Bolalar Dunyosi bilan Collab qilib joylanadi, havola 24 soat ichida botga yuboriladi, video o'chirilmaydi.\n"
     "• Mukofot 30 kun ichidagi ko'rishlar uchun: 10 000 ko'rish = 100 000 so'm, keyin har 1 000 ko'rishga +4 000 so'm, "
@@ -104,8 +104,12 @@ def bot():
 def main_keyboard():
     url = hud_url()
     first = [KeyboardButton(BTN_HUD, web_app=WebAppInfo(url=url))] if url else []
-    rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_PRODUCT), KeyboardButton(BTN_REEL)],
-            [KeyboardButton(BTN_SHOT), KeyboardButton(BTN_CHAT)]]
+    if products_enabled():
+        rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_PRODUCT), KeyboardButton(BTN_REEL)],
+                [KeyboardButton(BTN_SHOT), KeyboardButton(BTN_CHAT)]]
+    else:
+        rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_REEL), KeyboardButton(BTN_SHOT)],
+                [KeyboardButton(BTN_CHAT)]]
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
@@ -365,14 +369,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                             reply_markup=main_keyboard())
             await notify_product_request(context.bot, req_id)
             return
-        if state.startswith("reel:"):
-            rid = st.add_reel(u.id, text, request_id=int(state.split(":")[1]))
+        if state == "reel" or state.startswith("reel:"):
+            rid = st.add_reel(u.id, text, request_id=int(state.split(":")[1]) if ":" in state else None)
             context.user_data.pop("await", None)
             r = st.reel(rid)
             await update.message.reply_text(
                 f"✅ Video ro'yxatga olindi.\nKuzatuv {R.tashkent_str(r['ends_at'])} gacha davom etadi.\n"
                 "1, 7, 14 va 30-kunlarda Insights skrinshotini so'rayman.", reply_markup=main_keyboard())
-            await notify_admins(context.bot, f"🎬 Yangi Reels: @{c['instagram']} — {r['product']}\n{r['url']}")
+            await notify_admins(context.bot, f"🎬 Yangi Reels: @{c['instagram']}"
+                                             + (f" — {r['product']}" if r.get("product") else "") + f"\n{r['url']}")
             return
         if state.startswith("views:"):
             _, rid, path = state.split(":", 2)
@@ -391,7 +396,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if c["status"] != "approved":
         await start(update, context)
         return
-    if text == BTN_PRODUCT:
+    if text == BTN_PRODUCT and products_enabled():
         products = st.products(active_only=True)
         kb = [[InlineKeyboardButton(p["name"], callback_data=f"cr|preq|{p['id']}")] for p in products[:20]]
         kb.append([InlineKeyboardButton("✏️ Boshqa mahsulot (yozib yuborish)", callback_data="cr|pother")])
@@ -399,6 +404,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(("📝 Joriy topshiriq: " + brief + "\n\n" if brief else "")
                                         + "Qaysi mahsulotni suratga olmoqchisiz? Ruxsatni Bolalar Dunyosi beradi.",
                                         reply_markup=InlineKeyboardMarkup(kb))
+    elif text == BTN_REEL and not products_enabled():
+        context.user_data["await"] = "reel"
+        brief = st.get_setting("brief", "")
+        await update.message.reply_text(("📝 Joriy topshiriq: " + brief + "\n\n" if brief else "")
+                                        + "Instagram'da joylagan Collab Reels havolasini yuboring.")
     elif text == BTN_REEL:
         approved = st.approved_requests(u.id)
         if not approved:
