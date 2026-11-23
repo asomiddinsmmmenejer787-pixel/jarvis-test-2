@@ -104,7 +104,9 @@ def bot():
 
 def main_keyboard():
     url = hud_url()
-    first = [KeyboardButton(BTN_HUD, web_app=WebAppInfo(url=url))] if url else []
+    # Pastki klaviaturadagi web_app tugmasi Telegram ma'lumotini (initData) bermaydi — Kabinet namuna rejimida
+    # ochilib qolardi. Shuning uchun oddiy tugma: bosilganda ichki "Kabinetni ochish" tugmasi yuboriladi.
+    first = [KeyboardButton(BTN_HUD)] if url else []
     if products_enabled():
         rows = [first + [KeyboardButton(BTN_VOUCHER)], [KeyboardButton(BTN_PRODUCT), KeyboardButton(BTN_REEL)],
                 [KeyboardButton(BTN_SHOT), KeyboardButton(BTN_CHAT)]]
@@ -511,6 +513,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton(f"{r['shortcode']} · {R.tashkent_str(r['posted_at'], False)}",
                                     callback_data=f"cr|shot|{r['id']}")] for r in reels[:10]]
         await update.message.reply_text("Qaysi video uchun?", reply_markup=InlineKeyboardMarkup(kb))
+    elif text == BTN_HUD:
+        url = hud_url()
+        await update.message.reply_text("Kabinetingiz:", reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("📱 Kabinetni ochish", web_app=WebAppInfo(url=url))]]) if url else None)
     elif text == BTN_VOUCHER:
         await update.message.reply_text(await voucher_text(u.id))
     elif text == BTN_CHAT:
