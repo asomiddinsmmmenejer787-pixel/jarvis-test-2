@@ -17,15 +17,17 @@ import json
 import logging
 import os
 import re
+import contextvars
 import threading
 import time
 import uuid
 from datetime import datetime
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+import accounts
 import ads_api
 import analytics
 import audit
@@ -40,11 +42,18 @@ from instagram_api import InstagramError
 
 log = logging.getLogger("webapp")
 
-router = APIRouter()
+async def _account_dep(x_account: str = Header(default="")):
+    """HUD tepasida tanlangan profil (X-Account: main | toy). Shu so'rovdagi Instagram, do'kon,
+    xotira va komentlar shu akkauntga tegishli bo'ladi."""
+    accounts.set_current(x_account)
+
+
+router = APIRouter(dependencies=[Depends(_account_dep)])
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
 INIT_DATA_MAX_AGE = 24 * 3600
 
 _ctx = {"jarvis": None, "responder": None, "get_owner_id": None, "bot_token": "", "started": time.time()}
+_acc_objs = {}   # akkaunt -> {"responder": ..., "chat": ...} (asosiy akkaunt _ctx'da)
 _jobs = {}
 _jobs_lock = threading.Lock()
 _cache = {}
@@ -52,6 +61,25 @@ _cache = {}
 
 def init(jarvis, responder, get_owner_id, bot_token, chat=None):
     _ctx.update(jarvis=jarvis, responder=responder, get_owner_id=get_owner_id, bot_token=bot_token, chat=chat)
+
+
+def set_account(acc, responder, chat=None):
+    """Qo'shimcha akkaunt (o'yinchoq profili) javob tizimlarini ulaydi."""
+    _acc_objs[accounts.normalize(acc)] = {"responder": responder, "chat": chat}
+
+
+def _resp():
+    acc = accounts.current()
+    if acc == accounts.MAIN:
+        return _ctx.get("responder")
+    return (_acc_objs.get(acc) or {}).get("responder")
+
+
+def _chat():
+    acc = accounts.current()
+    if acc == accounts.MAIN:
+        return _ctx.get("chat")
+    return (_acc_objs.get(acc) or {}).get("chat")
 
 
 def webapp_url():
@@ -102,6 +130,7 @@ def require_owner(init_data):
 # ---------- yordamchilar ----------
 
 def _cached(key, ttl, fn):
+    key = f"{accounts.current()}:{key}"
     item = _cache.get(key)
     if item and time.time() - item[0] < ttl:
         return item[1]
@@ -121,12 +150,12 @@ def _jsonable(obj):
 
 
 def _report_path():
-    return os.path.join(config.DATA_DIR, "last_report.json")
+    return accounts.path("last_report.json")
 
 
 def _save_report(report):
     try:
-        os.makedirs(config.DATA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(_report_path()), exist_ok=True)
         with open(_report_path() + ".tmp", "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False)
         os.replace(_report_path() + ".tmp", _report_path())
@@ -245,7 +274,8 @@ def start_job(kind, steps, fn):
             log.exception("Mini ilova jarayonida xato (%s)", kind)
             job.finish(error=f"Kutilmagan xato: {type(e).__name__}")
 
-    threading.Thread(target=run, daemon=True, name=f"job-{kind}").start()
+    ctx = contextvars.copy_context()   # job ham shu profil uchun ishlaydi
+    threading.Thread(target=ctx.run, args=(run,), daemon=True, name=f"job-{kind}").start()
     return job
 
 
@@ -308,7 +338,7 @@ def audit_page(key: str, since: int = 0, limit: int = 300, kinds: str = ""):
     if responder is not None:
         status = responder.status()
         status["lessons"] = brain.get_lessons()
-        chat = _ctx.get("chat")
+        chat = _chat()
         status["chat_mode"] = chat.mode if chat is not None else None
     ks = tuple(k for k in kinds.split(",") if k) or None
     text = audit.text_dump(since, max(1, min(1000, limit)), ks, status)
@@ -322,7 +352,7 @@ def audit_page(key: str, since: int = 0, limit: int = 300, kinds: str = ""):
         parts.append("\nRUXSAT KUTAYOTGAN DIREKT (komentdan keyin):")
         parts += [row(i, ("cid", "created", "username", "comment", "topic", "reason", "text"))
                   for i in responder.get_dm_pending()]
-        chat = _ctx.get("chat")
+        chat = _chat()
         if chat is not None:
             parts.append("\nRUXSAT KUTAYOTGAN DIREKT SUHBATLAR:")
             parts += [row(i, ("key", "created", "username", "history", "text", "kind", "reason"))
@@ -338,11 +368,61 @@ async def privacy_page():
 
 # ---------- API ----------
 
+def _card_profile():
+    """Profil kartasi uchun: username, obunachilar, rasm (rasm maydoni bo'lmasa oddiy profil)."""
+    try:
+        return ig._request("GET", "me", {"fields": "username,name,followers_count,media_count,profile_picture_url"})
+    except InstagramError as e:
+        if e.fatal or e.rate_limited:
+            raise
+        return ig.get_profile()
+
+
+def account_card(acc):
+    """HUD tepasidagi profil kartasi ma'lumoti (bitta akkaunt)."""
+    with accounts.use(acc):
+        r, c = _resp(), _chat()
+        out = {"acc": acc, "title": accounts.TITLES[acc], "icon": accounts.ICONS[acc],
+               "username": accounts.DEFAULT_USERNAMES[acc], "connected": ig.is_configured(),
+               "enabled": r is not None}
+        if r is not None:
+            st = r.status()
+            cst = c.status() if c is not None else {}
+            out.update(mode=st["mode"], dm_mode=st["dm_mode"], chat_mode=cst.get("mode"),
+                       sent_today=st["sent_today"], limit_day=st["limit_day"],
+                       pending=st["pending"] + st["dm_pending"] + int(cst.get("pending") or 0),
+                       last_run=(st.get("last_run") or {}).get("time"))
+        if out["connected"]:
+            try:
+                p = _cached("card", 300, _card_profile)
+                out.update(username=p.get("username") or out["username"], name=p.get("name"),
+                           followers=p.get("followers_count"), media_count=p.get("media_count"),
+                           picture=p.get("profile_picture_url"))
+            except InstagramError as e:
+                out["error"] = _ig_error(e)
+            try:
+                v = followers_live.view()
+                out["followers_today"] = (v.get("today") or {}).get("net")
+                if out.get("followers") is None:
+                    out["followers"] = v.get("count")
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+
+
+@router.get("/api/accounts")
+def api_accounts(x_init_data: str = Header(default="")):
+    """Ikkala profil: HUD tepasida doim ko'rinib turadi."""
+    require_owner(x_init_data)
+    return JSONResponse(_jsonable({"current": accounts.current(),
+                                   "accounts": [account_card(a) for a in accounts.ALL]}))
+
+
 @router.get("/api/status")
 def api_status(x_init_data: str = Header(default="")):
     require_owner(x_init_data)
     ai = _ctx["jarvis"].ai_provider
-    responder = _ctx["responder"]
+    responder = _resp()
     out = {
         "uptime": int(time.time() - _ctx["started"]),
         "ai": {"provider": type(ai).__name__.replace("Provider", ""),
@@ -458,7 +538,7 @@ async def api_chat(request: Request, x_init_data: str = Header(default="")):
         raise HTTPException(status_code=400, detail="Tokenni bu yerga emas, botga /igtoken bilan yuboring")
 
     def work(job):
-        responder, chat = _ctx.get("responder"), _ctx.get("chat")
+        responder, chat = _resp(), _chat()
         if responder is not None and not text.startswith("/") and ig.is_configured():
             try:
                 status, last_post, hist = brain.build_context(responder, chat, _ctx["jarvis"].memory)
@@ -480,7 +560,7 @@ async def api_chat(request: Request, x_init_data: str = Header(default="")):
                                 brain.log_event(ev)
                         except Exception:  # noqa: BLE001
                             log.exception("Qayta tekshiruv xatosi")
-                    threading.Thread(target=bg, daemon=True).start()
+                    threading.Thread(target=contextvars.copy_context().run, args=(bg,), daemon=True).start()
                 return {"reply": reply}
         reply = _ctx["jarvis"].handle(text, progress=job.step)
         answer, err = _ai_text(reply)
@@ -534,13 +614,13 @@ def api_stories(x_init_data: str = Header(default="")):
 @router.get("/api/comments")
 def api_comments(x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     if responder is None:
         return {"enabled": False}
     from auto_reply import CATEGORY_NAMES
     items = [{**p, "category_name": CATEGORY_NAMES.get(p.get("category"), p.get("category"))}
              for p in responder.get_pending()]
-    chat = _ctx.get("chat")
+    chat = _chat()
     return {"enabled": True, "status": responder.status(), "pending": items,
             "dm_pending": responder.get_dm_pending(),
             "chat": {"status": chat.status(), "pending": chat.get_pending()} if chat else None}
@@ -549,7 +629,7 @@ def api_comments(x_init_data: str = Header(default="")):
 @router.post("/api/comments/mode")
 async def api_comments_mode(request: Request, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     mode = str((await request.json()).get("mode", ""))
     if responder is None or mode not in ("on", "off", "test"):
         raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
@@ -560,7 +640,7 @@ async def api_comments_mode(request: Request, x_init_data: str = Header(default=
 @router.post("/api/comments/limit")
 async def api_comments_limit(request: Request, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     if responder is None:
         raise HTTPException(status_code=400, detail="Komentga javob tizimi o'chiq")
     try:
@@ -576,7 +656,7 @@ async def api_comments_limit(request: Request, x_init_data: str = Header(default
 async def api_comments_saving(request: Request, x_init_data: str = Header(default="")):
     """Limitni tejashni yoqish/o'chirish (maqtov va belgilashlarga javobni cheklash)."""
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     if responder is None:
         raise HTTPException(status_code=400, detail="Komentga javob tizimi o'chiq")
     on = (await request.json()).get("on")
@@ -630,7 +710,7 @@ def api_followers(x_init_data: str = Header(default="")):
 @router.post("/api/comments/{cid}")
 def api_comments_action(cid: str, body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     if responder is None:
         raise HTTPException(status_code=400, detail="Komentlarga javob tizimi o'chiq")
     action = body.get("action")
@@ -654,7 +734,7 @@ def api_comments_action(cid: str, body: dict, x_init_data: str = Header(default=
 @router.post("/api/dm/mode")
 async def api_dm_mode(request: Request, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     mode = str((await request.json()).get("mode", ""))
     if responder is None or mode not in ("approve", "auto", "off"):
         raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
@@ -665,7 +745,7 @@ async def api_dm_mode(request: Request, x_init_data: str = Header(default="")):
 @router.post("/api/dm/{cid}")
 def api_dm_action(cid: str, body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    responder = _ctx["responder"]
+    responder = _resp()
     if responder is None:
         raise HTTPException(status_code=400, detail="Tizim o'chiq")
     try:
@@ -819,7 +899,7 @@ def api_shop(body: dict, x_init_data: str = Header(default="")):
 @router.post("/api/inbox/mode")
 async def api_inbox_mode(request: Request, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    chat = _ctx.get("chat")
+    chat = _chat()
     mode = str((await request.json()).get("mode", ""))
     if chat is None or mode not in ("approve", "auto", "off"):
         raise HTTPException(status_code=400, detail="Noto'g'ri rejim")
@@ -830,7 +910,7 @@ async def api_inbox_mode(request: Request, x_init_data: str = Header(default="")
 @router.post("/api/inbox/{key}")
 def api_inbox_action(key: str, body: dict, x_init_data: str = Header(default="")):
     require_owner(x_init_data)
-    chat = _ctx.get("chat")
+    chat = _chat()
     if chat is None:
         raise HTTPException(status_code=400, detail="Tizim o'chiq")
     try:

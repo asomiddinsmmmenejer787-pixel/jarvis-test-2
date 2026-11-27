@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 
 import brain
 import catalog
+import accounts
 import config
 import humanizer_uz
 from auto_reply import PROFANITY_RE
@@ -119,7 +120,7 @@ class DialogMemory:
     """Direktdagi hamma yozishmalar (javob berilgan-berilmaganidan qat'i nazar), o'rganish uchun."""
 
     def __init__(self, path=None):
-        self.path = path or os.path.join(config.DATA_DIR, "dm_memory.json")
+        self.path = path or accounts.path("dm_memory.json")
         self.lock = threading.RLock()
         try:
             with open(self.path, encoding="utf-8") as f:
@@ -261,7 +262,7 @@ def _key(mid):
     return hashlib.sha1(str(mid).encode()).hexdigest()[:12]
 
 
-_posts_cache = {"at": 0, "posts": []}
+_posts_cache = accounts.Scoped(lambda: {"at": 0, "posts": []})
 
 
 def knowledge():
@@ -309,7 +310,7 @@ def knowledge():
 
 
 _SHORT_RE = re.compile(r"instagram\.com/(?:[\w.]+/)?(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)")
-_link_posts = {"at": 0, "posts": []}
+_link_posts = accounts.Scoped(lambda: {"at": 0, "posts": []})
 
 
 def _our_post_by_link(text):
@@ -425,7 +426,7 @@ def describe(m):
 class DirectChat:
     def __init__(self, ai, state_path=None):
         self.ai = ai
-        self.path = state_path or os.path.join(config.DATA_DIR, "dm_chat_state.json")
+        self.path = state_path or accounts.path("dm_chat_state.json")
         self.lock = threading.RLock()
         self.last_run = None
         self._me = None

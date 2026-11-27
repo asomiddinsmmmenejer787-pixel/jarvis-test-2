@@ -19,6 +19,7 @@ import re
 import threading
 from datetime import datetime, timedelta, timezone
 
+import accounts
 import config
 
 log = logging.getLogger("catalog")
@@ -34,7 +35,23 @@ POST_FIELDS = ("title", "price", "info")
 
 
 def _path():
-    return os.path.join(config.DATA_DIR, "catalog.json")
+    return accounts.path("catalog.json")
+
+
+def _seed_from_main():
+    """O'yinchoq profilining katalogi hali yo'q bo'lsa: do'kon ma'lumoti (manzil, telefon, ish vaqti)
+    va egasining umumiy ko'rsatmalari asosiy sahifadan olinadi. Mahsulot, narx va xotira
+    olinmaydi: ular har akkauntda alohida (bir akkaunt narxi ikkinchisida aytilmasin)."""
+    if accounts.current() == accounts.MAIN or os.path.exists(_path()):
+        return {}
+    try:
+        with open(accounts.path("catalog.json", accounts.MAIN), encoding="utf-8") as f:
+            main = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(main, dict):
+        return {}
+    return {"shop": dict(main.get("shop") or {}), "lessons": list(main.get("lessons") or [])}
 
 
 def load():
@@ -43,7 +60,7 @@ def load():
             with open(_path(), encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, ValueError):
-            data = {}
+            data = _seed_from_main()
         data.setdefault("shop", {})
         data.setdefault("posts", {})
         data.setdefault("memory", [])
@@ -57,7 +74,7 @@ def load():
 
 def save(data):
     with _lock:
-        os.makedirs(config.DATA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(_path()), exist_ok=True)
         tmp = _path() + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1)

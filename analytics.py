@@ -17,6 +17,7 @@ import re
 import statistics
 from datetime import datetime, timedelta, timezone
 
+import accounts
 import config
 import instagram_api as ig
 from instagram_api import InstagramError
@@ -143,7 +144,7 @@ def _safe(fn, label, errors, default=None):
 # ---------- obunachilar tarixi ----------
 
 def _history_path():
-    return os.path.join(config.DATA_DIR, "ig_history.json")
+    return accounts.path("ig_history.json")
 
 
 def record_followers(count):

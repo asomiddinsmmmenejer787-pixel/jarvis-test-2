@@ -29,6 +29,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import catalog
+import accounts
 import config
 import audit
 import brain
@@ -772,10 +773,11 @@ class State:
 # ---------- asosiy klass ----------
 
 class CommentResponder:
-    def __init__(self, ai, state_path=None):
-        """ai: generate_json(system, message) metodiga ega provider (GeminiProvider)."""
+    def __init__(self, ai, state_path=None, default_mode=None):
+        """ai: generate_json(system, message) metodiga ega provider (GeminiProvider).
+        default_mode: holat fayli hali yo'q bo'lsa boshlang'ich rejim (AUTO_REPLY_MODE o'rniga)."""
         self.ai = ai
-        self.state = State(state_path or os.path.join(config.DATA_DIR, "auto_reply_state.json"))
+        self.state = State(state_path or accounts.path("auto_reply_state.json"))
         self.lock = threading.RLock()
         self.last_run = None
         self._upcoming_checked = 0       # kelayotgan post (21.11) oxirgi tekshirilgan vaqt
@@ -786,7 +788,7 @@ class CommentResponder:
         self._recent = deque(maxlen=20)   # oxirgi javoblar (takrorlamaslik uchun)
         self._run_lock = threading.Lock()  # fon tekshiruvi va qayta tekshiruv bir vaqtda ishlamasin
         if self.state.mode is None:
-            env_mode = os.environ.get("AUTO_REPLY_MODE", "test").strip().lower()
+            env_mode = (default_mode or os.environ.get("AUTO_REPLY_MODE", "test")).strip().lower()
             self.state.mode = env_mode if env_mode in MODES else "test"
         if self.state.dm_mode is None:
             env_dm = os.environ.get("DM_MODE", "auto").strip().lower()
@@ -1234,6 +1236,10 @@ class CommentResponder:
             log.warning("Collab postlarni o'qib bo'lmadi (Instagram bermadi): %s", e)
             return self._collab
         prev = {str(p.get("id")) for p in self._collab}
+        # Jarvis ulangan boshqa akkauntimiz joylagan collab postga o'sha akkaunt o'zi javob beradi
+        # (masalan o'yinchoq profili asosiy sahifa videosida hammuallif): ikki marta javob yozilmasin.
+        ours = accounts.other_connected_usernames()
+        posts = [p for p in posts if (p.get("username") or "").lower() not in ours]
         self._collab = [{**p, "_collab": (p.get("username") or "?").lower()} for p in posts if p.get("id")]
         if {str(p["id"]) for p in self._collab} != prev:
             log.info("Collab postlar: %s ta (%s)", len(self._collab),

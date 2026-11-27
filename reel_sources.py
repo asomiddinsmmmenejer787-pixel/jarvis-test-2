@@ -15,6 +15,7 @@ import os
 import threading
 import time
 
+import accounts
 import config
 import followers_live
 import instagram_api as ig
@@ -29,7 +30,7 @@ _next_try = 0            # keyingi urinish vaqti (xato bo'lsa ham keyingi urinis
 
 
 def _path():
-    return os.path.join(config.DATA_DIR, "reel_sources.json")
+    return accounts.path("reel_sources.json")
 
 
 def _load():
@@ -46,7 +47,7 @@ def _load():
 
 
 def _save(d):
-    os.makedirs(config.DATA_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(_path()), exist_ok=True)
     with open(_path() + ".tmp", "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False)
     os.replace(_path() + ".tmp", _path())

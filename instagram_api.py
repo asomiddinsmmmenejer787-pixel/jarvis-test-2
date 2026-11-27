@@ -22,6 +22,7 @@ import time
 
 import requests
 
+import accounts
 import config
 
 log = logging.getLogger("instagram_api")
@@ -81,11 +82,11 @@ class InstagramError(RuntimeError):
 # ---------- token ----------
 
 def _token_file():
-    return os.path.join(config.DATA_DIR, "instagram_token.json")
+    return accounts.path("instagram_token.json")
 
 
 def _env_token():
-    return (os.environ.get("INSTAGRAM_ACCESS_TOKEN") or "").strip()
+    return accounts.env_token()
 
 
 def _fingerprint(token):
@@ -171,6 +172,22 @@ def refresh_token_if_needed(every_days=20):
         return True
 
 
+def token_username(new_token):
+    """Token qaysi Instagram akkauntniki: username (kichik harflarda). Saqlamaydi."""
+    new_token = (new_token or "").strip()
+    if len(new_token) < 20 or " " in new_token:
+        raise InstagramError("Bu token emasga o'xshaydi")
+    try:
+        r = requests.get(f"{BASE}/me", params={"fields": "username", "access_token": new_token}, timeout=TIMEOUT)
+        data = r.json()
+    except (requests.RequestException, ValueError) as e:
+        raise InstagramError(f"Instagram bilan bog'lanib bo'lmadi ({type(e).__name__})")
+    if not isinstance(data, dict) or data.get("error") or not data.get("username"):
+        msg = ((data or {}).get("error") or {}).get("message", "noma'lum xato") if isinstance(data, dict) else "noma'lum xato"
+        raise InstagramError(f"Token ishlamadi: {msg}", fatal=True, code=190)
+    return str(data["username"]).lower()
+
+
 def set_token(new_token):
     """
     Egasi Telegram orqali yuborgan yangi tokenni tekshiradi va saqlaydi.
@@ -197,7 +214,7 @@ def set_token(new_token):
             "token": new_token,
             "refreshed_at": time.time(),
         })
-    log.info("Instagram token Telegram orqali yangilandi.")
+    log.info("Instagram token Telegram orqali yangilandi (%s).", accounts.current())
     return data["username"]
 
 
@@ -428,7 +445,7 @@ def get_audience():
 # ---------- komentlar ----------
 
 COMMENT_FIELDS_FROM = "id,text,username,from{id,username},timestamp,like_count,replies{id,username,text,timestamp}"
-_from_ok = {"value": True}
+_from_ok = accounts.Scoped(lambda: {"value": True})
 
 
 def get_all_comments(media_id, fields=None, limit=500):
@@ -460,7 +477,7 @@ def hide_comment(comment_id, hide=True):
 
 # ---------- direkt (private reply) ----------
 
-_ig_user_id = {"value": None}
+_ig_user_id = accounts.Scoped(lambda: {"value": None})
 
 
 def _my_ig_id():
@@ -492,7 +509,7 @@ def send_private_reply(comment_id, text):
 _MSG_FIELDS = "id,created_time,from,to,message"
 # Ulashilgan post/reel va storyga javoblar ham kerak (mijoz ko'pincha reelni ulashib "narxi?" deydi)
 _MSG_FIELDS_RICH = "id,created_time,from,to,message,attachments,shares,story"
-_rich_ok = {"value": True}
+_rich_ok = accounts.Scoped(lambda: {"value": True})
 
 
 def get_conversations(limit=15, per_conv=10):
@@ -540,7 +557,7 @@ _sent_lock = threading.Lock()
 
 
 def _sent_path():
-    return os.path.join(config.DATA_DIR, "sent_messages.json")
+    return accounts.path("sent_messages.json")
 
 
 def _norm(text):
@@ -568,7 +585,7 @@ def record_sent(res, text):
         if str(text or "").strip():
             d["texts"] = (d["texts"] + [_norm(text)])[-3000:]
         try:
-            os.makedirs(config.DATA_DIR, exist_ok=True)
+            os.makedirs(os.path.dirname(_sent_path()), exist_ok=True)
             with open(_sent_path() + ".tmp", "w", encoding="utf-8") as f:
                 json.dump(d, f)
             os.replace(_sent_path() + ".tmp", _sent_path())

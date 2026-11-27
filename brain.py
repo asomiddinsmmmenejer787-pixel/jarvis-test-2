@@ -21,6 +21,7 @@ import time
 from datetime import datetime
 
 import catalog
+import accounts
 import config
 import instagram_api as ig
 
@@ -71,7 +72,7 @@ def lessons_block():
 # ---------- jurnal ----------
 
 def _jpath():
-    return os.path.join(config.DATA_DIR, "journal.json")
+    return accounts.path("journal.json")
 
 
 def _jload():
@@ -94,7 +95,7 @@ def log_entry(text):
         items.append({"t": int(time.time()), "x": str(text)[:300]})
         items = items[-MAX_JOURNAL:]
         try:
-            os.makedirs(config.DATA_DIR, exist_ok=True)
+            os.makedirs(os.path.dirname(_jpath()), exist_ok=True)
             with open(_jpath() + ".tmp", "w", encoding="utf-8") as f:
                 json.dump(items, f, ensure_ascii=False)
             os.replace(_jpath() + ".tmp", _jpath())

@@ -15,6 +15,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
+import accounts
 import config
 import instagram_api as ig
 from catalog import TASHKENT
@@ -23,12 +24,12 @@ log = logging.getLogger("followers_live")
 _lock = threading.Lock()
 KEEP_DAYS = 8
 HEARTBEAT = 600          # o'zgarish bo'lmasa ham grafik uchun 10 daqiqada bir nuqta
-_last_fetch = [0.0]
-_insights = {"t": 0.0, "v": None, "err": None}
+_last_fetch = accounts.Scoped(lambda: [0.0])
+_insights = accounts.Scoped(lambda: {"t": 0.0, "v": None, "err": None})
 
 
 def _path():
-    return os.path.join(config.DATA_DIR, "followers_live.json")
+    return accounts.path("followers_live.json")
 
 
 def _load():
@@ -41,7 +42,7 @@ def _load():
 
 
 def _save(points):
-    os.makedirs(config.DATA_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(_path()), exist_ok=True)
     with open(_path() + ".tmp", "w", encoding="utf-8") as f:
         json.dump(points, f)
     os.replace(_path() + ".tmp", _path())

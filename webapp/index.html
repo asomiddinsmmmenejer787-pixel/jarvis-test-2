@@ -6,22 +6,26 @@
 <title>Jarvis</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0d0a07; --card:rgba(26,20,14,.82); --card2:rgba(38,29,20,.9); --line:rgba(232,176,79,.13); --line2:rgba(232,176,79,.28);
-  --gold:#e8b04f; --gold2:#f6d9a0; --text:#f5ecdd; --dim:#a8977f; --dim2:#7d6e5b;
-  --green:#7fd49a; --red:#f07f68; --amber:#f2c35b; --blue:#8fb8e8;
-  --r:20px; --ui:'Manrope',system-ui,-apple-system,sans-serif;
+  /* VORTEX: chuqur tungi ko'k, nurli ko'k-oq, har profilga o'z rangi */
+  --bg:#030712; --card:rgba(7,15,34,.74); --card2:rgba(13,27,56,.78); --line:rgba(96,165,255,.14); --line2:rgba(96,165,255,.32);
+  --gold:#5fb2ff; --gold2:#cfe6ff; --text:#eaf2ff; --dim:#8ea3c7; --dim2:#5f7499; --ink:#03101f;
+  --green:#5be3a6; --red:#ff6b8a; --amber:#ffc45c; --blue:#8fb8ff; --pink:#ff6fb5; --violet:#a98bff;
+  --acc-main:#5fb2ff; --acc-toy:#ff6fb5;
+  --r:18px; --ui:'Manrope',system-ui,-apple-system,sans-serif; --code:'JetBrains Mono',ui-monospace,monospace;
   /* eski kod bilan moslik */
-  --cyan:var(--gold); --cyan2:var(--gold2); --mono:var(--ui); --glow:0 0 12px rgba(232,176,79,.25);
+  --cyan:var(--gold); --cyan2:var(--gold2); --mono:var(--ui); --glow:0 0 14px rgba(95,178,255,.3);
 }
+/* o'yinchoq profili tanlanganda butun panel pushti-binafsha urg'uga o'tadi */
+body.acc-toy{--gold:#ff7cbd;--gold2:#ffd7ec;--line:rgba(255,124,189,.14);--line2:rgba(255,124,189,.32);--glow:0 0 14px rgba(255,124,189,.3)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;line-height:1.4;min-height:100%;font-variant-numeric:tabular-nums}
 body{overflow-x:hidden;padding-bottom:calc(86px + env(safe-area-inset-bottom))}
 #brain{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;transition:opacity .6s}
 body:not(.home) #brain{opacity:.28}
-body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(120% 60% at 50% 0%,transparent 30%,rgba(13,10,7,.7) 80%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(120% 60% at 50% 0%,transparent 30%,rgba(3,7,18,.7) 80%)}
 main{position:relative;z-index:1;padding:0 16px}
 a{color:var(--gold)}
 .muted{color:var(--dim);font-size:13.5px}
@@ -32,9 +36,9 @@ a{color:var(--gold)}
 .topbar{position:sticky;top:0;z-index:15;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;
   background:linear-gradient(var(--bg) 55%,transparent)}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.02em}
-.logo .orb{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe7b5,#e8b04f 45%,#7a4b14 100%);box-shadow:0 0 16px rgba(232,176,79,.55);animation:breathe 3.2s ease-in-out infinite}
+.logo .orb{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff,#9fd0ff 30%,var(--gold) 55%,#0b2a5c 100%);box-shadow:0 0 18px var(--gold);animation:breathe 3.2s ease-in-out infinite}
 .busy .logo .orb{animation:breathe .7s ease-in-out infinite}
-@keyframes breathe{50%{transform:scale(.88);box-shadow:0 0 26px rgba(232,176,79,.85)}}
+@keyframes breathe{50%{transform:scale(.88);box-shadow:0 0 28px var(--gold)}}
 .logo small{display:block;font-size:11.5px;font-weight:600;color:var(--dim);letter-spacing:0}
 .logo small b{color:var(--green);font-weight:700}
 .iconbtn{width:38px;height:38px;border-radius:12px;border:1px solid var(--line2);background:var(--card);color:var(--gold2);display:grid;place-items:center;font-size:17px;cursor:pointer}
@@ -97,7 +101,7 @@ h2.sec{font-size:24px;font-weight:800;margin:6px 0 2px;letter-spacing:-.01em}
 .tile .d{font-size:12px;margin-top:2px;color:var(--dim);font-weight:600}
 .tile .d.up{color:var(--green)}.tile .d.down{color:var(--red)}.tile .d.warn{color:var(--amber)}
 .tile.click{cursor:pointer}.tile.click .k::after{content:" ›";color:var(--gold)}
-.btn{appearance:none;border:0;background:var(--gold);color:#1d1306;font-family:var(--ui);font-weight:800;font-size:15px;padding:13px 16px;width:100%;border-radius:14px;cursor:pointer;transition:transform .12s,opacity .2s}
+.btn{appearance:none;border:0;background:var(--gold);color:var(--ink);font-family:var(--ui);font-weight:800;font-size:15px;padding:13px 16px;width:100%;border-radius:14px;cursor:pointer;transition:transform .12s,opacity .2s}
 .btn:active{transform:scale(.97)}
 .btn[disabled]{opacity:.4}
 .btn.sm{width:auto;padding:9px 13px;font-size:13.5px;border-radius:12px}
@@ -107,8 +111,8 @@ h2.sec{font-size:24px;font-weight:800;margin:6px 0 2px;letter-spacing:-.01em}
 .row{display:flex;gap:8px;align-items:center}
 .seg{display:flex;background:var(--card2);border-radius:14px;padding:4px;gap:4px}
 .seg button{flex:1;background:transparent;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;padding:9px 4px;font-size:13.5px;border-radius:10px;cursor:pointer;transition:.2s}
-.seg button.on{background:var(--gold);color:#1d1306}
-input,textarea,select{width:100%;background:rgba(10,8,5,.6);border:1px solid var(--line2);color:var(--text);font-family:var(--ui);font-size:15px;padding:11px 12px;outline:none;border-radius:12px}
+.seg button.on{background:var(--gold);color:var(--ink)}
+input,textarea,select{width:100%;background:rgba(3,7,18,.6);border:1px solid var(--line2);color:var(--text);font-family:var(--ui);font-size:15px;padding:11px 12px;outline:none;border-radius:12px}
 input:focus,textarea:focus{border-color:var(--gold)}
 textarea{resize:none;min-height:46px}
 label.f{display:block;font-size:12.5px;color:var(--dim);font-weight:700;margin:12px 0 5px}
@@ -137,7 +141,7 @@ details.more>summary small{display:block;font-weight:600;color:var(--dim);font-s
 .bar{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:center;margin:9px 0;font-size:13.5px}
 .bar .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .track{height:8px;background:var(--card2);border-radius:99px;position:relative;overflow:hidden}
-.fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,rgba(232,176,79,.45),var(--gold));border-radius:99px;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+.fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,rgba(95,178,255,.45),var(--gold));border-radius:99px;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1)}
 .bar .num{font-size:12.5px;color:var(--gold2);text-align:right;white-space:nowrap;min-width:54px;font-weight:700}
 
 /* jarayon */
@@ -165,13 +169,13 @@ details.more>summary small{display:block;font-weight:600;color:var(--dim);font-s
 /* chat */
 .msgs{display:flex;flex-direction:column;gap:10px;min-height:90px}
 .msg{max-width:88%;padding:11px 13px;font-size:15px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;border-radius:18px}
-.msg.me{align-self:flex-end;background:var(--gold);color:#1d1306;border-bottom-right-radius:6px;font-weight:600}
+.msg.me{align-self:flex-end;background:var(--gold);color:var(--ink);border-bottom-right-radius:6px;font-weight:600}
 .msg.j{align-self:flex-start;background:var(--card2);border-bottom-left-radius:6px}
 .msg.j .who{font-size:11.5px;color:var(--gold);font-weight:800;margin-bottom:3px}
 .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid var(--line2);color:var(--gold2);background:transparent;font-size:13.5px;padding:8px 13px;font-weight:700;border-radius:999px;cursor:pointer}
-.chip.on{background:var(--gold);color:#1d1306;border-color:var(--gold)}
+.chip.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
 .mini-steps{font-size:12.5px;color:var(--gold2)}
 
 /* komentlar */
@@ -195,7 +199,7 @@ details.more>summary small{display:block;font-weight:600;color:var(--dim);font-s
 .lp .c{font-size:14px;margin:2px 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pc{background:var(--card2);border-radius:16px;margin:10px 0;overflow:hidden}
 .pc .top{display:grid;grid-template-columns:64px 1fr;gap:12px;padding:10px;cursor:pointer}
-.pc img,.pc .noimg{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#2a2015}
+.pc img,.pc .noimg{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#0e1c3a}
 .pc .meta{font-size:12px;color:var(--gold2);font-weight:700}
 .pc .cap{font-size:14px;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pc.open .cap{-webkit-line-clamp:unset;white-space:pre-wrap}
@@ -216,20 +220,20 @@ details.more>summary small{display:block;font-weight:600;color:var(--dim);font-s
 .camp .s{font-weight:800;white-space:nowrap}
 .steps{counter-reset:s;margin:0;padding:0;list-style:none}
 .steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px;margin:10px 0;font-size:14.5px}
-.steps li::before{content:counter(s);width:26px;height:26px;border-radius:50%;background:var(--gold);color:#1d1306;font-weight:800;display:grid;place-items:center;font-size:13px}
+.steps li::before{content:counter(s);width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--ink);font-weight:800;display:grid;place-items:center;font-size:13px}
 code{background:var(--card2);padding:2px 7px;border-radius:7px;color:var(--gold2);font-weight:700}
 
 /* pastki menyu */
 nav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:grid;grid-template-columns:repeat(5,1fr);
-  background:rgba(22,17,12,.92);border:1px solid var(--line2);border-radius:22px;padding:6px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  background:rgba(5,11,26,.9);border:1px solid var(--line2);border-radius:22px;padding:6px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.45)}
 nav button{position:relative;background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:11px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border-radius:16px;cursor:pointer;transition:.2s}
 nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-nav button.on{color:#1d1306;background:var(--gold)}
-nav .dotc{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #16110c}
+nav button.on{color:var(--ink);background:var(--gold)}
+nav .dotc{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #050b1a}
 nav .dotc.show{display:flex}
 
 /* obunachilar oynasi */
-.fol{position:fixed;inset:0;z-index:50;background:rgba(10,8,5,.94);backdrop-filter:blur(12px);display:none;overflow:auto;
+.fol{position:fixed;inset:0;z-index:50;background:rgba(3,7,18,.94);backdrop-filter:blur(12px);display:none;overflow:auto;
   padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 20px)}
 .fol.show{display:block;animation:in .3s ease}
 .fol .hd{display:flex;justify-content:space-between;align-items:center}
@@ -246,7 +250,7 @@ nav .dotc.show{display:flex}
 .feedf .d.up{color:var(--green)}.feedf .d.down{color:var(--red)}
 .rsrc .it{display:grid;grid-template-columns:22px 48px 1fr auto;gap:10px;align-items:center;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer}
 .rsrc .rk{font-weight:800;color:var(--dim);text-align:center}
-.rsrc img,.rsrc .noimg{width:48px;height:64px;object-fit:cover;border-radius:10px;background:#2a2015}
+.rsrc img,.rsrc .noimg{width:48px;height:64px;object-fit:cover;border-radius:10px;background:#0e1c3a}
 .rsrc .cap{font-size:13.5px;line-height:1.3;max-height:2.6em;overflow:hidden;overflow-wrap:anywhere}
 .rsrc .bar{height:4px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}.rsrc .bar i{display:block;height:100%;background:var(--green)}
 .rsrc .v{font-size:12px;color:var(--dim);margin-top:3px}
@@ -254,14 +258,53 @@ nav .dotc.show{display:flex}
 .lock{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;align-items:center;justify-content:center;text-align:center;padding:30px}
 .lock.show{display:flex}
 .lock h2{color:var(--gold)}
+
+/* ===== VORTEX qo'shimchalari ===== */
+.topbar{flex-direction:column;align-items:stretch;gap:0;background:linear-gradient(var(--bg) 70%,transparent)}
+.tbrow{display:flex;align-items:center;justify-content:space-between}
+.logo small .accn{color:var(--gold);font-weight:700}
+/* ikkala profil: doim eng tepada */
+.profiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pf{position:relative;display:grid;grid-template-columns:40px 1fr;gap:9px;align-items:center;text-align:left;padding:9px 10px;border-radius:16px;
+  background:rgba(6,13,30,.82);border:1px solid rgba(255,255,255,.07);color:var(--text);font-family:var(--ui);cursor:pointer;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:border-color .25s,box-shadow .25s,transform .15s;overflow:hidden;min-width:0}
+.pf:active{transform:scale(.97)}
+.pf::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 100% at 0% 0%,rgba(var(--c),.24),transparent 62%);opacity:.35;transition:opacity .25s;pointer-events:none}
+.pf.on{border-color:rgba(var(--c),.8);box-shadow:0 0 0 1px rgba(var(--c),.35),0 0 24px rgba(var(--c),.28)}
+.pf.on::before{opacity:1}
+.pf[data-acc=main]{--c:95,178,255}.pf[data-acc=toy]{--c:255,124,189}
+.pf .av{position:relative;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:19px;background:#0b1630;border:2px solid rgba(var(--c),.85);box-shadow:0 0 12px rgba(var(--c),.45)}
+.pf.on .av{animation:avpulse 2.6s ease-in-out infinite}
+@keyframes avpulse{50%{box-shadow:0 0 20px rgba(var(--c),.8)}}
+.pf .av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.pf .av .st{position:absolute;right:-3px;bottom:-3px;width:12px;height:12px;border-radius:50%;background:var(--green);border:2px solid #050b1a;box-shadow:0 0 6px var(--green)}
+.pf .av .st.off{background:var(--dim2);box-shadow:none}.pf .av .st.err{background:var(--red);box-shadow:0 0 6px var(--red)}
+.pf .pi{min-width:0;position:relative}
+.pf .un{font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgb(var(--c));padding-right:20px}
+.pf .un span{font-family:var(--code);font-size:9.5px;font-weight:500;color:var(--dim)}
+.pf .pm{font-size:16px;font-weight:800;margin-top:1px;line-height:1.15;white-space:nowrap}.pf .pm small{font-size:11px;font-weight:700;margin-left:3px}
+.pf .pc{font-family:var(--code);font-size:9.5px;letter-spacing:.03em;color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf .pc b{color:var(--text);font-weight:700}
+.pf .pb{position:absolute;top:6px;right:7px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;z-index:1}
+.pf .pb.show{display:flex}
+.hero{height:210px}
+.kick{font-family:var(--code);font-size:10px;letter-spacing:.16em;color:var(--gold);font-weight:700;margin:16px 4px 0;text-transform:uppercase;opacity:.9}
+h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code);font-size:10px;letter-spacing:.16em;color:var(--gold);font-weight:700;margin-bottom:4px}
+.card,.stat,.cm,.panel{box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 30px rgba(0,0,0,.25)}
+.ch .s,.stat .k{letter-spacing:.01em}
+#tl{width:100%;height:58px;display:block;margin:2px 0 6px}
+.accnote{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--gold2);background:rgba(255,124,189,.08);border:1px solid var(--line2);border-radius:14px;padding:9px 12px;margin:10px 0}
 </style>
 </head>
 <body class="home">
 <canvas id="brain" aria-hidden="true"></canvas>
 
 <div class="topbar">
-  <div class="logo"><div class="orb"></div><div>Jarvis<small><b id="sysState">ishlayapti</b> · <span id="clock">--:--</span></small></div></div>
-  <button class="iconbtn" id="refreshBtn" onclick="refreshNow()" aria-label="Yangilash"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg></button>
+  <div class="tbrow">
+    <div class="logo"><div class="orb"></div><div>Jarvis<small><b id="sysState">ishlayapti</b> · <span id="clock">--:--</span> · <span class="accn" id="accName">asosiy</span></small></div></div>
+    <button class="iconbtn" id="refreshBtn" onclick="refreshNow()" aria-label="Yangilash"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg></button>
+  </div>
+  <div class="profiles" id="profiles"></div>
 </div>
 
 <main>
@@ -297,13 +340,14 @@ nav .dotc.show{display:flex}
 
     <div class="card">
       <div class="ch"><h3>Jarvis hozir nima qildi</h3><span class="s" id="feedWhen"></span></div>
+      <canvas id="tl" aria-label="24 soatlik faollik"></canvas>
       <div class="feed" id="feed"><div class="muted">Yuklanmoqda...</div></div>
     </div>
   </section>
 
   <!-- KOMENTLAR -->
   <section class="view" id="v-inbox">
-    <h2 class="sec">Komentlar va direkt</h2>
+    <h2 class="sec" data-k="02 · INBOX">Komentlar va direkt</h2>
     <div class="sub" id="inboxSub">Jarvis javob yozadi, shubhali joylarni sizga qoldiradi.</div>
     <div id="inboxEmpty"></div>
     <div id="pending"></div>
@@ -348,7 +392,7 @@ nav .dotc.show{display:flex}
 
   <!-- REKLAMA -->
   <section class="view" id="v-ads">
-    <h2 class="sec">Reklama</h2>
+    <h2 class="sec" data-k="03 · TARGET · UMUMIY">Reklama</h2>
     <div class="sub" id="adsAcc">Meta reklama kabineti</div>
     <div class="seg" id="adsSeg" style="margin:10px 0"><button data-p="today">Bugun</button><button data-p="yesterday">Kecha</button><button data-p="7" class="on">7 kun</button><button data-p="30">30 kun</button></div>
     <div id="adsBox"><div class="muted">Yuklanmoqda...</div></div>
@@ -369,8 +413,8 @@ nav .dotc.show{display:flex}
 
   <!-- DO'KON -->
   <section class="view" id="v-shop">
-    <h2 class="sec">Do'kon</h2>
-    <div class="sub">Jarvis mijozlarga shu yerdagi narx va ma'lumotni aytadi.</div>
+    <h2 class="sec" data-k="04 · DO'KON">Do'kon</h2>
+    <div class="sub" id="shopSub">Jarvis mijozlarga shu yerdagi narx va ma'lumotni aytadi.</div>
     <div class="seg" id="shopSeg" style="margin:10px 0"><button data-t="stock" class="on">Ombor</button><button data-t="posts">Postlar</button><button data-t="mem">Xotira</button><button data-t="info">Ma'lumot</button></div>
 
     <div class="shop-tab" id="sh-stock">
@@ -425,7 +469,7 @@ nav .dotc.show{display:flex}
 
   <!-- JARVIS -->
   <section class="view" id="v-jarvis">
-    <h2 class="sec">Jarvis bilan</h2>
+    <h2 class="sec" data-k="05 · JARVIS">Jarvis bilan</h2>
     <div class="sub">Ssenariy, hook, g'oya yoki oddiy savol yozing.</div>
     <section class="panel proc" id="proc">
       <div class="ptitle">Ishlayapman <span id="procTime">0.0 s</span></div>
@@ -475,7 +519,7 @@ nav .dotc.show{display:flex}
   </section>
   <!-- BLOGERLAR (Creator Rewards) -->
   <section class="view" id="v-creators">
-    <h2 class="sec">Blogerlar</h2>
+    <h2 class="sec" data-k="06 · BLOGERLAR · UMUMIY">Blogerlar</h2>
     <div class="sub">Arizalar, skrinshotlar, mukofotlar, vaucher va promo-kodlar.</div>
     <div id="creatorsBox"><div class="muted">Yuklanmoqda...</div></div>
   </section>
@@ -512,90 +556,101 @@ const $ = s => document.querySelector(s);
 const state = {limit:12, cmd:'', busy:false};
 const haptic = t => { try{ tg && tg.HapticFeedback && (t==='ok'?tg.HapticFeedback.notificationOccurred('success'):t==='err'?tg.HapticFeedback.notificationOccurred('error'):tg.HapticFeedback.impactOccurred('light')) }catch(e){} };
 
-if (tg){ tg.ready(); tg.expand(); try{tg.setHeaderColor('#0d0a07');tg.setBackgroundColor('#0d0a07')}catch(e){} }
+if (tg){ tg.ready(); tg.expand(); try{tg.setHeaderColor('#030712');tg.setBackgroundColor('#030712')}catch(e){} }
 
 
-// ---------- miya (orqa fon) ----------
-// Neyron tarmoq: miya shaklidagi tugunlar + ekran bo'ylab tolalar.
-// QABUL: impulslar ekran chetidan miyaga; UZATISH: miyadan chetga; SAQLASH: miya ichida xotira markaziga.
+// ---------- VORTEX (orqa fon) ----------
+// Markazda tirik girdob: ingichka nur tolalari doim aylanib turadi (bo'sh turganda sokin, ishlaganda tezlashadi).
+// Atrofida Jarvis agentlari orbitada aylanadi. QABUL: agentdan girdobga (oq-ko'k), UZATISH: girdobdan agentga
+// (to'q sariq), SAQLASH: girdob tagidagi xotira halqasiga spiral bo'lib tushadi (binafsha).
 const Brain=(function(){
   const cv=document.getElementById('brain'), cx=cv.getContext('2d');
-  const COL={recv:[243,226,191],send:[224,122,60],store:[214,160,44]};
-  let W=0,H=0,dpr=1,nodes=[],edges=[],adj=[],toCore=[],toMem=[],core=0,mem=0,rim=[],inner=[],pulses=[],outline=[],bx=0,by=0,bs=1;
-  const B={busy:false,progress:0,energy:0,signal};
-  const inBrain=(x,y)=>{ // yon tomondan miya silueti (birlik o'lchamda)
-    const cer=((x+.04)/1)**2+((y+.1)/.68)**2<1 && y<.34+.1*Math.sin(x*5);
-    const cbl=((x-.5)/.34)**2+((y-.44)/.22)**2<1;
-    const stem=x>.12&&x<.3&&y>.3&&y<.78-(.3-x)*.6;
-    return cer||cbl||stem };
+  const AGENTS=[
+    {k:'koment',n:'KOMENT',c:[95,178,255]}, {k:'direkt',n:'DIREKT',c:[169,139,255]},
+    {k:'obuna',n:'OBUNA',c:[91,227,166]},   {k:'reklama',n:'REKLAMA',c:[255,196,92]},
+    {k:'ombor',n:'OMBOR',c:[255,107,138]},  {k:'xotira',n:'XOTIRA',c:[120,220,255]}];
+  const COL={recv:[214,236,255],send:[255,170,90],store:[180,140,255]};
+  let W=0,H=0,dpr=1,vx=0,vy=0,vh=0,vw=0,ox=0,oy=0,orx=0,ory=0,strands=[],sparks=[],pulses=[],t=0,spin=0;
+  const B={busy:false,progress:0,energy:0,hue:[95,178,255],signal,hit,setAccent,rebuild:()=>build()};
+  AGENTS.forEach(a=>{a.g=0;a.x=0;a.y=0;a.d=0});
+  function setAccent(rgb){ B.hue=rgb; B.energy=Math.min(1,B.energy+.5) }
+  const prof=s=>{ const k=Math.max(0,1-s*s); return Math.pow(k,.55)*(.55+.45*Math.sin((s+1.05)*1.55)) };
   function build(){
     dpr=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight; cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0);
-    bs=Math.min(W*.36,150); bx=W/2; by=70+bs*.66; nodes=[]; pulses=[];
-    let tries=0; while(nodes.length<96&&tries++<6000){ const x=Math.random()*2.2-1.1,y=Math.random()*1.7-.85;
-      if(!inBrain(x,y)) continue; if(nodes.some(n=>(n.u-x)**2+(n.v-y)**2<.012)) continue;
-      nodes.push({u:x,v:y,x:bx+x*bs,y:by+y*bs,b:1,g:0,ph:Math.random()*6.28}) }
-    tries=0; const nb=nodes.length; while(nodes.length<nb+46&&tries++<4000){ const x=Math.random()*W,y=Math.random()*H;
-      if(inBrain((x-bx)/bs*.86,(y-by)/bs*.86)) continue; if(nodes.some(n=>(n.x-x)**2+(n.y-y)**2<58*58)) continue;
-      nodes.push({x,y,b:0,g:0,ph:Math.random()*6.28}) }
-    edges=[]; adj=nodes.map(()=>[]); const has=new Set();
-    const link=(i,j)=>{ const k=i<j?i+'_'+j:j+'_'+i; if(i===j||has.has(k)) return; has.add(k); edges.push([i,j]); adj[i].push(j); adj[j].push(i) };
-    nodes.forEach((n,i)=>{ nodes.map((m,j)=>[(m.x-n.x)**2+(m.y-n.y)**2,j]).sort((a,b)=>a[0]-b[0]).slice(1,n.b?4:3).forEach(([d,j])=>link(i,j)) });
-    const near=(tx,ty)=>{ let best=0,bd=1e9; nodes.forEach((n,i)=>{ if(!n.b) return; const d=(n.u-tx)**2+(n.v-ty)**2; if(d<bd){bd=d;best=i} }); return best };
-    core=near(-.05,-.12); mem=near(.12,.16);
-    const bfs=src=>{ const par=nodes.map(()=>-1), seen=new Set([src]); let q=[src];
-      for(;;){ while(q.length){ const a=q.shift(); for(const c of adj[a]) if(!seen.has(c)){ seen.add(c); par[c]=a; q.push(c) } }
-        let bi=-1,bj=-1,bd=1e12; nodes.forEach((n,i)=>{ if(seen.has(i)) return; seen.forEach(j=>{ const d=(nodes[j].x-n.x)**2+(nodes[j].y-n.y)**2; if(d<bd){bd=d;bi=i;bj=j} }) });
-        if(bi<0) break; link(bi,bj); seen.add(bi); par[bi]=bj; q=[bi] }
-      return par };
-    toCore=bfs(core); toMem=bfs(mem);
-    rim=nodes.map((n,i)=>i).filter(i=>!nodes[i].b&&(nodes[i].x<60||nodes[i].x>W-60||nodes[i].y>H*.55));
-    if(!rim.length) rim=nodes.map((n,i)=>i).filter(i=>!nodes[i].b);
-    inner=nodes.map((n,i)=>i).filter(i=>nodes[i].b&&i!==mem);
-    // miya konturi: markazdan nur yuborib chegarani topamiz
-    outline=[]; for(let k=0;k<120;k++){ const an=k/120*6.283; let r=0; while(r<1.4&&inBrain(.1+Math.cos(an)*(r+.02),.05+Math.sin(an)*(r+.02))) r+=.02;
-      outline.push([.1+Math.cos(an)*(r+.03),.05+Math.sin(an)*(r+.03),k]) }
+    const hero=document.querySelector('.hero'); const r=hero?hero.getBoundingClientRect():{top:150,height:200};
+    const top=(r.top+(window.scrollY||0)); vh=Math.max(140,r.height*.86); vy=top+r.height*.5+6; vx=W/2; vw=Math.min(W*.2,86);
+    ox=vx; oy=vy+vh*.04; orx=Math.min(W*.44,200); ory=orx*.24;
+    strands=[]; for(let i=0;i<70;i++) strands.push({ph:Math.random()*6.283,rad:.45+Math.random()*.65,tw:1.6+Math.random()*2.6,sp:(.35+Math.random()*.5)*(Math.random()<.5?1:-1)*.6+.25,a:.05+Math.random()*.12,pk:Math.random()<.16});
+    sparks=[]; for(let i=0;i<70;i++) sparks.push(newSpark(true));
   }
-  const pathTo=(from,par)=>{ const p=[from]; let c=from,g=0; while(par[c]>=0&&g++<200){ c=par[c]; p.push(c) } return p };
-  const pick=a=>a[Math.floor(Math.random()*a.length)];
-  function emit(type,strength=1){
-    let path; if(type==='recv') path=pathTo(pick(rim),toCore); else if(type==='send') path=pathTo(pick(rim),toCore).reverse(); else path=pathTo(pick(inner),toMem);
-    if(path.length>1) pulses.push({path,t:0,type,sp:(type==='store'?5.5:8)*(.8+Math.random()*.5),a:strength});
-  }
+  function newSpark(any){ const st=strands[Math.floor(Math.random()*strands.length)]||{ph:0,rad:1,tw:2,sp:.4};
+    return {st,s:any?Math.random()*2-1:1,v:.06+Math.random()*.16,r:.6+Math.random()*1.6,a:.4+Math.random()*.6} }
+  const pt=(st,s)=>{ const ang=st.ph+s*st.tw+spin*st.sp; return [vx+Math.cos(ang)*vw*prof(s)*st.rad, vy+s*vh/2+Math.sin(ang)*3, Math.sin(ang)] };
+  function emit(type,strength=1,ai){ const i=ai!=null?ai:Math.floor(Math.random()*AGENTS.length);
+    pulses.push({type,i,t:0,a:strength,sp:(type==='store'?.55:.9)*(.8+Math.random()*.5)}) }
   const lamp={recv:0,send:0,store:0};
   function signal(type,n){ B.energy=Math.min(1,B.energy+.3); for(let i=0;i<(n||3);i++) setTimeout(()=>emit(type),i*140);
-    lamp[type]=performance.now()+900; const el=document.getElementById('fl-'+type); if(el){ el.classList.add('on'); setTimeout(()=>{ if(performance.now()>=lamp[type]-20) el.classList.remove('on') },900) } }
+    lamp[type]=performance.now()+900 }
+  function hit(key){ const i=AGENTS.findIndex(a=>a.k===key); if(i<0) return; AGENTS[i].g=1; emit('recv',1,i); setTimeout(()=>emit('send',.8,i),300); B.energy=Math.min(1,B.energy+.35) }
+  const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${Math.max(0,Math.min(1,a))})`;
+  const mix=(a,b,k)=>[0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*k));
+  function drawAgent(a,front){ if((a.d>0)!==front) return;
+    const sc=.78+.32*(a.d+1)/2, r=10*sc+a.g*4, al=.45+.55*(a.d+1)/2;
+    cx.strokeStyle=rgba(a.c,(.08+.25*a.g)*al); cx.lineWidth=1; cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(vx,vy); cx.stroke();
+    const g=cx.createRadialGradient(a.x,a.y,0,a.x,a.y,r*2.6); g.addColorStop(0,rgba(a.c,(.35+.5*a.g)*al)); g.addColorStop(1,rgba(a.c,0));
+    cx.fillStyle=g; cx.beginPath(); cx.arc(a.x,a.y,r*2.6,0,6.283); cx.fill();
+    cx.fillStyle=`rgba(4,10,24,${.85*al})`; cx.beginPath(); cx.arc(a.x,a.y,r,0,6.283); cx.fill();
+    cx.strokeStyle=rgba(a.c,.95*al); cx.lineWidth=1.6; cx.beginPath(); cx.arc(a.x,a.y,r,0,6.283); cx.stroke();
+    cx.strokeStyle=rgba(a.c,.35*al); cx.lineWidth=1; cx.beginPath(); cx.arc(a.x,a.y,r+3.5+a.g*3,-1.2+t,0.6+t); cx.stroke();
+    cx.fillStyle=rgba(a.c,.9*al); cx.beginPath(); cx.arc(a.x,a.y,2.2+a.g*1.5,0,6.283); cx.fill();
+    if(W>330){ cx.fillStyle=`rgba(200,220,255,${.55*al})`; cx.font='700 8.5px JetBrains Mono,monospace'; cx.textAlign='center'; cx.fillText(a.n,a.x,a.y+r+12) } }
   let last=0,idle=0;
   function frame(ts){
-    requestAnimationFrame(frame); if(document.hidden) return; const dt=Math.min(.05,(ts-last)/1000||0); last=ts;
-    B.energy=Math.max(B.busy?.55:0,B.energy-dt*.22); const e=B.energy;
-    idle-=dt; if(idle<=0){ emit(pick(['recv','send','store','recv']),.55); idle=B.busy?.18:(1.5-e)*(.9+Math.random()) }
-    cx.clearRect(0,0,W,H); const t=ts/1000;
-    nodes.forEach(n=>{ n.dx=Math.sin(t*.5+n.ph)*(n.b?1.6:3); n.dy=Math.cos(t*.4+n.ph*1.3)*(n.b?1.6:3); n.g=Math.max(0,n.g-dt*(n.m?.25:1.4)) });
-    const breath=.5+.5*Math.sin(t*.9);
-    cx.lineWidth=1.2; cx.strokeStyle=`rgba(224,168,90,${.16+.08*breath+.14*e})`; cx.beginPath();
-    outline.forEach(([u,v,k],i)=>{ const w=1+.012*Math.sin(k*.9+t*.8), x=bx+u*bs*w, y=by+v*bs*w; i?cx.lineTo(x,y):cx.moveTo(x,y) }); cx.closePath(); cx.stroke();
+    requestAnimationFrame(frame); if(document.hidden) return; const dt=Math.min(.05,(ts-last)/1000||0); last=ts; t=ts/1000;
+    B.energy=Math.max(B.busy?.55:0,B.energy-dt*.2); const e=B.energy; spin+=dt*(.55+e*1.9);
+    idle-=dt; if(idle<=0){ emit(['recv','send','store','recv'][Math.floor(Math.random()*4)],.55); idle=B.busy?.25:(1.7-e)*(.8+Math.random()) }
+    cx.clearRect(0,0,W,H);
+    const base=mix(B.hue,[230,242,255],.35), pink=[255,124,189];
+    // orbita va agentlar (orqadagilar)
+    AGENTS.forEach((a,i)=>{ const an=i/AGENTS.length*6.283+t*.07; a.x=ox+Math.cos(an)*orx; a.y=oy+Math.sin(an)*ory; a.d=Math.sin(an); a.g=Math.max(0,a.g-dt*.9) });
+    cx.strokeStyle=rgba(B.hue,.13+.1*e); cx.lineWidth=1; cx.beginPath(); cx.ellipse(ox,oy,orx,ory,0,0,6.283); cx.stroke();
+    cx.strokeStyle=rgba(B.hue,.06); cx.beginPath(); cx.ellipse(ox,oy,orx*.72,ory*.72,0,0,6.283); cx.stroke();
+    AGENTS.forEach(a=>drawAgent(a,false));
+    // pol nuri
+    const fy=vy+vh/2; let g=cx.createRadialGradient(vx,fy,0,vx,fy,vw*2.6); g.addColorStop(0,rgba(B.hue,.42+.25*e)); g.addColorStop(1,rgba(B.hue,0));
+    cx.save(); cx.translate(vx,fy); cx.scale(1,.28); cx.translate(-vx,-fy); cx.fillStyle=g; cx.beginPath(); cx.arc(vx,fy,vw*2.6,0,6.283); cx.fill(); cx.restore();
+    // girdob tolalari
+    cx.globalCompositeOperation='lighter';
+    g=cx.createRadialGradient(vx,vy,0,vx,vy,vw*1.6); g.addColorStop(0,rgba([255,255,255],.22+.25*e)); g.addColorStop(.4,rgba(B.hue,.14+.12*e)); g.addColorStop(1,rgba(B.hue,0));
+    cx.fillStyle=g; cx.beginPath(); cx.arc(vx,vy,vw*1.6,0,6.283); cx.fill();
     cx.lineWidth=1;
-    for(const [i,j] of edges){ const a=nodes[i],b=nodes[j], inb=a.b&&b.b, al=(inb?.13+.05*breath+.12*e:.045+.03*e)+Math.max(a.g,b.g)*.3;
-      cx.strokeStyle=`rgba(224,168,90,${al})`; cx.beginPath(); cx.moveTo(a.x+a.dx,a.y+a.dy); cx.lineTo(b.x+b.dx,b.y+b.dy); cx.stroke() }
-    nodes.forEach((n,i)=>{ const r=(n.b?1.5:1.1)+n.g*2.4, al=(n.b?.4+.15*breath:.16)+n.g*.6+e*.15;
-      cx.fillStyle=i===mem?`rgba(214,160,44,${Math.min(1,.6+n.g)})`:`rgba(240,205,150,${Math.min(1,al)})`;
-      cx.beginPath(); cx.arc(n.x+n.dx,n.y+n.dy,i===mem?2.6+n.g*3:r,0,6.28); cx.fill() });
-    const m=nodes[mem]; if(m.g>.02){ cx.strokeStyle=`rgba(214,160,44,${m.g*.5})`; cx.beginPath(); cx.arc(m.x+m.dx,m.y+m.dy,6+(1-m.g)*16,0,6.28); cx.stroke() }
-    if(B.progress>0&&B.progress<1){ cx.strokeStyle='rgba(224,168,90,.5)'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(bx-bs*.8,by+bs*.92); cx.lineTo(bx-bs*.8+bs*1.6*B.progress,by+bs*.92); cx.stroke();
-      cx.strokeStyle='rgba(224,168,90,.12)'; cx.beginPath(); cx.moveTo(bx-bs*.8,by+bs*.92); cx.lineTo(bx+bs*.8,by+bs*.92); cx.stroke(); cx.lineWidth=1 }
-    pulses=pulses.filter(p=>{ p.t+=dt*p.sp; const k=Math.floor(p.t); if(k>=p.path.length-1){ const end=nodes[p.path[p.path.length-1]]; end.g=1; if(p.type==='store'){ end.m=1 } return false }
-      const a=nodes[p.path[k]],b=nodes[p.path[k+1]],f=p.t-k, x=a.x+a.dx+(b.x+b.dx-a.x-a.dx)*f, y=a.y+a.dy+(b.y+b.dy-a.y-a.dy)*f, c=COL[p.type];
-      a.g=Math.max(a.g,.5*p.a);
-      const g=cx.createRadialGradient(x,y,0,x,y,7); g.addColorStop(0,`rgba(${c},${.85*p.a})`); g.addColorStop(1,`rgba(${c},0)`);
-      cx.fillStyle=g; cx.beginPath(); cx.arc(x,y,7,0,6.28); cx.fill(); return true });
+    for(const st of strands){ const c=st.pk?pink:base; cx.strokeStyle=rgba(c,st.a*(1+1.4*e)); cx.beginPath();
+      for(let k=0;k<=34;k++){ const [x,y]=pt(st,-1+k/17); k?cx.lineTo(x,y):cx.moveTo(x,y) } cx.stroke() }
+    for(const p of sparks){ p.s-=dt*p.v*(1+2*e); if(p.s<-1){ Object.assign(p,newSpark(false)) }
+      const [x,y,z]=pt(p.st,p.s), al=p.a*(.35+.65*(z+1)/2)*(.6+.4*prof(p.s));
+      cx.fillStyle=rgba([235,245,255],al); cx.beginPath(); cx.arc(x,y,p.r*(1+.5*e),0,6.283); cx.fill() }
+    // impulslar
+    pulses=pulses.filter(p=>{ p.t+=dt*p.sp; const a=AGENTS[p.i]; if(p.t>=1){ if(p.type!=='store') a.g=Math.max(a.g,p.type==='send'?.9:.5); return false }
+      let x,y; if(p.type==='store'){ const an=p.t*9+p.i, rr=vw*(1-p.t)*.9; x=vx+Math.cos(an)*rr; y=vy+p.t*vh/2+Math.sin(an)*rr*.25 }
+      else { const k=p.type==='recv'?p.t:1-p.t, mx=(a.x+vx)/2, my=Math.min(a.y,vy)-30; const u=1-k;
+        x=u*u*a.x+2*u*k*mx+k*k*vx; y=u*u*a.y+2*u*k*my+k*k*vy }
+      const c=COL[p.type], gg=cx.createRadialGradient(x,y,0,x,y,8); gg.addColorStop(0,rgba(c,.95*p.a)); gg.addColorStop(1,rgba(c,0));
+      cx.fillStyle=gg; cx.beginPath(); cx.arc(x,y,8,0,6.283); cx.fill(); return true });
+    cx.globalCompositeOperation='source-over';
+    // ish jarayoni: pol atrofida yoy
+    if(B.progress>0&&B.progress<1){ cx.strokeStyle=rgba(B.hue,.75); cx.lineWidth=2; cx.beginPath(); cx.ellipse(vx,fy,vw*1.5,vw*.4,0,Math.PI*.5,Math.PI*.5+6.283*B.progress); cx.stroke(); cx.lineWidth=1 }
+    AGENTS.forEach(a=>drawAgent(a,true));
   }
-  function touch(x,y){ B.energy=Math.min(1,B.energy+.18); let best=-1,bd=1e9; nodes.forEach((n,i)=>{ const d=(n.x-x)**2+(n.y-y)**2; if(d<140*140) n.g=Math.max(n.g,.7*(1-Math.sqrt(d)/140)); if(d<bd){bd=d;best=i} });
-    if(best>=0){ pulses.push({path:pathTo(best,toCore),t:0,type:'recv',sp:9,a:.9}); setTimeout(()=>emit('send',.8),260) } }
+  function touch(x,y){ B.energy=Math.min(1,B.energy+.18); let best=-1,bd=60*60;
+    AGENTS.forEach((a,i)=>{ const d=(a.x-x)**2+(a.y-y)**2; if(d<bd){bd=d;best=i} });
+    if(best>=0) hit(AGENTS[best].k); else emit('recv',.8) }
   addEventListener('pointerdown',ev=>touch(ev.clientX,ev.clientY),{passive:true});
   let sc=0; addEventListener('scroll',()=>{ const n=performance.now(); if(n-sc>350){ sc=n; B.energy=Math.min(1,B.energy+.08); emit('recv',.6) } },{passive:true});
   let rz; addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(build,200) });
   build(); requestAnimationFrame(frame); return B;
 })();
+function accHex(){ return getComputedStyle(document.body).getPropertyValue('--gold').trim()||'#5fb2ff' }
+function accA(a){ const n=parseInt(accHex().replace('#',''),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})` }
 
 // ---------- formatlash ----------
 const fmt = n => n==null||isNaN(n) ? '—' : Math.round(+n).toLocaleString('ru-RU').replace(/,/g,' ');
@@ -608,7 +663,7 @@ async function api(path, opts={}){
   const save = opts.method && opts.method!=='GET' && !/\/api\/(insta|post|chat)$/.test(path);
   Brain.signal(save?'store':'send');
   if (DEMO){ const d=await demoApi(path, opts); Brain.signal('recv'); return d }
-  const r = await fetch(path, {method: opts.method||'GET', headers:{'Content-Type':'application/json','X-Init-Data': tg ? tg.initData : ''},
+  const r = await fetch(path, {method: opts.method||'GET', headers:{'Content-Type':'application/json','X-Init-Data': tg ? tg.initData : '','X-Account': ACC},
     body: opts.body ? JSON.stringify(opts.body) : undefined});
   let data = {}; try{ data = await r.json() }catch(e){}
   Brain.signal('recv');
@@ -673,25 +728,82 @@ function renderHudReport(r){
   if (h){ $('#hudAudience').innerHTML=h; $('#hudAudience').classList.remove('muted'); animateBars($('#hudAudience')) }
 }
 
+// ---------- PROFILLAR (ikkala akkaunt, doim tepada) ----------
+let ACC=(()=>{ try{ const a=localStorage.getItem('jarvis_acc'); return a==='toy'?'toy':'main' }catch(e){ return 'main' } })();
+const ACC_RGB={main:[95,178,255],toy:[255,124,189]};
+let ACCS=[{acc:'main',icon:'🛴',title:'Asosiy sahifa',username:'bolalar_dunyosi.uzb'},{acc:'toy',icon:'🧸',title:'O\'yinchoq profili',username:'bolalar_dunyosi_oyinchoq'}];
+function pfCard(a){
+  const on=a.acc===ACC, st=!a.connected?'off':a.error?'err':'';
+  const av=a.picture?`<img src="${esc(a.picture)}" alt="" onerror="this.remove()">`:esc(a.icon||'•');
+  let pm, pc;
+  if (a.connected===false){ pm='<span class="muted" style="font-size:13px">Ulanmagan</span>'; pc=a.acc==='toy'?'BOTGA: /oyinchoqtoken':'BOTGA: /igtoken' }
+  else if (a.connected==null){ pm='<span class="muted">—</span>'; pc='YUKLANMOQDA…' }
+  else {
+    const d=a.followers_today; pm=fmt(a.followers)+(d?`<small class="${d>0?'up':'down'}">${sign(d)}</small>`:'');
+    const cm=a.mode==='on'?'':' '+(MODE_UZ[a.mode]||''), dm=MODE_UZ[a.chat_mode]||MODE_UZ[a.dm_mode]||'—';
+    pc=`💬 <b>${fmt(a.sent_today||0)}</b>${cm} · ✉ ${dm}`;
+    if (a.error) pc='⚠ '+esc(a.error).slice(0,40);
+  }
+  const name=a.acc==='toy'?'O\'yinchoq':'Asosiy';
+  return `<button class="pf${on?' on':''}" data-acc="${a.acc}" onclick="switchAcc('${a.acc}')" aria-pressed="${on}" title="@${esc(a.username)}">
+    <div class="av">${av}<i class="st ${st}"></i></div>
+    <div class="pi"><div class="un">${name}</div><div class="pm">${pm}</div><div class="pc">${pc}</div></div>
+    <span class="pb${a.pending?' show':''}">${a.pending>99?'99+':a.pending||''}</span></button>`;
+}
+function renderAccounts(){ $('#profiles').innerHTML=ACCS.map(pfCard).join('');
+  const cur=ACCS.find(a=>a.acc===ACC); $('#accName').textContent=cur?(ACC==='toy'?'🧸 o\'yinchoq':'asosiy'):'' }
+function applyAcc(){ document.body.classList.toggle('acc-toy',ACC==='toy'); Brain.setAccent(ACC_RGB[ACC]||ACC_RGB.main); renderAccounts();
+  $('#shopSub').textContent = ACC==='toy' ? 'O\'yinchoq profili narxlari alohida: asosiy sahifa narxi bu yerda aytilmaydi.' : 'Jarvis mijozlarga shu yerdagi narx va ma\'lumotni aytadi.' }
+async function loadAccounts(){ try{ const r=await api('/api/accounts'); if(r.accounts&&r.accounts.length){ ACCS=r.accounts; renderAccounts() } }catch(e){} }
+function switchAcc(acc){
+  if (acc===ACC){ haptic(); Brain.hit('koment'); return }
+  ACC=acc; try{ localStorage.setItem('jarvis_acc',acc) }catch(e){}
+  haptic('ok'); applyAcc(); Brain.signal('send',6);
+  lastStatus=null; H.comments=null; H.feedSeen=null; H.folShown=null; H.brief=''; H.fol=null;
+  ['#homeFol','#stReplies','#stDm','#stReach'].forEach(id=>$(id).textContent='—'); ['#homeFolD','#homeFolNote','#stRepliesD','#stDmD','#stReachD'].forEach(id=>$(id).textContent='');
+  $('#feed').innerHTML='<div class="muted">Yuklanmoqda...</div>'; $('#needs').innerHTML=''; $('#report').innerHTML='';
+  ['#pending','#dmPending','#chatPending'].forEach(id=>$(id).innerHTML='');
+  go(curView); loadAccounts();
+}
+
+// ---------- faollik chizig'i (24 soat) ----------
+function drawTimeline(items, now){
+  const cv=$('#tl'); if(!cv) return; const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; if(!w) return;
+  cv.width=w*dpr; cv.height=h*dpr; const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,w,h);
+  now=now||Date.now()/1000; const t0=now-86400, X=t=>4+(t-t0)/86400*(w-8), base=h-14;
+  const bins=new Array(48).fill(0); items.forEach(it=>{ if(it.t>=t0) bins[Math.min(47,Math.floor((it.t-t0)/1800))]++ });
+  const mx=Math.max(1,...bins);
+  g.beginPath(); for(let i=0;i<=96;i++){ const k=i/96, b=bins[Math.min(47,Math.floor(k*48))]/mx;
+    const y=base-4-b*12-Math.sin(i*.55+now/600)*1.6; i?g.lineTo(4+k*(w-8),y):g.moveTo(4,y) }
+  g.strokeStyle=accA(.75); g.lineWidth=1.4; g.shadowColor=accA(.8); g.shadowBlur=6; g.stroke(); g.shadowBlur=0;
+  g.strokeStyle=accA(.18); g.lineWidth=1; g.beginPath(); g.moveTo(4,base); g.lineTo(w-4,base); g.stroke();
+  const col=x=>/egasiga|topshirildi|raqobat/.test(x)?'#ffc45c':/[Dd]irekt/.test(x)?'#a98bff':accHex();
+  items.forEach(it=>{ if(it.t<t0) return; const x=X(it.t), c=col(it.x||''), hh=12+((it.t*7)%10);
+    g.strokeStyle=c; g.globalAlpha=.7; g.beginPath(); g.moveTo(x,base); g.lineTo(x,base-hh); g.stroke(); g.globalAlpha=1;
+    g.fillStyle=c; g.beginPath(); g.arc(x,base-hh,2,0,6.283); g.fill() });
+  g.fillStyle='rgba(142,163,199,.7)'; g.font='600 9px JetBrains Mono,monospace'; g.textAlign='center';
+  for(let k=0;k<=4;k++){ const t=t0+k*21600, d=new Date(t*1000); g.fillText(k===4?'HOZIR':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),Math.min(w-18,Math.max(16,X(t))),h-2) }
+}
+
 // ---------- BUGUN (bosh sahifa) ----------
 const H={comments:null,ads:null,fol:null,feedSeen:null,brief:''};
 function greetText(){ const h=new Date().getHours(); return h<5?'Xayrli tun':h<11?'Xayrli tong':h<17?'Xayrli kun':'Xayrli kech' }
 async function loadHome(full=true){
   $('#greet').textContent=greetText()+', Asomiddin';
-  const jobs=[loadHomeComments(), loadHomeAds(), loadFeed(), loadHomeFollowers()];
+  const jobs=[loadHomeComments(), loadHomeAds(), loadFeed(), loadHomeFollowers(), loadAccounts()];
   if (full || !lastStatus) jobs.push(loadStatus());
   await Promise.allSettled(jobs);
   writeBrief();
 }
 async function loadHomeComments(){
-  try{ const r=await api('/api/comments'); H.comments=r; renderNeeds(r) }catch(e){ H.comments=null }
+  try{ const r=await api('/api/comments'); H.comments=r; renderNeeds(r); Brain.hit('koment'); if(r.chat) setTimeout(()=>Brain.hit('direkt'),500) }catch(e){ H.comments=null }
 }
 function pendingCounts(r){ return {c:(r.pending||[]).length, d:(r.dm_pending||[]).length, ch:((r.chat||{}).pending||[]).length} }
 function renderNeeds(r){
   if (!r || !r.enabled){ $('#needs').innerHTML=''; return }
   const p=pendingCounts(r), n=p.c+p.d+p.ch, st=r.status||{};
   const parts=[p.c?p.c+' ta komment':'',p.d?p.d+' ta direkt xabar':'',p.ch?p.ch+' ta yozishma':''].filter(Boolean).join(', ');
-  $('#needs').innerHTML = n ? `<div class="need" onclick="go('inbox')"><div class="n">${n}</div><div class="t">Sizni kutyapti<small>${esc(parts)} · ko'rib, bir bosishda yuboring</small></div><div class="arr">›</div></div>`
+  $('#needs').innerHTML = n ? `<div class="kick">Siz tasdiqlaysiz · Jarvis bajaradi</div><div class="need" onclick="go('inbox')"><div class="n">${n}</div><div class="t">Sizni kutyapti<small>${esc(parts)} · ko'rib, bir bosishda yuboring</small></div><div class="arr">›</div></div>`
     : `<div class="calm">✓ Hech narsa sizni kutmayapti. Jarvis o'zi boshqaryapti.</div>`;
   const b=$('#navBadge'); b.textContent=n>99?'99+':n; b.classList.toggle('show',n>0);
   if (st.sent_today!=null){ $('#stReplies').textContent=fmt(st.sent_today); $('#stRepliesD').textContent=`limit ${st.limit_day} · ${MODE_UZ[st.mode]||st.mode}` }
@@ -699,7 +811,7 @@ function renderNeeds(r){
     $('#stDm').textContent=MODE_UZ[cs.mode]||'—'; $('#stDmD').textContent=p.ch?p.ch+' ta kutmoqda':lr?'tekshirildi '+lr.time:'' }
 }
 async function loadHomeAds(){
-  try{ const r=await api('/api/ads?period=today'); H.ads=r;
+  try{ const r=await api('/api/ads?period=today'); H.ads=r; setTimeout(()=>Brain.hit('reklama'),900);
     if (!r.connected){ $('#stAds').textContent='ulash'; $('#stAdsD').textContent='target shu yerda chiqadi'; return }
     if (r.error){ $('#stAds').textContent='—'; $('#stAdsD').textContent='xato: ochib ko\'ring'; return }
     const t=r.total||{}; $('#stAds').textContent=money(t.spend,(r.account||{}).currency);
@@ -708,7 +820,7 @@ async function loadHomeAds(){
 }
 async function loadHomeFollowers(){
   let r; try{ r=await api('/api/followers') }catch(e){ return }
-  H.fol=r;
+  H.fol=r; Brain.hit('obuna');
   if (!r.connected){ $('#homeFol').textContent='—'; $('#homeFolNote').textContent='Instagram ulanmagan'; return }
   if (r.count!=null) rollTo($('#homeFol'), H.folShown, r.count), H.folShown=r.count;
   const td=r.today||{}; const net=td.net||0;
@@ -722,10 +834,10 @@ function drawSpark(pts){
   const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,w,h); if (pts.length<2) return;
   const vs=pts.map(p=>p[1]); let lo=Math.min(...vs), hi=Math.max(...vs); if(hi===lo){hi+=1;lo-=1}
   const t0=pts[0][0], t1=pts.at(-1)[0]||t0+1, X=t=>(t-t0)/(t1-t0||1)*(w-6)+3, Y=v=>h-4-(v-lo)/(hi-lo)*(h-10);
-  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,'rgba(232,176,79,.35)'); grad.addColorStop(1,'rgba(232,176,79,0)');
+  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,accA(.35)); grad.addColorStop(1,accA(0));
   g.beginPath(); pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]))); g.lineTo(X(t1),h); g.lineTo(X(t0),h); g.closePath(); g.fillStyle=grad; g.fill();
-  g.beginPath(); pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]))); g.strokeStyle='#e8b04f'; g.lineWidth=2; g.lineJoin='round'; g.stroke();
-  const lp=pts.at(-1); g.beginPath(); g.arc(X(lp[0]),Y(lp[1]),3.5,0,7); g.fillStyle='#f6d9a0'; g.fill();
+  g.beginPath(); pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1]))); g.strokeStyle=accHex(); g.lineWidth=2; g.lineJoin='round'; g.stroke();
+  const lp=pts.at(-1); g.beginPath(); g.arc(X(lp[0]),Y(lp[1]),3.5,0,7); g.fillStyle='#fff'; g.fill();
 }
 const FEED_ICONS=[[/^Komentga javob/,'💬'],[/egasiga|topshirildi/,'✋'],[/[Dd]irekt/,'✉️'],[/[Ll]imit|rejim|qoida|ko'rsatma/,'⚙️']];
 function feedRow(it, now){
@@ -734,8 +846,9 @@ function feedRow(it, now){
   return {html:`<div class="ic">${ic}</div><div><div class="x">${x}</div><div class="w">${ago(it.t, now)}</div></div>`, key:it.t+it.x.slice(0,40)};
 }
 async function loadFeed(){
-  let r; try{ r=await api('/api/feed?n=12') }catch(e){ $('#feed').innerHTML=`<div class="muted">${esc(e.message)}</div>`; return }
-  const items=r.items||[];
+  let r; try{ r=await api('/api/feed?n=50') }catch(e){ $('#feed').innerHTML=`<div class="muted">${esc(e.message)}</div>`; return }
+  drawTimeline(r.items||[], r.now);
+  const items=(r.items||[]).slice(0,12);
   if (!items.length){ $('#feed').innerHTML='<div class="empty"><div class="e">🌙</div>Hozircha yangi ish yo\'q. Komment kelsa, shu yerda ko\'rinadi.</div>'; return }
   const first=H.feedSeen===null; H.feedSeen=H.feedSeen||new Set();
   $('#feed').innerHTML=items.map(it=>{ const f=feedRow(it, r.now); const isNew=!first&&!H.feedSeen.has(f.key); H.feedSeen.add(f.key); return `<div class="it${isNew?' new':''}">${f.html}</div>` }).join('');
@@ -748,7 +861,8 @@ function writeBrief(){
     const p=pendingCounts(r), n=p.c+p.d+p.ch; parts.push(n?`${n} tasini sizga qoldirdim.`:'Sizga qoldirgan ishim yo\'q.') }
   const f=H.fol; if (f&&f.connected&&f.today&&(f.today.gained||f.today.lost)) parts.push(`Obunachilar bugun ${sign(f.today.net||0)}.`);
   const a=H.ads; if (a&&a.connected&&!a.error&&a.total&&a.total.spend) parts.push(`Reklamaga bugun ${money(a.total.spend,(a.account||{}).currency)} ketdi${a.total.messages?', '+a.total.messages+' kishi direktga yozdi':''}.`);
-  const text=parts.join(' ')||'Hammasi joyida.';
+  let text=parts.join(' ')||'Hammasi joyida.';
+  if (ACC==='toy') text='🧸 O\'yinchoq profilida: '+text.charAt(0).toLowerCase()+text.slice(1);
   if (text===H.brief) return; H.brief=text;
   const el=$('#brief'); el.classList.add('typing'); el.textContent=''; let i=0;
   (function tick(){ el.textContent=text.slice(0,i); i+=2; if(i<=text.length+1) setTimeout(tick,18); else el.classList.remove('typing') })();
@@ -918,16 +1032,16 @@ function renderReelSources(rs){
 function drawFolChart(pts){
   const cv=$('#folChart'), dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; cv.width=w*dpr; cv.height=h*dpr;
   const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,w,h);
-  if (pts.length<2){ g.fillStyle='rgba(224,168,90,.5)'; g.font='12px monospace'; g.fillText('Grafik ma\'lumot yig\'ilgach chiqadi',8,h/2); return }
+  if (pts.length<2){ g.fillStyle=accA(.5); g.font='12px monospace'; g.fillText('Grafik ma\'lumot yig\'ilgach chiqadi',8,h/2); return }
   const t0=pts[0][0], t1=pts.at(-1)[0]||t0+1, vs=pts.map(p=>p[1]); let lo=Math.min(...vs), hi=Math.max(...vs); if(hi===lo){hi+=1;lo-=1}
   const X=t=>(t-t0)/(t1-t0||1)*(w-8)+4, Y=v=>h-10-(v-lo)/(hi-lo)*(h-24);
-  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,'rgba(224,168,90,.35)'); grad.addColorStop(1,'rgba(224,168,90,0)');
+  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,accA(.35)); grad.addColorStop(1,accA(0));
   g.beginPath(); pts.forEach((p,i)=>{ const x=X(p[0]),y=Y(p[1]); if(i) g.lineTo(x,pts[i-1]?Y(pts[i-1][1]):y), g.lineTo(x,y); else g.moveTo(x,y) });
   g.lineTo(X(t1),h); g.lineTo(X(t0),h); g.closePath(); g.fillStyle=grad; g.fill();
   g.beginPath(); pts.forEach((p,i)=>{ const x=X(p[0]),y=Y(p[1]); if(i){ g.lineTo(x,Y(pts[i-1][1])); g.lineTo(x,y) } else g.moveTo(x,y) });
-  g.strokeStyle='#e0a85a'; g.lineWidth=1.6; g.shadowColor='rgba(224,168,90,.7)'; g.shadowBlur=6; g.stroke(); g.shadowBlur=0;
+  g.strokeStyle=accHex(); g.lineWidth=1.6; g.shadowColor=accA(.7); g.shadowBlur=6; g.stroke(); g.shadowBlur=0;
   const lp=pts.at(-1); g.beginPath(); g.arc(X(lp[0]),Y(lp[1]),3.5,0,7); g.fillStyle='#f3e2bf'; g.fill();
-  g.fillStyle='rgba(224,168,90,.7)'; g.font='10px monospace'; g.fillText(fmt(hi),4,10); g.fillText(fmt(lo),4,h-1);
+  g.fillStyle=accA(.7); g.font='10px monospace'; g.fillText(fmt(hi),4,10); g.fillText(fmt(lo),4,h-1);
 }
 
 async function saveLimit(){
@@ -1101,7 +1215,7 @@ async function chatAct(key, action){
 
 // ---------- POSTLAR ----------
 let POSTS={posts:[],shop:{}};
-async function loadCatalog(){
+async function loadCatalog(){ Brain.hit('xotira');
   try{ POSTS=await api('/api/posts'); renderPosts() }catch(e){ $('#postList').innerHTML=`<div class="err">${esc(e.message)}</div>` }
 }
 function renderMemory(){
@@ -1161,7 +1275,7 @@ async function saveShop(){
 
 // ---------- OMBOR ----------
 let STOCK=[], stEdit=null, stIn=true;
-async function loadStock(){
+async function loadStock(){ Brain.hit('ombor');
   try{ const r=await api('/api/stock'); STOCK=r.stock||[]; renderStock() }catch(e){ $('#stockList').innerHTML=`<div class="err">${esc(e.message)}</div>` }
 }
 function renderStock(){
@@ -1263,7 +1377,25 @@ demoApi=function(path, opts){
       {name:'Viloyatlar',campaign:'Follower',daily_budget:2,end:'2026-12-01',target:{age:'22–50 yosh',gender:'Hammasi',places:['Samarqand','Farg\'ona','Andijon'],interests:[],advantage:false}}]});
   return _demoOld(path, opts);
 };
+// demo: ikkala profil
+const _demoOld2=demoApi;
+demoApi=function(path, opts){
+  if (path==='/api/accounts') return Promise.resolve({current:ACC,accounts:[
+    {acc:'main',icon:'🛴',title:'Asosiy sahifa',username:'bolalar_dunyosi.uzb',connected:true,enabled:true,followers:105069,followers_today:173,mode:'on',dm_mode:'auto',chat_mode:'auto',sent_today:46,limit_day:500,pending:2},
+    {acc:'toy',icon:'🧸',title:'O\'yinchoq profili',username:'bolalar_dunyosi_oyinchoq',connected:true,enabled:true,followers:18420,followers_today:37,mode:'on',dm_mode:'auto',chat_mode:'auto',sent_today:12,limit_day:500,pending:0}]});
+  if (ACC==='toy'){
+    if (path==='/api/comments') return Promise.resolve({enabled:true,status:{mode:'on',dm_mode:'auto',sent_today:12,limit_day:500,pending:0},chat:{status:{mode:'auto',pending:0,last_run:{time:'09:24',convs:6,new:0}},pending:[]},dm_pending:[],pending:[]});
+    if (path.startsWith('/api/feed')){ const now=Math.floor(Date.now()/1000); return Promise.resolve({now,items:[
+      {t:now-90,x:"Komentga javob: @nigora_88 «Bu qo'g'irchoq necha pul?» → Direktga narxini yozdim 😊"},
+      {t:now-95,x:"Komentdan keyin direkt: @nigora_88 → Gapiradigan qo'g'irchoq: 189 000 so'm, Chilonzor 9"},
+      {t:now-2400,x:"Direktda javob: @aziz_ota «Lego bormi?» → Ha, 6+ yosh uchun 3 xil to'plam bor"},
+      {t:now-7300,x:"Komentga javob: @malika «Juda chiroyli 😍» → Rahmat! Qizingizga yoqsa xursand bo'lamiz"}]}) }
+    if (path==='/api/followers'){ return _demoOld2(path,opts).then(r=>({...r,count:18420+(r.count-105069),today:{gained:52,lost:15,net:37},series:r.series.map(([t,v])=>[t,v-86650]),reels:null})) }
+  }
+  return _demoOld2(path, opts);
+};
 // ---------- ishga tushirish ----------
+applyAcc(); requestAnimationFrame(()=>Brain.rebuild());
 if (!DEMO && (!tg || !tg.initData)) showLock();
 else {
   loadHome(true);

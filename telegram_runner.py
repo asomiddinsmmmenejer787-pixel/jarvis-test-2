@@ -12,6 +12,7 @@ import threading
 import time
 from datetime import datetime
 
+import accounts
 import config
 import uvicorn
 from fastapi import FastAPI, Request
@@ -172,6 +173,41 @@ responder = (
 
 # Direktga o'zi yozgan mijozlarga javob
 chat = DirectChat(jarvis.ai_provider) if responder is not None else None
+
+# O'yinchoq profili (bolalar_dunyosi_oyinchoq): o'z tokeni, o'z komment/direkt holati,
+# o'z do'kon ma'lumoti va xotirasi (DATA_DIR/toy/). Token /oyinchoqtoken bilan ulanadi.
+TOY = accounts.TOY
+toy_responder = toy_chat = None
+if responder is not None:
+    with accounts.use(TOY):
+        toy_responder = CommentResponder(
+            jarvis.ai_provider, default_mode=os.environ.get("TOY_AUTO_REPLY_MODE", "on"))
+        toy_chat = DirectChat(jarvis.ai_provider)
+
+
+def R():
+    """Hozirgi akkauntning komment javob tizimi."""
+    return toy_responder if accounts.is_toy() else responder
+
+
+def C():
+    """Hozirgi akkauntning direkt yozishma tizimi."""
+    return toy_chat if accounts.is_toy() else chat
+
+
+def cbp(prefix):
+    """Tugma kodi: o'yinchoq profili tugmalari 't' bilan boshlanadi (tar|, tdm|, tdc|)."""
+    return ("t" + prefix) if accounts.is_toy() else prefix
+
+
+def tagged(text):
+    """O'yinchoq profili xabarlari tepasiga akkaunt nomi yoziladi."""
+    lab = accounts.label()
+    return f"{lab}\n{text}" if lab else text
+
+
+def acc_of_callback(data):
+    return TOY if (data or "").startswith("t") else accounts.MAIN
 
 
 # ---------- mini ilova (Jarvis HUD) ----------
@@ -443,30 +479,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ruxsat so'ralgan komentga egasi Reply qilib o'z javobini yozdi
     replied = update.message.reply_to_message
     if responder and replied is not None:
-        chat_key = chat.find_by_message(replied.message_id) if chat else None
-        if chat_key:
-            try:
-                result = await asyncio.to_thread(chat.approve, chat_key, user_text)
-            except InstagramError as e:
-                result = ig_error_text(e)
-            await update.message.reply_text(result)
-            return
-        dm_cid = responder.find_dm_by_message(replied.message_id)
-        if dm_cid:
-            try:
-                result = await asyncio.to_thread(responder.approve_dm, dm_cid, user_text)
-            except InstagramError as e:
-                result = ig_error_text(e)
-            await update.message.reply_text(result)
-            return
-        cid = responder.find_by_message(replied.message_id)
-        if cid:
-            try:
-                result = await asyncio.to_thread(responder.approve, cid, user_text)
-            except InstagramError as e:
-                result = ig_error_text(e)
-            await update.message.reply_text(result)
-            return
+        for acc in accounts.ALL:
+            with accounts.use(acc):
+                r, c = R(), C()
+                if r is None:
+                    continue
+                chat_key = c.find_by_message(replied.message_id) if c else None
+                if chat_key:
+                    try:
+                        result = await asyncio.to_thread(c.approve, chat_key, user_text)
+                    except InstagramError as e:
+                        result = ig_error_text(e)
+                    await update.message.reply_text(result)
+                    return
+                dm_cid = r.find_dm_by_message(replied.message_id)
+                if dm_cid:
+                    try:
+                        result = await asyncio.to_thread(r.approve_dm, dm_cid, user_text)
+                    except InstagramError as e:
+                        result = ig_error_text(e)
+                    await update.message.reply_text(result)
+                    return
+                cid = r.find_by_message(replied.message_id)
+                if cid:
+                    try:
+                        result = await asyncio.to_thread(r.approve, cid, user_text)
+                    except InstagramError as e:
+                        result = ig_error_text(e)
+                    await update.message.reply_text(result)
+                    return
 
     ctx_text = user_text
     if replied is not None and (replied.text or replied.caption):
@@ -725,18 +766,33 @@ async def igtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         logger.warning("Token yozilgan xabarni o'chirib bo'lmadi.")
     chat_id = update.effective_chat.id
+    # Qaysi akkaunt tokeni ekanini Instagram'ning o'zidan bilamiz: o'yinchoq profili tokeni
+    # asosiy sahifa tokeni o'rniga yozilib qolmasin.
+    forced = context.chat_data.pop("force_toy", False) if context.chat_data is not None else False
     try:
-        username = await asyncio.to_thread(ig.set_token, token)
+        owner_name = await asyncio.to_thread(ig.token_username, token)
     except InstagramError as e:
         await context.bot.send_message(chat_id=chat_id, text=f"❌ {e}\nMeta'dan yangi token olib, qayta yuboring.")
         return
+    acc = TOY if (forced or owner_name == accounts.DEFAULT_USERNAMES[TOY]) else accounts.MAIN
+    with accounts.use(acc):
+        try:
+            username = await asyncio.to_thread(ig.set_token, token)
+        except InstagramError as e:
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ {e}\nMeta'dan yangi token olib, qayta yuboring.")
+            return
     sched = _load_scheduler()
-    sched.get("alerts", {}).pop("ig_fatal", None)
+    sched.get("alerts", {}).pop("toy_ig_fatal" if acc == TOY else "ig_fatal", None)
     _save_scheduler(sched)
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"✅ Instagram ulandi: @{username}\nToken saqlandi va o'zi yangilanib turadi. Endi /insta yozib ko'ring.",
-    )
+    if acc == TOY:
+        st = toy_responder.status() if toy_responder else {}
+        text = (f"✅ O'yinchoq profili ulandi: @{username}\n"
+                f"Komentlarga javob: {st.get('mode', '—')}, direkt: {st.get('dm_mode', '—')}.\n"
+                "Bir daqiqa ichida Jarvis bu sahifa komentlariga ham javob yoza boshlaydi. "
+                "Holat va sozlash: /oyinchoq")
+    else:
+        text = f"✅ Instagram ulandi: @{username}\nToken saqlandi va o'zi yangilanib turadi. Endi /insta yozib ko'ring."
+    await context.bot.send_message(chat_id=chat_id, text=text)
 
 
 @owner_only
@@ -915,6 +971,85 @@ def last_run_lines(r):
     ]
 
 
+TOY_MODE_NAMES = {"on": "on", "yoniq": "on", "test": "test", "off": "off", "ochiq": "off", "o'chiq": "off",
+                  "avto": "auto", "auto": "auto", "tasdiq": "approve", "approve": "approve"}
+
+
+def toy_status_text():
+    with accounts.use(TOY):
+        connected = ig.is_configured()
+        st = toy_responder.status()
+        cst = toy_chat.status() if toy_chat else {}
+    lines = [f"🧸 O'yinchoq profili — @{accounts.DEFAULT_USERNAMES[TOY]}",
+             "Ulangan ✅" if connected else "Ulanmagan ❌ — tokenni yuboring: /oyinchoqtoken IGAA...",
+             "",
+             f"💬 Komentlarga javob: {MODE_UZ_TXT.get(st['mode'], st['mode'])} · bugun {st['sent_today']}/{st['limit_day']}",
+             f"📩 Komentdan keyin direkt: {MODE_UZ_TXT.get(st['dm_mode'], st['dm_mode'])}",
+             f"✉️ Direktga yozganlarga javob: {MODE_UZ_TXT.get(cst.get('mode'), cst.get('mode') or '—')}",
+             f"Tasdiq kutayotgan: {st['pending'] + st['dm_pending'] + (cst.get('pending') or 0)}"]
+    lr = st.get("last_run")
+    if lr:
+        lines.append(f"Oxirgi tekshiruv: {lr.get('time', '')}")
+    lines += ["", "O'zgartirish:",
+              "/oyinchoq koment on | test | off",
+              "/oyinchoq direkt avto | tasdiq | off",
+              "/oyinchoq yozishma avto | tasdiq | off",
+              "/oyinchoq tekshir — hozir tekshirish",
+              "Narx va mahsulotlar: Jarvis HUD → tepada 🧸 profilni tanlang → Do'kon"]
+    return "\n".join(lines)
+
+
+MODE_UZ_TXT = {"on": "YONIQ", "test": "TEST", "off": "O'CHIQ", "auto": "AVTO", "approve": "TASDIQ"}
+
+
+@owner_only
+async def oyinchoq_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """O'yinchoq profili holati va rejimlari."""
+    if toy_responder is None:
+        await update.message.reply_text("Bu funksiya uchun Gemini kerak.")
+        return
+    args = [a.lower() for a in (context.args or [])]
+    if args:
+        what, val = args[0], TOY_MODE_NAMES.get(args[1]) if len(args) > 1 else None
+        try:
+            with accounts.use(TOY):
+                if what in ("koment", "komment", "komentlar") and val in ("on", "test", "off"):
+                    toy_responder.set_mode(val)
+                elif what == "direkt" and val in ("auto", "approve", "off"):
+                    toy_responder.set_dm_mode(val)
+                elif what == "yozishma" and val in ("auto", "approve", "off") and toy_chat:
+                    toy_chat.set_mode(val)
+                elif what in ("tekshir", "check"):
+                    if not ig.is_configured():
+                        await update.message.reply_text("Avval token: /oyinchoqtoken IGAA...")
+                        return
+                    await update.message.reply_text("🧸 Tekshiryapman...")
+                    await toy_instagram_tick(context.application)
+                else:
+                    await update.message.reply_text(
+                        "Tushunmadim. Masalan: /oyinchoq koment on yoki /oyinchoq direkt avto")
+                    return
+        except InstagramError as e:
+            await update.message.reply_text(ig_error_text(e))
+            return
+    await update.message.reply_text(toy_status_text())
+
+
+@owner_only
+async def oyinchoqtoken_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """O'yinchoq profili tokeni (username tekshirilmasdan, majburan o'yinchoq profiliga yoziladi)."""
+    if not context.args:
+        await update.message.reply_text(
+            "O'yinchoq profili tokenini shunday yuboring:\n/oyinchoqtoken IGAA...\n\n"
+            "Token: developers.facebook.com → jarviss ilovasi → Instagram → API setup → "
+            "bolalar_dunyosi_oyinchoq qatoridagi «Сгенерировать маркер».\n"
+            "Xabaringiz xavfsizlik uchun darhol o'chiriladi.")
+        return
+    if context.chat_data is not None:
+        context.chat_data["force_toy"] = True
+    await igtoken_cmd.__wrapped__(update, context)
+
+
 @owner_only
 async def checknow_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Komentlarni hoziroq tekshiradi va natijani ko'rsatadi."""
@@ -961,22 +1096,22 @@ def approval_keyboard(item):
     cid = item["cid"]
     first_row = []
     if item.get("reply"):
-        first_row.append(InlineKeyboardButton("✅ Yuborish", callback_data=f"ar|ok|{cid}"))
-    first_row.append(InlineKeyboardButton("🙈 Yashirish", callback_data=f"ar|hide|{cid}"))
+        first_row.append(InlineKeyboardButton("✅ Yuborish", callback_data=f"{cbp('ar')}|ok|{cid}"))
+    first_row.append(InlineKeyboardButton("🙈 Yashirish", callback_data=f"{cbp('ar')}|hide|{cid}"))
     return InlineKeyboardMarkup([
         first_row,
-        [InlineKeyboardButton("❌ Javobsiz qoldirish", callback_data=f"ar|no|{cid}")],
+        [InlineKeyboardButton("❌ Javobsiz qoldirish", callback_data=f"{cbp('ar')}|no|{cid}")],
     ])
 
 
 async def send_approval(bot, owner, item):
     msg = await bot.send_message(
         chat_id=owner,
-        text=approval_text(item),
+        text=tagged(approval_text(item)),
         reply_markup=approval_keyboard(item),
         disable_web_page_preview=True,
     )
-    responder.set_message_id(item["cid"], msg.message_id)
+    R().set_message_id(item["cid"], msg.message_id)
 
 
 # ---------- xotira ----------
@@ -1047,16 +1182,16 @@ def chat_approval_text(item):
 
 async def send_chat_approval(bot, owner, item):
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("💬 Yuborish", callback_data=f"dc|ok|{item['key']}"),
-        InlineKeyboardButton("❌ Javobsiz", callback_data=f"dc|no|{item['key']}"),
+        InlineKeyboardButton("💬 Yuborish", callback_data=f"{cbp('dc')}|ok|{item['key']}"),
+        InlineKeyboardButton("❌ Javobsiz", callback_data=f"{cbp('dc')}|no|{item['key']}"),
     ]])
-    msg = await bot.send_message(chat_id=owner, text=chat_approval_text(item), reply_markup=kb,
+    msg = await bot.send_message(chat_id=owner, text=tagged(chat_approval_text(item)), reply_markup=kb,
                                  disable_web_page_preview=True)
-    chat.set_message_id(item["key"], msg.message_id)
+    C().set_message_id(item["key"], msg.message_id)
 
 
 async def send_unsent_chat_approvals(bot, owner):
-    for item in chat.get_pending():
+    for item in C().get_pending():
         if item.get("msg_id"):
             continue
         try:
@@ -1070,10 +1205,10 @@ async def notify_chat_event(bot, owner, ev):
         text = (f"💬 Direktda javob berildi: @{ev.get('username')}\n"
                 + (f"{'' if ev['reason'].startswith('🛒') else '⚠️ '}{ev['reason']}\n" if ev.get("reason") else "")
                 + f"Mijoz: «{ev['message']}»\n→ {ev['text']}")
-        await bot.send_message(chat_id=owner, text=text, disable_notification=not ev.get("reason"),
+        await bot.send_message(chat_id=owner, text=tagged(text), disable_notification=not ev.get("reason"),
                                disable_web_page_preview=True)
     elif ev["type"] == "chat_error":
-        await bot.send_message(chat_id=owner, text=f"⚠️ @{ev.get('username')} ga direkt javobi yuborilmadi: {ev.get('error')}")
+        await bot.send_message(chat_id=owner, text=tagged(f"⚠️ @{ev.get('username')} ga direkt javobi yuborilmadi: {ev.get('error')}"))
 
 
 @owner_only
@@ -1085,10 +1220,12 @@ async def chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return
     await query.answer("Bajarilmoqda...")
-    try:
-        result = await asyncio.to_thread(chat.approve if action == "ok" else chat.reject, key)
-    except InstagramError as e:
-        result = ig_error_text(e)
+    with accounts.use(acc_of_callback(query.data)):
+        c = C()
+        try:
+            result = await asyncio.to_thread(c.approve if action == "ok" else c.reject, key)
+        except InstagramError as e:
+            result = ig_error_text(e)
     try:
         await query.edit_message_text((query.message.text or "") + "\n\n— " + result, disable_web_page_preview=True)
     except Exception:
@@ -1140,15 +1277,16 @@ def dm_approval_text(item):
 
 async def send_dm_approval(bot, owner, item):
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("📩 Yuborish", callback_data=f"dm|ok|{item['cid']}"),
-        InlineKeyboardButton("❌ Yubormaslik", callback_data=f"dm|no|{item['cid']}"),
+        InlineKeyboardButton("📩 Yuborish", callback_data=f"{cbp('dm')}|ok|{item['cid']}"),
+        InlineKeyboardButton("❌ Yubormaslik", callback_data=f"{cbp('dm')}|no|{item['cid']}"),
     ]])
-    msg = await bot.send_message(chat_id=owner, text=dm_approval_text(item), reply_markup=kb,
+    msg = await bot.send_message(chat_id=owner, text=tagged(dm_approval_text(item)), reply_markup=kb,
                                  disable_web_page_preview=True)
-    responder.set_dm_message_id(item["cid"], msg.message_id)
+    R().set_dm_message_id(item["cid"], msg.message_id)
 
 
 async def send_unsent_approvals(bot, owner):
+    responder = R()
     for item in responder.get_pending():
         if item.get("msg_id"):
             continue
@@ -1187,13 +1325,15 @@ async def dm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return
     await query.answer("Bajarilmoqda...")
-    try:
-        if action == "ok":
-            result = await asyncio.to_thread(responder.approve_dm, cid)
-        else:
-            result = await asyncio.to_thread(responder.reject_dm, cid)
-    except InstagramError as e:
-        result = ig_error_text(e)
+    with accounts.use(acc_of_callback(query.data)):
+        r = R()
+        try:
+            if action == "ok":
+                result = await asyncio.to_thread(r.approve_dm, cid)
+            else:
+                result = await asyncio.to_thread(r.reject_dm, cid)
+        except InstagramError as e:
+            result = ig_error_text(e)
     try:
         await query.edit_message_text((query.message.text or "") + "\n\n— " + result,
                                       disable_web_page_preview=True)
@@ -1236,18 +1376,20 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer("Bajarilmoqda...")
 
-    if responder is None:
-        result = "Komentlarga javob tizimi o'chiq."
-    else:
-        try:
-            if action == "ok":
-                result = await asyncio.to_thread(responder.approve, cid)
-            elif action == "hide":
-                result = await asyncio.to_thread(responder.hide, cid)
-            else:
-                result = await asyncio.to_thread(responder.reject, cid)
-        except InstagramError as e:
-            result = ig_error_text(e)
+    with accounts.use(acc_of_callback(query.data)):
+        r = R()
+        if r is None:
+            result = "Komentlarga javob tizimi o'chiq."
+        else:
+            try:
+                if action == "ok":
+                    result = await asyncio.to_thread(r.approve, cid)
+                elif action == "hide":
+                    result = await asyncio.to_thread(r.hide, cid)
+                else:
+                    result = await asyncio.to_thread(r.reject, cid)
+            except InstagramError as e:
+                result = ig_error_text(e)
 
     try:
         await query.edit_message_text(
@@ -1313,7 +1455,7 @@ async def notify_event(bot, owner, ev):
                 + f"Komment: «{ev.get('comment', '')}» · post {ev.get('post_time', '')}\n\n{ev['text']}")
     elif ev["type"] == "dm_error":
         text = f"⚠️ @{ev.get('username')} ga direkt yuborilmadi: {ev.get('error')}"
-        await bot.send_message(chat_id=owner, text=text, disable_web_page_preview=True)
+        await bot.send_message(chat_id=owner, text=tagged(text), disable_web_page_preview=True)
         return
     else:
         return
@@ -1321,7 +1463,7 @@ async def notify_event(bot, owner, ev):
         d = ev["dm"]
         text += (f"\n\n📩 Direktga shunday yozardim (post {d.get('post_time', '')}"
                  + (f", ⚠️ {d['reason']}" if d.get("reason") else "") + f"):\n{d.get('text') or '—'}")
-    await bot.send_message(chat_id=owner, text=text, disable_notification=True,
+    await bot.send_message(chat_id=owner, text=tagged(text), disable_notification=True,
                            disable_web_page_preview=True)
 
 
@@ -1349,6 +1491,74 @@ async def maybe_daily_jobs(bot, owner):
 
 
 async def instagram_tick(app):
+    await main_instagram_tick(app)
+    try:
+        await toy_instagram_tick(app)
+    except Exception:  # noqa: BLE001 - o'yinchoq profili xatosi asosiy ishni to'xtatmasin
+        logger.exception("O'yinchoq profili tekshiruvida kutilmagan xato.")
+
+
+async def toy_instagram_tick(app):
+    """O'yinchoq profili: komentlarga javob va direkt. Asosiy sahifa bilan bir xil qoidalar,
+    lekin o'z tokeni, o'z holati, o'z narx/xotirasi bilan."""
+    owner = get_owner_id()
+    if owner is None or toy_responder is None:
+        return
+    with accounts.use(TOY):
+        if not ig.is_configured():
+            return
+        bot = app.bot
+        try:
+            await asyncio.to_thread(ig.refresh_token_if_needed)
+            try:
+                await asyncio.to_thread(followers_live.sample, 110)
+            except InstagramError as e:
+                if e.fatal:
+                    raise
+                logger.warning("O'yinchoq: obunachilar sonini o'qib bo'lmadi: %s", e)
+
+            if toy_responder.mode != "off":
+                try:
+                    events = await asyncio.to_thread(toy_responder.run_once)
+                finally:
+                    await send_unsent_approvals(bot, owner)
+                for ev in events:
+                    brain.log_event(ev)
+                    try:
+                        await notify_event(bot, owner, ev)
+                    except Exception:
+                        logger.exception("O'yinchoq: voqeani yuborib bo'lmadi.")
+
+            if toy_chat is not None and toy_chat.mode != "off":
+                try:
+                    chat_events = await asyncio.to_thread(toy_chat.run_once)
+                except InstagramError as e:
+                    if e.fatal or e.rate_limited:
+                        raise
+                    chat_events = []
+                    await alert_owner(
+                        bot, owner, "toy_chat_error",
+                        tagged(f"⚠️ Direkt yozishmalarni o'qib bo'lmadi: {e}\nToken xabarlar ruxsati "
+                               "(instagram_business_manage_messages) bilan olinganini tekshiring."), every_hours=24)
+                finally:
+                    await send_unsent_chat_approvals(bot, owner)
+                for ev in chat_events:
+                    brain.log_event(ev)
+                    try:
+                        await notify_chat_event(bot, owner, ev)
+                    except Exception:
+                        logger.exception("O'yinchoq: voqeani yuborib bo'lmadi.")
+        except InstagramError as e:
+            if e.fatal:
+                await alert_owner(bot, owner, "toy_ig_fatal",
+                                  tagged("⚠️ " + ig_error_text(e) + "\nYangi token: /oyinchoqtoken IGAA..."))
+            else:
+                logger.warning("O'yinchoq: Instagram vaqtinchalik xatosi: %s", e)
+        except AIError as e:
+            logger.warning("O'yinchoq: AI xatosi: %s", e)
+
+
+async def main_instagram_tick(app):
     owner = get_owner_id()
     if owner is None or not ig.is_configured():
         return
@@ -1467,6 +1677,7 @@ async def post_init(app):
             BotCommand("ytholat", "YouTube holati"),
             BotCommand("autoreply", "Komentlarga javob rejimi"),
             BotCommand("pending", "Ruxsat kutayotgan komentlar"),
+            BotCommand("oyinchoq", "🧸 O'yinchoq profili: komment va direkt"),
             BotCommand("direkt", "Komentdan keyingi direkt"),
             BotCommand("yozishma", "Direktga yozganlarga javob"),
             BotCommand("xotira", "Jarvis xotirasi (mahsulot va narxlar)"),
@@ -1547,10 +1758,12 @@ def build_app(token):
     app.add_handler(CommandHandler("app", app_cmd))
     app.add_handler(CommandHandler("checknow", checknow_cmd))
     app.add_handler(CommandHandler(JARVIS_COMMANDS, jarvis_command))
-    app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^ar\|"))
-    app.add_handler(CallbackQueryHandler(dm_callback, pattern=r"^dm\|"))
+    app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^t?ar\|"))
+    app.add_handler(CallbackQueryHandler(dm_callback, pattern=r"^t?dm\|"))
+    app.add_handler(CommandHandler("oyinchoq", oyinchoq_cmd))
+    app.add_handler(CommandHandler("oyinchoqtoken", oyinchoqtoken_cmd))
     app.add_handler(CommandHandler("direkt", direkt_cmd))
-    app.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^dc\|"))
+    app.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^t?dc\|"))
     app.add_handler(CommandHandler("yozishma", yozishma_cmd))
     app.add_handler(CommandHandler("eslab", eslab_cmd))
     app.add_handler(CommandHandler("xotira", xotira_cmd))
@@ -1581,6 +1794,7 @@ def main():
 
     # Mini ilova uchun kontekst (initData imzosi bot tokeni bilan tekshiriladi)
     webapp.init(jarvis, responder, get_owner_id, token, chat)
+    webapp.set_account(TOY, toy_responder, toy_chat)
 
     # OAuth callback va mini ilova web-serveri
     start_web_server()
