@@ -1045,58 +1045,110 @@ const NX=(function(){
     pts.push(seat(to)); return pts }
   function walk(link){ const pts=path(link.from,link.to); if(pts.length<2) return;
     let L=0; for(let i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
-    walkers.push({pts,L,d:0,from:link.from,to:link.to,kind:link.kind}); if(walkers.length>6) walkers.shift() }
+    if(walkers.some(w=>w.from===link.from&&w.phase!=='done')) return;
+    walkers.push({pts,L,d:0,from:link.from,to:link.to,kind:link.kind,phase:'go',hold:0}); if(walkers.length>6) walkers.shift() }
   function wpos(w){ let d=w.d; for(let i=1;i<w.pts.length;i++){ const a=w.pts[i-1],b=w.pts[i],s=Math.hypot(b.x-a.x,b.y-a.y); if(d<=s){ const k=s?d/s:0; return {x:a.x+(b.x-a.x)*k,y:a.y+(b.y-a.y)*k} } d-=s } return w.pts[w.pts.length-1] }
   function agent(a){ return (data&&data.agents||[]).find(x=>x.id===a)||{id:a,state:'idle'} }
   function rr(x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath() }
+  // 2D odam: bosh, soch, yuz, tana, qo'llar, oyoqlar. Kasbiga qarab aksessuar.
+  const LOOK={'project-manager':{skin:'#e8b48f',hair:'#2b1d14',shirt:'#3d7bd6',acc:'clip'},researcher:{skin:'#c98d68',hair:'#1a1a1a',shirt:'#2f9e72',acc:'glasses'},
+    scriptwriter:{skin:'#f0c39e',hair:'#6b3d1f',shirt:'#d9a13b',acc:'long'},copywriter:{skin:'#d9a07a',hair:'#3a2418',shirt:'#e07a4a',acc:'long'},
+    designer:{skin:'#f2c7a5',hair:'#c0397a',shirt:'#c9508f',acc:'bun'},'video-editor':{skin:'#b97a55',hair:'#121212',shirt:'#7d63d8',acc:'phones'},
+    targetologist:{skin:'#e3ad85',hair:'#40291b',shirt:'#d94f68',acc:'cap'},developer:{skin:'#c48a62',hair:'#222',shirt:'#2f8fb8',acc:'hood'},
+    auditor:{skin:'#efc09a',hair:'#8a8f99',shirt:'#5b6787',acc:'glasses'},founder:{skin:'#d9a07a',hair:'#1b1410',shirt:'#e8edf8',acc:''}};
+  function person(id,x,y,s,pose,t,face){ // x,y = bel (beli) nuqtasi; pose: type|sit|read|stand|walk|wait|stuck
+    const L=LOOK[id]||LOOK.founder, ph=(t*7+x*.13)%6.283;
+    g.lineCap='round'; g.lineJoin='round';
+    // oyoqlar (tik turganda/yurganda)
+    if(pose==='stand'||pose==='walk'||pose==='wait'){ const sw=pose==='walk'?Math.sin(ph*1.6)*4*s:0;
+      g.strokeStyle='#26304a'; g.lineWidth=3.2*s; g.beginPath(); g.moveTo(x-2.5*s,y); g.lineTo(x-2.5*s+sw,y+11*s); g.moveTo(x+2.5*s,y); g.lineTo(x+2.5*s-sw,y+11*s); g.stroke();
+      g.fillStyle='#101522'; g.beginPath(); g.ellipse(x-2.5*s+sw,y+11.5*s,2.4*s,1.4*s,0,0,6.283); g.ellipse(x+2.5*s-sw,y+11.5*s,2.4*s,1.4*s,0,0,6.283); g.fill() }
+    // tana
+    const bh=12*s, bw=11*s, by=y-bh; g.fillStyle=L.shirt; rr(x-bw/2,by,bw,bh+1,3.5*s); g.fill();
+    if(L.acc==='hood'){ g.fillStyle='rgba(0,0,0,.18)'; rr(x-bw/2,by,bw,3*s,2*s); g.fill() }
+    g.fillStyle='rgba(255,255,255,.18)'; g.fillRect(x-.6*s,by+1.5*s,1.2*s,bh-3*s);
+    // qo'llar
+    const shL={x:x-bw/2+1*s,y:by+2.5*s}, shR={x:x+bw/2-1*s,y:by+2.5*s}; let hL,hR;
+    if(pose==='type'){ const a=Math.sin(ph*2.2)*1.6*s, b=Math.sin(ph*2.2+2)*1.6*s; hL={x:x-4*s,y:y+4*s+a}; hR={x:x+4*s,y:y+4*s+b} }
+    else if(pose==='stuck'){ hL={x:x-5*s,y:by-9*s}; hR={x:x+5*s,y:by-9*s} }
+    else if(pose==='read'||pose==='wait'){ hL={x:x-3*s,y:by+6*s}; hR={x:x+3*s,y:by+6*s} }
+    else if(pose==='walk'){ const sw=Math.sin(ph*1.6)*3*s; hL={x:x-6*s-sw*.3,y:y-2*s+sw}; hR={x:x+3*s,y:by+5*s} }
+    else { hL={x:x-6.5*s,y:y-1*s}; hR={x:x+6.5*s,y:y-1*s+Math.sin(t*1.3)*.8*s} }
+    g.strokeStyle=L.shirt; g.lineWidth=3*s; g.beginPath(); g.moveTo(shL.x,shL.y); g.lineTo(hL.x,hL.y); g.moveTo(shR.x,shR.y); g.lineTo(hR.x,hR.y); g.stroke();
+    g.fillStyle=L.skin; g.beginPath(); g.arc(hL.x,hL.y,1.7*s,0,6.283); g.arc(hR.x,hR.y,1.7*s,0,6.283); g.fill();
+    // qo'lidagi narsa
+    if((pose==='read'||pose==='wait'||pose==='walk'||L.acc==='clip'&&pose!=='type')&&face!=='empty'){ const px=pose==='walk'?hR.x:x, py=pose==='walk'?hR.y:by+5*s;
+      g.fillStyle=L.acc==='clip'&&pose!=='walk'?'#a87b4f':'#f4f7ff'; rr(px-3.5*s,py-4.5*s,7*s,8.5*s,1*s); g.fill();
+      g.fillStyle='#8a97b8'; for(let i=0;i<3;i++) g.fillRect(px-2.3*s,py-2.8*s+i*2.2*s,4.6*s,.7*s) }
+    // bo'yin va bosh
+    const hx=x, hy=by-5.8*s, hr=5.6*s, look=face==='back';
+    g.fillStyle=L.skin; g.fillRect(x-1.5*s,by-1.5*s,3*s,2.5*s);
+    if(L.acc==='long'){ g.fillStyle=L.hair; rr(hx-hr-.6*s,hy-1*s,2*hr+1.2*s,hr*1.9,2.5*s); g.fill() }
+    g.fillStyle=L.skin; g.beginPath(); g.arc(hx,hy,hr,0,6.283); g.fill();
+    g.fillStyle=L.hair; g.beginPath(); g.arc(hx,hy-.6*s,hr+.4*s,Math.PI*1.02,Math.PI*1.98); g.fill();
+    if(look){ g.beginPath(); g.arc(hx,hy,hr+.3*s,0,6.283); g.fill() }
+    if(L.acc==='bun'){ g.beginPath(); g.arc(hx,hy-hr-1*s,2.6*s,0,6.283); g.fill() }
+    if(L.acc==='cap'){ g.fillStyle='#e04f63'; g.beginPath(); g.arc(hx,hy-1*s,hr+.6*s,Math.PI,0); g.fill(); g.fillRect(hx,hy-1.6*s,hr+3*s,1.6*s) }
+    if(!look){ // yuz: ko'zlar (ba'zan pirpiraydi), og'iz
+      const blink=((t+x*.07)%4)<.12, ey=hy+.6*s; g.fillStyle='#1b1f2e';
+      if(blink){ g.fillRect(hx-2.6*s,ey,1.8*s,.5*s); g.fillRect(hx+.8*s,ey,1.8*s,.5*s) }
+      else { g.beginPath(); g.arc(hx-1.7*s,ey,.85*s,0,6.283); g.arc(hx+1.7*s,ey,.85*s,0,6.283); g.fill() }
+      g.strokeStyle='#8a4b3a'; g.lineWidth=.8*s; g.beginPath();
+      if(pose==='stuck') g.arc(hx,hy+3.6*s,1.4*s,Math.PI*1.15,Math.PI*1.85); else g.arc(hx,hy+2.2*s,1.4*s,Math.PI*.15,Math.PI*.85); g.stroke();
+      if(L.acc==='glasses'){ g.strokeStyle='#1b1f2e'; g.lineWidth=.7*s; g.beginPath(); g.arc(hx-1.8*s,ey,1.6*s,0,6.283); g.moveTo(hx+3.4*s,ey); g.arc(hx+1.8*s,ey,1.6*s,0,6.283); g.stroke() } }
+    if(L.acc==='phones'){ g.strokeStyle='#1d1d1d'; g.lineWidth=1.4*s; g.beginPath(); g.arc(hx,hy,hr+.8*s,Math.PI*1.05,Math.PI*1.95); g.stroke();
+      g.fillStyle='#7d63d8'; rr(hx-hr-1.6*s,hy-1*s,2.4*s,3.6*s,1*s); g.fill(); rr(hx+hr-.8*s,hy-1*s,2.4*s,3.6*s,1*s); g.fill() }
+    g.lineCap='butt';
+    return {hx,hy,hr} }
+  function away(a){ return walkers.some(w=>w.from===a&&w.phase!=='done') }
   function drawRoom(a,r,c,t){
-    const R=room(r,c), m=META[a], ag=agent(a), st=ag.state||'idle', on=st==='working', selc=sel===a;
-    // pol
-    g.fillStyle=rgba(m.c,on?0.09:0.04); g.fillRect(R.x+1,R.y+1,R.w-2,R.h-2);
-    g.strokeStyle='rgba(120,160,230,.05)'; g.lineWidth=1; for(let i=1;i<6;i++){ g.beginPath(); g.moveTo(R.x+R.w*i/6,R.y); g.lineTo(R.x+R.w*i/6,R.y+R.h); g.stroke() }
-    if(selc){ g.strokeStyle=rgba(m.c,.9); g.lineWidth=2; g.strokeRect(R.x+3,R.y+3,R.w-6,R.h-6) }
-    // gilam
-    g.fillStyle=rgba(m.c,.07); rr(R.x+R.w*.2,R.y+R.h*.46,R.w*.6,R.h*.3,8); g.fill();
-    // stol
-    const dx=R.x+R.w*.16, dy=R.y+R.h*.14, dw=R.w*.68, dh=R.h*.22;
-    g.fillStyle='#2a3550'; rr(dx,dy,dw,dh,4); g.fill(); g.strokeStyle='rgba(180,200,255,.22)'; g.lineWidth=1; g.stroke();
-    // kompyuter (monitor + klaviatura)
-    const mw=R.w*.26, mh=R.h*.11, mx=R.cx-mw/2, my=dy+dh*.12;
-    g.fillStyle='#0b1020'; rr(mx-1.5,my-1.5,mw+3,mh+3,2); g.fill();
-    if(on){ g.fillStyle=rgba(m.c,.85); g.fillRect(mx,my,mw,mh); g.fillStyle='rgba(5,10,25,.55)';
-      for(let i=0;i<4;i++){ const lw=mw*(.3+.6*Math.abs(Math.sin(t*2.3+i*1.7+r+c))); g.fillRect(mx+2,my+2+i*(mh-4)/4,lw-4,1.5) }
-      g.fillStyle=rgba(m.c,.18); g.beginPath(); g.arc(R.cx,my+mh/2,mw*.9,0,6.283); g.fill() }
-    else if(st==='blocked'){ g.fillStyle=Math.sin(t*5)>0?'#ff6b8a':'#3a1020'; g.fillRect(mx,my,mw,mh) }
-    else { g.fillStyle='#141c30'; g.fillRect(mx,my,mw,mh) }
-    g.fillStyle='#9fb0d6'; g.fillRect(R.cx-2,my+mh+1.5,4,dh*.14);
-    g.fillStyle='#3b4766'; rr(R.cx-mw*.42,dy+dh*.72,mw*.84,dh*.16,2); g.fill();
-    // qog'ozlar / krujka
-    g.fillStyle='rgba(230,240,255,.65)'; g.fillRect(dx+dw*.08,dy+dh*.3,dw*.12,dh*.45);
-    g.fillStyle=rgba(m.c,.8); g.beginPath(); g.arc(dx+dw*.88,dy+dh*.5,2.6,0,6.283); g.fill();
-    // stul
-    const sp=seat(a); g.fillStyle='#39456a'; g.beginPath(); g.arc(sp.x,sp.y+3,R.w*.085,0,6.283); g.fill();
-    g.fillStyle='#2b3554'; rr(sp.x-R.w*.08,sp.y+R.w*.07,R.w*.16,R.w*.035,2); g.fill();
+    const R=room(r,c), m=META[a], ag=agent(a), st=ag.state||'idle', on=st==='working', s=R.w/112;
+    // pol (parket) va gilam
+    g.fillStyle=rgba(m.c,on?0.08:0.035); g.fillRect(R.x+1,R.y+1,R.w-2,R.h-2);
+    g.strokeStyle='rgba(120,160,230,.05)'; g.lineWidth=1; for(let i=1;i<8;i++){ g.beginPath(); g.moveTo(R.x,R.y+R.h*i/8); g.lineTo(R.x+R.w,R.y+R.h*i/8); g.stroke() }
+    if(sel===a){ g.strokeStyle=rgba(m.c,.9); g.lineWidth=2; g.strokeRect(R.x+3,R.y+3,R.w-6,R.h-6) }
+    g.fillStyle=rgba(m.c,.08); rr(R.x+R.w*.12,R.y+R.h*.62,R.w*.5,R.h*.26,8); g.fill();
+    // devordagi rasm / doska
+    g.fillStyle='rgba(200,215,255,.08)'; rr(R.x+R.w*.36,R.y+6*s,R.w*.28,9*s,2); g.fill(); g.fillStyle=rgba(m.c,.5); g.fillRect(R.x+R.w*.39,R.y+9*s,R.w*.1,3*s);
     // o'simlik
-    g.fillStyle='#1e6b4c'; g.beginPath(); g.arc(R.x+R.w*.88,R.y+R.h*.86,R.w*.055,0,6.283); g.fill();
-    g.fillStyle='#2fa36f'; g.beginPath(); g.arc(R.x+R.w*.88+2,R.y+R.h*.86-2,R.w*.03,0,6.283); g.fill();
-    // agent
-    let ax,ay; const bob=Math.sin(t*3+r*2+c)*1.2;
-    if(on||st==='blocked'||st==='assigned'){ ax=sp.x; ay=sp.y-2+(on?bob:0) }
-    else if(st==='waiting'){ ax=R.x+R.w*.74; ay=R.y+R.h*.7+Math.sin(t*1.5+c)*1.5 }
-    else { ax=R.x+R.w*.28+Math.sin(t*.6+r+c*2)*R.w*.06; ay=R.y+R.h*.72 }
-    const ar=Math.max(9,R.w*.1);
-    if(on){ g.fillStyle=rgba(m.c,.25+.15*Math.sin(t*4)); g.beginPath(); g.arc(ax,ay,ar+5,0,6.283); g.fill() }
-    if(st==='blocked'){ g.strokeStyle=rgba('#ff6b8a',.5+.5*Math.sin(t*6)); g.lineWidth=2; g.beginPath(); g.arc(ax,ay,ar+4,0,6.283); g.stroke() }
-    g.fillStyle='#0d1428'; g.beginPath(); g.arc(ax,ay,ar,0,6.283); g.fill(); g.strokeStyle=m.c; g.lineWidth=2; g.stroke();
-    g.font=`${Math.round(ar*1.15)}px system-ui,"Apple Color Emoji","Segoe UI Emoji"`; g.textAlign='center'; g.textBaseline='middle'; g.fillText(m.e,ax,ay+1);
-    // holat nuqtasi
-    g.fillStyle=ST[st].c; g.beginPath(); g.arc(ax+ar*.75,ay-ar*.75,3.2,0,6.283); g.fill();
-    if(st==='blocked'){ g.fillStyle='#ff6b8a'; g.font='bold 12px Manrope,system-ui'; g.fillText('!',ax+ar+6,ay-ar) }
-    // vazifa yorlig'i
-    if(ag.task&&ag.task.id){ g.font='700 8.5px JetBrains Mono,monospace'; const tw=g.measureText(ag.task.id).width+8;
-      g.fillStyle=rgba(m.c,.85); rr(R.x+R.w-tw-5,R.y+5,tw,13,4); g.fill(); g.fillStyle='#061021'; g.fillText(ag.task.id,R.x+R.w-5-tw/2,R.y+12) }
-    // nom
-    g.font='800 10px Manrope,system-ui'; g.textAlign='left'; g.fillStyle=rgba(m.c,.95); g.fillText(m.n,R.x+6,R.y+R.h-9);
+    const px=R.x+R.w*.86, py=R.y+R.h*.8; g.fillStyle='#6b4a32'; rr(px-5*s,py,10*s,9*s,2); g.fill();
+    g.fillStyle='#2fa36f'; for(let i=0;i<5;i++){ const ang=-Math.PI/2+(i-2)*.5+Math.sin(t*.8+i)*.05; g.beginPath(); g.ellipse(px+Math.cos(ang)*6*s,py-2*s+Math.sin(ang)*6*s,2.6*s,5*s,ang+Math.PI/2,0,6.283); g.fill() }
+    const cx=R.cx, deskY=R.y+R.h*.47, deskW=R.w*.66, deskH=R.h*.13;
+    const here=!away(a);
+    const seatX=cx-R.w*.13, waist=deskY+1*s;
+    // stul (odam orqasida)
+    g.fillStyle='#2b3554'; rr(seatX-9*s,deskY-27*s,18*s,22*s,5*s); g.fill(); g.fillStyle='#39456a'; rr(seatX-8*s,deskY-26*s,16*s,10*s,4*s); g.fill();
+    // o'tirgan odam (stol ortida, bizga qaragan)
+    let sitting = here && (on||st==='blocked'||st==='assigned');
+    if(sitting){ const pose= on?'type':st==='blocked'?'stuck':'read';
+      const hd=person(a,seatX,waist,s,pose,t,'front');
+      if(on){ g.fillStyle=rgba(m.c,.16+.06*Math.sin(t*6)); g.beginPath(); g.arc(hd.hx,hd.hy,hd.hr*1.6,0,6.283); g.fill() } }
+    // stol
+    g.fillStyle='#3a2f2a'; rr(cx-deskW/2,deskY,deskW,deskH,3*s); g.fill(); g.fillStyle='#4d3f37'; g.fillRect(cx-deskW/2,deskY,deskW,2.2*s);
+    g.fillStyle='#2a221e'; g.fillRect(cx-deskW/2+3*s,deskY+deskH,3*s,9*s); g.fillRect(cx+deskW/2-6*s,deskY+deskH,3*s,9*s);
+    // kompyuter: monitor orqasi bizga, ekran nuri yuzga tushadi
+    const mw=R.w*.26, mh=R.h*.14, mx=cx+R.w*.02, my=deskY-mh+2*s;
+    if(on){ g.fillStyle=rgba(m.c,.22); g.beginPath(); g.moveTo(mx,my); g.lineTo(mx+mw,my); g.lineTo(mx+mw+10*s,my-18*s); g.lineTo(mx-10*s,my-18*s); g.closePath(); g.fill() }
+    g.fillStyle='#1a2236'; rr(mx,my,mw,mh,2*s); g.fill(); g.strokeStyle=on?rgba(m.c,.9):st==='blocked'&&Math.sin(t*5)>0?'#ff6b8a':'rgba(160,180,230,.35)'; g.lineWidth=1.4; g.stroke();
+    g.fillStyle='#9fb0d6'; g.beginPath(); g.arc(mx+mw/2,my+mh/2,1.6*s,0,6.283); g.fill();
+    g.fillStyle='#2b3449'; g.fillRect(mx+mw/2-1.5*s,my+mh,3*s,2*s);
+    // stol ustidagi narsalar: krujka (bug'i bilan), qog'oz
+    const kx=cx-deskW/2+8*s, ky=deskY-2*s; g.fillStyle='#e8edf8'; rr(kx-3*s,ky-5*s,6*s,6*s,1.2*s); g.fill();
+    g.strokeStyle='rgba(230,240,255,.25)'; g.lineWidth=1; g.beginPath(); g.moveTo(kx,ky-6*s); g.quadraticCurveTo(kx+2*s+Math.sin(t*2)*2,ky-10*s,kx,ky-14*s); g.stroke();
+    g.fillStyle='rgba(240,245,255,.8)'; g.fillRect(cx-deskW/2+14*s,deskY+2.5*s,8*s,5*s);
+    // nom lavhasi stolda
+    g.fillStyle=rgba(m.c,.9); rr(cx-deskW/2+deskW*.55,deskY+deskH-5.5*s,deskW*.38,4.5*s,1.5); g.fill();
+    // tik turgan / yurgan odam
+    if(here&&!sitting){ if(st==='waiting'){ person(a,R.x+R.w*.72,R.y+R.h*.72,s,'wait',t,'front') }
+      else { const wx=R.x+R.w*.3+Math.sin(t*.45+r+c*2)*R.w*.14, moving=Math.abs(Math.cos(t*.45+r+c*2))>.25; person(a,wx,R.y+R.h*.72,s,moving?'walk':'stand',t,'front') } }
+    // holat pufakchasi
+    const bx=R.x+R.w-8*s, byy=R.y+20*s; g.fillStyle=ST[st].c; g.beginPath(); g.arc(bx,byy,3.4*s,0,6.283); g.fill();
+    if(st==='blocked'&&here){ g.fillStyle='#ff6b8a'; rr(seatX+9*s,deskY-44*s,12*s,12*s,3*s); g.fill(); g.fillStyle='#fff'; g.font=`bold ${Math.round(10*s)}px Manrope,system-ui`; g.textAlign='center'; g.textBaseline='middle'; g.fillText('!',seatX+15*s,deskY-38*s) }
+    if(on&&here){ const dots='.'.repeat(1+Math.floor(t*2)%3); g.fillStyle='rgba(255,255,255,.9)'; rr(seatX+9*s,deskY-44*s,16*s,10*s,4*s); g.fill(); g.fillStyle='#2b3449'; g.font=`bold ${Math.round(8*s)}px Manrope,system-ui`; g.textAlign='left'; g.textBaseline='middle'; g.fillText(dots,seatX+11*s,deskY-39.5*s) }
+    // vazifa yorlig'i va nom
+    if(ag.task&&ag.task.id){ g.font='700 8.5px JetBrains Mono,monospace'; g.textAlign='center'; g.textBaseline='middle'; const tw=g.measureText(ag.task.id).width+8;
+      g.fillStyle=rgba(m.c,.85); rr(R.x+5,R.y+5,tw,13,4); g.fill(); g.fillStyle='#061021'; g.fillText(ag.task.id,R.x+5+tw/2,R.y+12) }
+    g.font='800 10px Manrope,system-ui'; g.textAlign='left'; g.textBaseline='middle'; g.fillStyle=rgba(m.c,.95); g.fillText(m.e+' '+m.n,R.x+6,R.y+R.h-9);
   }
   function drawWalls(t){
     g.strokeStyle='rgba(150,185,255,.55)'; g.lineWidth=3; g.lineCap='round';
@@ -1123,11 +1175,14 @@ const NX=(function(){
     g.clearRect(0,0,W,H); g.fillStyle='#070d1d'; g.fillRect(0,0,W,H);
     GRID.forEach((row,r)=>row.forEach((a,c)=>drawRoom(a,r,c,t)));
     drawWalls(t);
-    walkers=walkers.filter(w=>{ w.d+=dt*75; const p=wpos(w), m=META[w.from]||META.founder;
-      g.fillStyle=rgba(m.c,.35); g.beginPath(); g.arc(p.x,p.y,11,0,6.283); g.fill();
-      g.fillStyle='#f4f7ff'; rr(p.x-5,p.y-7,10,13,1.5); g.fill(); g.strokeStyle=m.c; g.lineWidth=1.5; g.stroke();
-      g.fillStyle=m.c; for(let i=0;i<3;i++) g.fillRect(p.x-3,p.y-4+i*3.5,6-(i===2?2:0),1.3);
-      return w.d<w.L+8 });
+    walkers=walkers.filter(w=>{ const s=(room(0,0).w)/112;
+      if(w.phase==='go'){ w.d+=dt*60; if(w.d>=w.L){ w.d=w.L; w.phase='give' } }
+      else if(w.phase==='give'){ w.hold+=dt; if(w.hold>1.2){ w.phase='back'; w.pts=w.pts.slice().reverse(); w.d=0 } }
+      else if(w.phase==='back'){ w.d+=dt*70; if(w.d>=w.L) w.phase='done' }
+      const p=wpos(w), m=META[w.from]||META.founder;
+      g.fillStyle='rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(p.x,p.y+11*s,6*s,2*s,0,0,6.283); g.fill();
+      person(w.from,p.x,p.y,s,w.phase==='give'?'read':'walk',t,w.phase==='back'?'empty':'front');
+      return w.phase!=='done' });
   }
   function itemText(f){ const who=(META[f.actor]||{}).n||f.actor||''; const k={'task.assign':'vazifa topshirdi','task.start':'ishni boshladi','task.progress':'ish holati','task.submit':'natijani topshirdi',
       'task.verify':'tekshirib tasdiqladi','task.reject':'qayta ishlashga qaytardi','task.revise':'qayta ishlashga qaytardi','task.close':'vazifani yopdi','task.block':"to'siqqa uchradi",
