@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 import brain
 import catalog
 import accounts
+import audit
 import config
 import humanizer_uz
 from auto_reply import PROFANITY_RE
@@ -742,6 +743,9 @@ class DirectChat:
         ok, err = self._send(item["igsid"], body)
         if not ok:
             return f"❌ Yuborilmadi: {err}"
+        if text and body != item.get("text"):
+            audit.record("owner_edit", where="chat", customer=(item.get("history") or "")[-400:],
+                         draft=item.get("text", ""), owner=body)
         with self.lock:
             self.s["pending"].pop(key, None)
             self.s["seen"][key] = int(time.time())

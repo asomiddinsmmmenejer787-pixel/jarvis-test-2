@@ -51,7 +51,9 @@ def _seed_from_main():
         return {}
     if not isinstance(main, dict):
         return {}
-    return {"shop": dict(main.get("shop") or {}), "lessons": list(main.get("lessons") or [])}
+    # Jarvis o'zi topgan ("🤖") qoidalar asosiy sahifa javoblaridan chiqqan, mahsulotga bog'liq bo'lishi mumkin
+    lessons = [x for x in (main.get("lessons") or []) if not str(x).startswith("🤖")]
+    return {"shop": dict(main.get("shop") or {}), "lessons": lessons}
 
 
 def load():

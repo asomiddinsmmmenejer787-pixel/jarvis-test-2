@@ -979,6 +979,7 @@ class CommentResponder:
         recent_posts = ig.get_recent_posts(posts_to_check) or []
         latest_id = latest_post_id(recent_posts)
         own_ids = {str(p.get("id")) for p in recent_posts}
+        self._recent_ids = [str(p.get("id")) for p in recent_posts]   # qorovul shu postlarni qayta o'qitadi
         collab = [p for p in self._collab_posts() if str(p.get("id")) not in own_ids]
         if collab:
             stats["collab"] = len(collab)
@@ -1526,6 +1527,9 @@ class CommentResponder:
         ok, err = self._send_dm(cid, body)
         if not ok:
             return f"❌ Yuborilmadi: {err}"
+        if text and body != item.get("text"):
+            audit.record("owner_edit", where="dm", customer=item.get("comment", ""),
+                         draft=item.get("text", ""), owner=body)
         with self.lock:
             self.state.dm_pending.pop(cid, None)
             self.state.save()
@@ -1567,6 +1571,10 @@ class CommentResponder:
         if not reply:
             return "Jarvisda tayyor javob yo'q. Shu xabarga Reply qilib o'zingiz yozing."
         ig.reply_to_comment(cid, reply)
+        if text and reply != item.get("reply"):
+            # o'z-o'zini tuzatish: egasi Jarvis javobini o'zgartirdi - kunlik tahlilda eng qimmatli saboq
+            audit.record("owner_edit", where="comment", customer=item.get("text", ""),
+                         draft=item.get("reply", ""), owner=reply, category=item.get("category", ""))
         with self.lock:
             self.state.mark(cid, "sent_manual")
             self.state.save()

@@ -33,6 +33,7 @@ import analytics
 import audit
 import brain
 import followers_live
+import selfheal
 import reel_sources
 import catalog
 from ai.base import is_error_text
@@ -408,6 +409,46 @@ def account_card(acc):
             except Exception:  # noqa: BLE001
                 pass
         return out
+
+
+@router.get("/api/selfheal")
+def api_selfheal(x_init_data: str = Header(default="")):
+    """O'z-o'zini tuzatish: topilgan xatolar, Jarvis o'zi chiqargan qoidalar, kunlik hisobot."""
+    require_owner(x_init_data)
+    return JSONResponse(_jsonable(selfheal.view()))
+
+
+@router.delete("/api/selfheal/rule/{n}")
+def api_selfheal_rule_delete(n: int, x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+    try:
+        removed = selfheal.delete_auto(n)
+    except IndexError:
+        raise HTTPException(status_code=404, detail="Bunday qoida yo'q")
+    brain.log_entry(f"Egasi Jarvis qoidasini o'chirdi: {removed[:120]}")
+    return JSONResponse(_jsonable(selfheal.view()))
+
+
+SELFHEAL_STEPS = [
+    ("received", "So'rov qabul qilindi"),
+    ("collect", "Oxirgi javoblar yig'ilmoqda"),
+    ("analyze", "Javoblar tekshirilmoqda"),
+    ("prepare", "Xulosa tayyorlanmoqda"),
+]
+
+
+@router.post("/api/selfheal/run")
+def api_selfheal_run(x_init_data: str = Header(default="")):
+    require_owner(x_init_data)
+
+    def work(job):
+        job.step("collect")
+        job.step("analyze")
+        res = selfheal.review(_ctx["jarvis"].ai_provider, force=True)
+        job.step("prepare")
+        return {"result": res, "view": selfheal.view()}
+
+    return start_job("selfheal", SELFHEAL_STEPS, work).view()
 
 
 @router.get("/api/accounts")

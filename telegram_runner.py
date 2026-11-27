@@ -23,6 +23,7 @@ import analytics
 import audit
 import brain
 import followers_live
+import selfheal
 import reel_sources
 import catalog
 import instagram_api as ig
@@ -1496,6 +1497,59 @@ async def instagram_tick(app):
         await toy_instagram_tick(app)
     except Exception:  # noqa: BLE001 - o'yinchoq profili xatosi asosiy ishni to'xtatmasin
         logger.exception("O'yinchoq profili tekshiruvida kutilmagan xato.")
+    for acc in accounts.ALL:
+        try:
+            await selfheal_tick(app, acc)
+        except Exception:  # noqa: BLE001 - o'z-o'zini tuzatish asosiy ishni to'xtatmasin
+            logger.exception("O'z-o'zini tuzatishda kutilmagan xato (%s).", acc)
+
+
+async def selfheal_tick(app, acc, force_review=False):
+    """O'z-o'zini tuzatadigan miya: qorovul (10 daq), o'z javoblarini tekshirish (soatiga), kunlik o'rganish."""
+    owner = get_owner_id()
+    if owner is None:
+        return None
+    with accounts.use(acc):
+        r, c = R(), C()
+        if r is None or not ig.is_configured():
+            return None
+        bot = app.bot
+        for note in await asyncio.to_thread(selfheal.watch, r):
+            await bot.send_message(chat_id=owner, text=tagged(note))
+        res = None
+        try:
+            res = await asyncio.to_thread(selfheal.review, jarvis.ai_provider, None, force_review)
+            text = selfheal.review_text(res)
+            if text:
+                await bot.send_message(chat_id=owner, text=tagged(text), disable_notification=True)
+            if not force_review:
+                report = await asyncio.to_thread(selfheal.daily, jarvis.ai_provider, c)
+                if report:
+                    await bot.send_message(chat_id=owner, text=report, disable_notification=True)
+        except AIError as e:
+            logger.warning("O'z-o'zini tekshirish: AI javob bermadi: %s", e)
+        return res
+
+
+@owner_only
+async def tuzat_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Jarvis o'z javoblarini hozir tekshiradi (soatlik tekshiruvni kutmasdan)."""
+    await update.message.reply_text("🧠 Oxirgi javoblarimni tekshiryapman...")
+    lines = []
+    for acc in accounts.ALL:
+        with accounts.use(acc):
+            if R() is None or not ig.is_configured():
+                continue
+            res = await selfheal_tick(context.application, acc, force_review=True)
+            name = accounts.label(acc) or "Asosiy sahifa"
+            if res is None:
+                lines.append(f"{name}: tekshirib bo'lmadi")
+            elif not res["checked"]:
+                lines.append(f"{name}: oxirgi soatda tekshiradigan javob yo'q")
+            elif not res["mistakes"]:
+                lines.append(f"{name}: {res['checked']} ta javob — xato topilmadi ✅")
+    if lines:
+        await update.message.reply_text("\n".join(lines))
 
 
 async def toy_instagram_tick(app):
@@ -1505,7 +1559,7 @@ async def toy_instagram_tick(app):
     if owner is None or toy_responder is None:
         return
     with accounts.use(TOY):
-        if not ig.is_configured():
+        if not ig.is_configured() or selfheal.paused():
             return
         bot = app.bot
         try:
@@ -1520,6 +1574,7 @@ async def toy_instagram_tick(app):
             if toy_responder.mode != "off":
                 try:
                     events = await asyncio.to_thread(toy_responder.run_once)
+                    selfheal.note_ok()
                 finally:
                     await send_unsent_approvals(bot, owner)
                 for ev in events:
@@ -1553,6 +1608,8 @@ async def toy_instagram_tick(app):
                 await alert_owner(bot, owner, "toy_ig_fatal",
                                   tagged("⚠️ " + ig_error_text(e) + "\nYangi token: /oyinchoqtoken IGAA..."))
             else:
+                if e.rate_limited:
+                    selfheal.note_rate_limit()
                 logger.warning("O'yinchoq: Instagram vaqtinchalik xatosi: %s", e)
         except AIError as e:
             logger.warning("O'yinchoq: AI xatosi: %s", e)
@@ -1560,7 +1617,7 @@ async def toy_instagram_tick(app):
 
 async def main_instagram_tick(app):
     owner = get_owner_id()
-    if owner is None or not ig.is_configured():
+    if owner is None or not ig.is_configured() or selfheal.paused():
         return
     bot = app.bot
     try:
@@ -1598,6 +1655,7 @@ async def main_instagram_tick(app):
         if responder is not None and responder.mode != "off":
             try:
                 events = await asyncio.to_thread(responder.run_once)
+                selfheal.note_ok()
             finally:
                 await send_unsent_approvals(bot, owner)
             for ev in events:
@@ -1633,6 +1691,8 @@ async def main_instagram_tick(app):
         if e.fatal:
             await alert_owner(bot, owner, "ig_fatal", "⚠️ " + ig_error_text(e))
         else:
+            if e.rate_limited:
+                selfheal.note_rate_limit()
             logger.warning("Instagram vaqtinchalik xatosi: %s", e)
     except AIError as e:
         if e.fatal:
@@ -1687,6 +1747,7 @@ async def post_init(app):
             BotCommand("caption", "Instagram caption"),
             BotCommand("ideas", "Kontent g'oyalari"),
             BotCommand("qoidalar", "Jarvis o'rgangan qoidalar"),
+            BotCommand("tuzat", "🧠 Jarvis o'z javoblarini hozir tekshirsin"),
             BotCommand("jurnal", "Jarvis oxirgi ishlari"),
             BotCommand("sozlamalar", "Limitni tejash qoidalari"),
             BotCommand("xatolar", "Oxirgi xatolar va kuzatuv holati"),
@@ -1761,6 +1822,7 @@ def build_app(token):
     app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^t?ar\|"))
     app.add_handler(CallbackQueryHandler(dm_callback, pattern=r"^t?dm\|"))
     app.add_handler(CommandHandler("oyinchoq", oyinchoq_cmd))
+    app.add_handler(CommandHandler("tuzat", tuzat_cmd))
     app.add_handler(CommandHandler("oyinchoqtoken", oyinchoqtoken_cmd))
     app.add_handler(CommandHandler("direkt", direkt_cmd))
     app.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^t?dc\|"))

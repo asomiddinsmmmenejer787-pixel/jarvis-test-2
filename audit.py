@@ -44,6 +44,12 @@ def record(kind, /, **fields):
     kind faqat o'rni bilan beriladi: maydonlar orasida "kind" bo'lsa ham xato bo'lmaydi."""
     try:
         item = {"t": int(time.time()), "k": kind}
+        try:
+            import accounts
+            if accounts.current() != accounts.MAIN:
+                item["acc"] = accounts.current()   # o'yinchoq profili yozuvlari ajralib tursin
+        except Exception:  # noqa: BLE001
+            pass
         for k, v in fields.items():
             if isinstance(v, str):
                 v = v[:600]

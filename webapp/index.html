@@ -298,6 +298,14 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
 .card,.stat,.cm,.panel{box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 30px rgba(0,0,0,.25)}
 .ch .s,.stat .k{letter-spacing:.01em}
 #tl{width:100%;height:58px;display:block;margin:2px 0 6px}
+.heal .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.heal .nums div{background:var(--card2);border-radius:14px;padding:10px;text-align:center}
+.heal .nums b{display:block;font-size:22px;font-weight:800}.heal .nums span{font-size:11.5px;color:var(--dim);font-weight:700}
+.rule{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.rule:first-child{border-top:0}
+.rule button{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:10px;width:30px;height:30px;cursor:pointer}
+.mist{font-size:13.5px;padding:7px 0;border-top:1px solid var(--line);color:var(--text)}.mist:first-child{border-top:0}
+.mist small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
 .accnote{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--gold2);background:rgba(255,124,189,.08);border:1px solid var(--line2);border-radius:14px;padding:9px 12px;margin:10px 0}
 </style>
 </head>
@@ -332,6 +340,15 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
       <div class="stat" onclick="go('inbox')"><div class="k">✉️ Direkt</div><div class="v" id="stDm">—</div><div class="d" id="stDmD"></div></div>
       <div class="stat" onclick="go('ads')"><div class="k">📣 Reklama bugun</div><div class="v" id="stAds">—</div><div class="d" id="stAdsD"></div></div>
       <div class="stat" onclick="go('jarvis')"><div class="k">👁 Qamrov · 7 kun</div><div class="v" id="stReach">—</div><div class="d" id="stReachD"></div></div>
+    </div>
+
+    <div class="card heal" id="healCard">
+      <div class="ch"><h3>🧠 O'zini tuzatish</h3><span class="s" id="healWhen"></span></div>
+      <div class="nums"><div><b id="hlRev">—</b><span>tekshiruv</span></div><div><b id="hlMis">—</b><span>xato topdi</span></div><div><b id="hlRul">—</b><span>qoida</span></div></div>
+      <div class="muted" id="healNote" style="margin:6px 0 2px">Jarvis har soatda o'z javoblarini qayta o'qib, xatosini topadi va o'zi qoida chiqaradi.</div>
+      <details class="more" style="margin:10px 0 0"><summary><div>Jarvis o'zi chiqargan qoidalar<small id="hlRulesN">—</small></div></summary><div class="card" id="healRules"></div></details>
+      <details class="more" style="margin:10px 0 0"><summary><div>Topilgan xatolar<small id="hlFoundN">—</small></div></summary><div class="card" id="healFound"></div></details>
+      <button class="btn ghost" id="healBtn" style="margin-top:12px" onclick="runHeal()">Hozir o'zingni tekshir</button>
     </div>
 
     <div class="quick">
@@ -795,12 +812,37 @@ function drawTimeline(items, now){
   for(let k=0;k<=4;k++){ const t=t0+k*21600, d=new Date(t*1000); g.fillText(k===4?'HOZIR':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),Math.min(w-18,Math.max(16,X(t))),h-2) }
 }
 
+// ---------- O'ZINI TUZATISH ----------
+function renderHeal(v){
+  if(!v) return; const c=v.counts||{};
+  $('#hlRev').textContent=fmt(c.reviews||0); $('#hlMis').textContent=fmt(c.mistakes||0); $('#hlRul').textContent=fmt((v.rules||[]).length);
+  $('#healWhen').textContent = v.last_review ? 'tekshirildi '+ago(v.last_review) : 'hali tekshirmagan';
+  let note = v.paused_until ? `⏸ Instagram limiti: ${new Date(v.paused_until*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} gacha sekinlashtirildi.` : '';
+  if (v.report && v.report.text) note = (note?note+'\n':'') + v.report.text.split('\n').slice(1,3).join(' ');
+  $('#healNote').textContent = note || 'Jarvis har soatda o\'z javoblarini qayta o\'qib, xatosini topadi va o\'zi qoida chiqaradi.';
+  const rules=v.rules||[]; $('#hlRulesN').textContent = rules.length? rules.length+' ta · darhol ishlayapti' : 'hali yo\'q';
+  $('#healRules').innerHTML = rules.length ? rules.map(r=>`<div class="rule"><div>🤖 ${esc(r.text)}</div><button onclick="delHeal(${r.i})" aria-label="O'chirish">✕</button></div>`).join('')
+    : '<div class="muted">Jarvis hali xato topmagan. Topsa, qoida shu yerda chiqadi va noto\'g\'risini ✕ bilan o\'chirasiz.</div>';
+  const f=v.found||[]; $('#hlFoundN').textContent = f.length? 'oxirgisi '+ago(f[0].t) : 'hali yo\'q';
+  $('#healFound').innerHTML = f.length ? f.slice(0,10).map(x=>`<div class="mist">${esc(x.problem)}${x.example?`<small>«${esc(x.example)}»</small>`:''}</div>`).join('') : '<div class="muted">Hali yo\'q.</div>';
+}
+async function loadHeal(){ try{ renderHeal(await api('/api/selfheal')); Brain.hit('xotira') }catch(e){} }
+async function delHeal(i){ if(!confirm('Bu qoida o\'chirilsinmi?')) return; try{ renderHeal(await api('/api/selfheal/rule/'+i,{method:'DELETE'})); haptic('ok') }catch(e){ alert(e.message) } }
+async function runHeal(){ const b=$('#healBtn'); if(b.disabled) return; b.disabled=true; b.textContent='Tekshiryapman...'; Brain.busy=true; haptic();
+  try{ let job=await api('/api/selfheal/run',{method:'POST'});
+    while(job.status==='running'){ await new Promise(r=>setTimeout(r,800)); job=await api('/api/job/'+job.id) }
+    if(job.status==='error') throw new Error(job.error);
+    const r=(job.result||{}).result||{}; renderHeal((job.result||{}).view);
+    b.textContent = !r.checked ? 'Oxirgi soatda javob yo\'q' : r.mistakes&&r.mistakes.length ? `${r.mistakes.length} ta xato topdim, ${(r.rules||[]).length} ta qoida` : `${r.checked} ta javob — xato yo'q ✅`; haptic('ok')
+  }catch(e){ b.textContent='Xato: '+e.message; haptic('err') }
+  finally{ Brain.busy=false; setTimeout(()=>{ b.disabled=false; b.textContent='Hozir o\'zingni tekshir' },4000) } }
+
 // ---------- BUGUN (bosh sahifa) ----------
 const H={comments:null,ads:null,fol:null,feedSeen:null,brief:''};
 function greetText(){ const h=new Date().getHours(); return h<5?'Xayrli tun':h<11?'Xayrli tong':h<17?'Xayrli kun':'Xayrli kech' }
 async function loadHome(full=true){
   $('#greet').textContent=greetText()+', Asomiddin';
-  const jobs=[loadHomeComments(), loadHomeAds(), loadFeed(), loadHomeFollowers(), loadAccounts()];
+  const jobs=[loadHomeComments(), loadHomeAds(), loadFeed(), loadHomeFollowers(), loadAccounts(), loadHeal()];
   if (full || !lastStatus) jobs.push(loadStatus());
   await Promise.allSettled(jobs);
   writeBrief();
@@ -1390,6 +1432,10 @@ demoApi=function(path, opts){
 // demo: ikkala profil
 const _demoOld2=demoApi;
 demoApi=function(path, opts){
+  if (path.startsWith('/api/selfheal')){ const now=Math.floor(Date.now()/1000); return Promise.resolve({last_review:now-1300,counts:{reviews:9,mistakes:4,rules:3},paused_until:0,
+    rules:[{i:0,text:'Yetkazib berish so\'ralsa "Toshkent bo\'ylab 1 kunda" deb aniq ayt, direktga yo\'llama'},{i:1,text:'Maqtovga "Rahmat 😊" bilan boshlama, har safar boshqacha yoz'},{i:2,text:'G100 narxini faqat 7 200 000 so\'m deb ayt, boshqa raqam yozma'}],
+    found:[{t:now-1300,problem:'Yetkazib berish savoliga "direktga yozing" deb javob berildi, savolga javob yo\'q',example:'Direktga yozing, aniqlab aytamiz 😊'},{t:now-5000,problem:'Ketma-ket 3 ta javob "Rahmat" bilan boshlangan'}],
+    report:{t:now-40000,text:"🌙 Kunlik o'z-o'zini tahlil\nBugun o'zimda 4 ta xato topdim, 3 ta yangi qoida chiqardim.\nNatija: siz 2 ta javobimni tuzatdingiz, 1 mijoz savolini qayta so'radi."}}) }
   if (path==='/api/accounts') return Promise.resolve({current:ACC,accounts:[
     {acc:'main',icon:'🛴',title:'Asosiy sahifa',username:'bolalar_dunyosi.uzb',connected:true,enabled:true,followers:105069,followers_today:173,mode:'on',dm_mode:'auto',chat_mode:'auto',sent_today:46,limit_day:500,pending:2},
     {acc:'toy',icon:'🧸',title:'O\'yinchoq profili',username:'bolalar_dunyosi_oyinchoq',connected:true,enabled:true,followers:18420,followers_today:37,mode:'on',dm_mode:'auto',chat_mode:'auto',sent_today:12,limit_day:500,pending:0}]});
