@@ -24,7 +24,8 @@ body.acc-toy{--gold:#ff7cbd;--gold2:#ffd7ec;--line:rgba(255,124,189,.14);--line2
 html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;line-height:1.4;min-height:100%;font-variant-numeric:tabular-nums}
 body{overflow-x:hidden;padding-bottom:calc(86px + env(safe-area-inset-bottom))}
 #brain{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;transition:opacity .6s}
-body:not(.home) #brain{opacity:.28}
+body:not(.home) #brain{opacity:.55}
+body.home.scrolled #brain{opacity:.5}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(120% 60% at 50% 0%,transparent 30%,rgba(3,7,18,.7) 80%)}
 main{position:relative;z-index:1;padding:0 16px}
 a{color:var(--gold)}
@@ -287,7 +288,11 @@ nav .dotc.show{display:flex}
 .pf .pc b{color:var(--text);font-weight:700}
 .pf .pb{position:absolute;top:6px;right:7px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;z-index:1}
 .pf .pb.show{display:flex}
-.hero{height:210px}
+.hero{height:calc(100vh - 230px);min-height:320px;position:relative}
+.scrollhint{position:absolute;left:0;right:0;bottom:104px;text-align:center;font-family:var(--code);font-size:10px;letter-spacing:.2em;color:var(--gold2);opacity:.55;transition:opacity .4s;pointer-events:none}
+.scrollhint i{display:block;font-style:normal;font-size:18px;animation:hintbob 1.8s ease-in-out infinite}
+@keyframes hintbob{50%{transform:translateY(5px)}}
+body.scrolled .scrollhint{opacity:0}
 .kick{font-family:var(--code);font-size:10px;letter-spacing:.16em;color:var(--gold);font-weight:700;margin:16px 4px 0;text-transform:uppercase;opacity:.9}
 h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code);font-size:10px;letter-spacing:.16em;color:var(--gold);font-weight:700;margin-bottom:4px}
 .card,.stat,.cm,.panel{box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 30px rgba(0,0,0,.25)}
@@ -310,7 +315,7 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
 <main>
   <!-- BUGUN -->
   <section class="view on" id="v-home">
-    <div class="hero"></div>
+    <div class="hero" id="hero"><div class="scrollhint">PASTGA SURING<i>⌄</i></div></div>
     <h1 class="greet" id="greet">Salom, Asomiddin</h1>
     <div class="brief" id="brief">Bir soniya, hammasini ko'zdan kechiryapman...</div>
     <div id="needs"></div>
@@ -577,11 +582,11 @@ const Brain=(function(){
   const prof=s=>{ const k=Math.max(0,1-s*s); return Math.pow(k,.55)*(.55+.45*Math.sin((s+1.05)*1.55)) };
   function build(){
     dpr=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight; cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0);
-    const hero=document.querySelector('.hero'); const r=hero?hero.getBoundingClientRect():{top:150,height:200};
-    const top=(r.top+(window.scrollY||0)); vh=Math.max(140,r.height*.86); vy=top+r.height*.5+6; vx=W/2; vw=Math.min(W*.2,86);
-    ox=vx; oy=vy+vh*.04; orx=Math.min(W*.44,200); ory=orx*.24;
-    strands=[]; for(let i=0;i<70;i++) strands.push({ph:Math.random()*6.283,rad:.45+Math.random()*.65,tw:1.6+Math.random()*2.6,sp:(.35+Math.random()*.5)*(Math.random()<.5?1:-1)*.6+.25,a:.05+Math.random()*.12,pk:Math.random()<.16});
-    sparks=[]; for(let i=0;i<70;i++) sparks.push(newSpark(true));
+    const tb=document.querySelector('.topbar'), tbh=tb?tb.offsetHeight:150, bottom=H-130, area=Math.max(260,bottom-tbh);
+    vy=tbh+area*.47; vh=area*.8; vx=W/2; vw=Math.min(W*.3,vh*.3,170);
+    ox=vx; oy=vy+vh*.1; orx=Math.min(W*.47,330); ory=orx*.3;
+    strands=[]; for(let i=0;i<96;i++) strands.push({ph:Math.random()*6.283,rad:.45+Math.random()*.65,tw:1.6+Math.random()*2.6,sp:(.35+Math.random()*.5)*(Math.random()<.5?1:-1)*.6+.25,a:.08+Math.random()*.16,pk:Math.random()<.16});
+    sparks=[]; for(let i=0;i<120;i++) sparks.push(newSpark(true));
   }
   function newSpark(any){ const st=strands[Math.floor(Math.random()*strands.length)]||{ph:0,rad:1,tw:2,sp:.4};
     return {st,s:any?Math.random()*2-1:1,v:.06+Math.random()*.16,r:.6+Math.random()*1.6,a:.4+Math.random()*.6} }
@@ -750,7 +755,12 @@ function pfCard(a){
     <div class="pi"><div class="un">${name}</div><div class="pm">${pm}</div><div class="pc">${pc}</div></div>
     <span class="pb${a.pending?' show':''}">${a.pending>99?'99+':a.pending||''}</span></button>`;
 }
-function renderAccounts(){ $('#profiles').innerHTML=ACCS.map(pfCard).join('');
+function sizeHero(){ const tb=document.querySelector('.topbar'), h=$('#hero'); if(!tb||!h) return;
+  const want=Math.max(300, innerHeight - tb.offsetHeight + 10);
+  if (Math.abs(h.offsetHeight-want)>4){ h.style.height=want+'px'; Brain.rebuild() } }
+addEventListener('resize',()=>setTimeout(sizeHero,250));
+addEventListener('scroll',()=>document.body.classList.toggle('scrolled',(window.scrollY||0)>60),{passive:true});
+function renderAccounts(){ $('#profiles').innerHTML=ACCS.map(pfCard).join(''); requestAnimationFrame(sizeHero);
   const cur=ACCS.find(a=>a.acc===ACC); $('#accName').textContent=cur?(ACC==='toy'?'🧸 o\'yinchoq':'asosiy'):'' }
 function applyAcc(){ document.body.classList.toggle('acc-toy',ACC==='toy'); Brain.setAccent(ACC_RGB[ACC]||ACC_RGB.main); renderAccounts();
   $('#shopSub').textContent = ACC==='toy' ? 'O\'yinchoq profili narxlari alohida: asosiy sahifa narxi bu yerda aytilmaydi.' : 'Jarvis mijozlarga shu yerdagi narx va ma\'lumotni aytadi.' }
@@ -1395,7 +1405,7 @@ demoApi=function(path, opts){
   return _demoOld2(path, opts);
 };
 // ---------- ishga tushirish ----------
-applyAcc(); requestAnimationFrame(()=>Brain.rebuild());
+applyAcc(); requestAnimationFrame(()=>{ sizeHero(); Brain.rebuild() });
 if (!DEMO && (!tg || !tg.initData)) showLock();
 else {
   loadHome(true);
