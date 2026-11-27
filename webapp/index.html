@@ -225,9 +225,9 @@ details.more>summary small{display:block;font-weight:600;color:var(--dim);font-s
 code{background:var(--card2);padding:2px 7px;border-radius:7px;color:var(--gold2);font-weight:700}
 
 /* pastki menyu */
-nav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:grid;grid-template-columns:repeat(5,1fr);
+nav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:grid;grid-template-columns:repeat(6,1fr);
   background:rgba(5,11,26,.9);border:1px solid var(--line2);border-radius:22px;padding:6px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.45)}
-nav button{position:relative;background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:11px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border-radius:16px;cursor:pointer;transition:.2s}
+nav button{position:relative;background:none;border:0;color:var(--dim);font-family:var(--ui);font-weight:700;font-size:10px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border-radius:16px;cursor:pointer;transition:.2s}
 nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--ink);background:var(--gold)}
 nav .dotc{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #050b1a}
@@ -306,6 +306,19 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
 .rule button{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:10px;width:30px;height:30px;cursor:pointer}
 .mist{font-size:13.5px;padding:7px 0;border-top:1px solid var(--line);color:var(--text)}.mist:first-child{border-top:0}
 .mist small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+/* Nexora ofisi */
+.nxoffice{padding:8px}
+#nxCanvas{width:100%;display:block;border-radius:14px;cursor:pointer}
+.nxleg{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--dim);font-weight:700;padding:8px 4px 2px}
+.nxleg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.nxchips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.nxchips span{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:6px 11px;font-size:12.5px;font-weight:700;color:var(--dim)}
+.nxchips b{color:var(--text)}
+.nxa{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);cursor:pointer}
+.nxa:first-child{border-top:0}
+.nxe{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:17px;border:2px solid;background:#0d1428}
+.nxt b{display:block;font-size:14px}.nxt small{display:block;color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.nxs{font-size:11.5px;font-weight:800;white-space:nowrap}
 .accnote{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--gold2);background:rgba(255,124,189,.08);border:1px solid var(--line2);border-radius:14px;padding:9px 12px;margin:10px 0}
 </style>
 </head>
@@ -546,6 +559,16 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
     <div class="sub">Arizalar, skrinshotlar, mukofotlar, vaucher va promo-kodlar.</div>
     <div id="creatorsBox"><div class="muted">Yuklanmoqda...</div></div>
   </section>
+  <section class="view" id="v-nexora">
+    <h2 class="sec" data-k="07 · NEXORA · AGENTLIK">Nexora ofisi</h2>
+    <div class="sub">Agentlar jonli: har birining o'z xonasi, stoli, kompyuteri. Ish topshirilganda hujjat eshiklardan o'tib boradi. Xonani bosing.</div>
+    <div id="nxBar"></div>
+    <div class="card nxoffice"><canvas id="nxCanvas"></canvas>
+      <div class="nxleg"><span><i style="background:#5be3a6"></i>ishlayapti</span><span><i style="background:#ffc45c"></i>vazifa oldi</span><span><i style="background:#8fb8ff"></i>tekshiruvda</span><span><i style="background:#ff6b8a"></i>to'siq</span><span><i style="background:#62779c"></i>bo'sh</span><span>📄 ish topshirilmoqda</span></div></div>
+    <div class="card" id="nxDetail" hidden></div>
+    <div class="card"><div class="ch"><h3>Agentlar</h3></div><div id="nxList"><div class="muted">Yuklanmoqda...</div></div></div>
+    <div class="card"><div class="ch"><h3>Ofisda nima bo'lyapti</h3></div><div class="feed" id="nxFeed"></div></div>
+  </section>
 </main>
 
 <nav>
@@ -554,6 +577,7 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
   <button data-v="ads"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Reklama</button>
   <button data-v="shop"><svg viewBox="0 0 24 24"><path d="M4 8h16l-1.5 12h-13z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>Do'kon</button>
   <button data-v="jarvis"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>Jarvis</button>
+  <button data-v="nexora"><svg viewBox="0 0 24 24"><path d="M4 21V6l8-3 8 3v15"/><path d="M10 21v-4h4v4"/><path d="M8 9h2M14 9h2M8 13h2M14 13h2"/></svg>Nexora</button>
 </nav>
 
 <div class="fol" id="fol">
@@ -986,13 +1010,159 @@ document.querySelectorAll('#shopSeg button').forEach(b=>b.onclick=()=>{ haptic()
 function setChip(c){ document.querySelectorAll('#chips .chip').forEach(x=>x.classList.toggle('on',x.dataset.c===c)); state.cmd=c;
   $('#chatIn').placeholder = c ? 'Mavzu: masalan, Yadea G100 samokat' : 'Savolingizni yozing' }
 
+// ---------- NEXORA OFISI (agentlik jonli) ----------
+// Har bir agentga alohida xona: stol, stul, kompyuter. Xonalar orasida eshiklar.
+// Ish topshirilganda (assign / submit / verify) hujjat eshiklar orqali keyingi xonaga olib boriladi.
+const NX=(function(){
+  const GRID=[['researcher','project-manager','auditor'],['scriptwriter','copywriter','designer'],['video-editor','targetologist','developer']];
+  const META={'project-manager':{e:'📋',n:'PM',c:'#5fb2ff'},researcher:{e:'🔎',n:'Tadqiqotchi',c:'#5be3a6'},scriptwriter:{e:'✍️',n:'Ssenariynavis',c:'#ffc45c'},
+    copywriter:{e:'📝',n:'Kopirayter',c:'#ff9f6b'},designer:{e:'🎨',n:'Dizayner',c:'#ff6fb5'},'video-editor':{e:'🎬',n:'Montajchi',c:'#a98bff'},
+    targetologist:{e:'🎯',n:'Targetolog',c:'#ff6b8a'},developer:{e:'💻',n:'Dasturchi',c:'#62d6ff'},auditor:{e:'🛡️',n:'Auditor',c:'#d7e1ff'},founder:{e:'👤',n:'Siz',c:'#ffffff'}};
+  const ST={working:{t:'ishlayapti',c:'#5be3a6'},assigned:{t:'vazifa oldi',c:'#ffc45c'},waiting:{t:'tekshiruvda',c:'#8fb8ff'},blocked:{t:"to'siq",c:'#ff6b8a'},idle:{t:"bo'sh",c:'#62779c'}};
+  const where={}; GRID.forEach((row,r)=>row.forEach((a,c)=>where[a]={r,c}));
+  let cv,g,W=0,H=0,P=8,rw=0,rh=0,data=null,walkers=[],seen=null,raf=null,timer=null,sel=null,lastT=0;
+  const rgba=(hex,a)=>{const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`};
+  const room=(r,c)=>({x:P+c*rw,y:P+r*rh,w:rw,h:rh,cx:P+c*rw+rw/2,cy:P+r*rh+rh/2});
+  function size(){ cv=$('#nxCanvas'); if(!cv) return; g=cv.getContext('2d'); const d=Math.min(2,devicePixelRatio||1);
+    W=cv.clientWidth; H=Math.round(W*1.08); cv.style.height=H+'px'; cv.width=W*d; cv.height=H*d; g.setTransform(d,0,0,d,0,0);
+    rw=(W-2*P)/3; rh=(H-2*P)/3 }
+  // eshiklar: qo'shni xonalar orasida + kirish eshigi (PM xonasi tepasida)
+  function doors(){ const ds=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++){ const R=room(r,c);
+      if(c<2) ds.push({x:R.x+R.w,y:R.y+R.h*0.78,v:true,a:GRID[r][c],b:GRID[r][c+1]});
+      if(r<2) ds.push({x:R.x+R.w*0.5,y:R.y+R.h,v:false,a:GRID[r][c],b:GRID[r+1][c]}); }
+    ds.push({x:P+rw*1.5,y:P,v:false,a:'founder',b:'project-manager',entry:true}); return ds }
+  function doorBetween(a,b){ return doors().find(d=>(d.a===a&&d.b===b)||(d.a===b&&d.b===a)) }
+  function seat(a){ const p=where[a]; if(!p) return {x:P+rw*1.5,y:-20}; const R=room(p.r,p.c); return {x:R.cx,y:R.y+R.h*0.56} }
+  function path(from,to){ // xonama-xona: avval ustun, keyin qator bo'ylab, har o'tishda eshikdan
+    const pts=[]; let cur=from==='founder'?null:where[from];
+    if(!cur){ pts.push({x:P+rw*1.5,y:P-14}); const d=doorBetween('founder','project-manager'); pts.push({x:d.x,y:d.y}); cur=where['project-manager']; pts.push(seat('project-manager')) }
+    else pts.push(seat(from));
+    const dst=where[to]; if(!dst) return pts;
+    let {r,c}=cur; let guard=0;
+    while((r!==dst.r||c!==dst.c)&&guard++<8){ let nr=r,nc=c; if(c!==dst.c) nc+=Math.sign(dst.c-c); else nr+=Math.sign(dst.r-r);
+      const d=doorBetween(GRID[r][c],GRID[nr][nc]); if(d){ const R=room(r,c); if(d.v) pts.push({x:d.x-10,y:d.y},{x:d.x+((nc>c)?10:-10)*1,y:d.y}); else pts.push({x:d.x,y:d.y-10*(nr>r?1:-1)},{x:d.x,y:d.y+10*(nr>r?1:-1)}) }
+      r=nr;c=nc; const R2=room(r,c); pts.push({x:R2.cx,y:R2.y+R2.h*0.7}) }
+    pts.push(seat(to)); return pts }
+  function walk(link){ const pts=path(link.from,link.to); if(pts.length<2) return;
+    let L=0; for(let i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+    walkers.push({pts,L,d:0,from:link.from,to:link.to,kind:link.kind}); if(walkers.length>6) walkers.shift() }
+  function wpos(w){ let d=w.d; for(let i=1;i<w.pts.length;i++){ const a=w.pts[i-1],b=w.pts[i],s=Math.hypot(b.x-a.x,b.y-a.y); if(d<=s){ const k=s?d/s:0; return {x:a.x+(b.x-a.x)*k,y:a.y+(b.y-a.y)*k} } d-=s } return w.pts[w.pts.length-1] }
+  function agent(a){ return (data&&data.agents||[]).find(x=>x.id===a)||{id:a,state:'idle'} }
+  function rr(x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath() }
+  function drawRoom(a,r,c,t){
+    const R=room(r,c), m=META[a], ag=agent(a), st=ag.state||'idle', on=st==='working', selc=sel===a;
+    // pol
+    g.fillStyle=rgba(m.c,on?0.09:0.04); g.fillRect(R.x+1,R.y+1,R.w-2,R.h-2);
+    g.strokeStyle='rgba(120,160,230,.05)'; g.lineWidth=1; for(let i=1;i<6;i++){ g.beginPath(); g.moveTo(R.x+R.w*i/6,R.y); g.lineTo(R.x+R.w*i/6,R.y+R.h); g.stroke() }
+    if(selc){ g.strokeStyle=rgba(m.c,.9); g.lineWidth=2; g.strokeRect(R.x+3,R.y+3,R.w-6,R.h-6) }
+    // gilam
+    g.fillStyle=rgba(m.c,.07); rr(R.x+R.w*.2,R.y+R.h*.46,R.w*.6,R.h*.3,8); g.fill();
+    // stol
+    const dx=R.x+R.w*.16, dy=R.y+R.h*.14, dw=R.w*.68, dh=R.h*.22;
+    g.fillStyle='#2a3550'; rr(dx,dy,dw,dh,4); g.fill(); g.strokeStyle='rgba(180,200,255,.22)'; g.lineWidth=1; g.stroke();
+    // kompyuter (monitor + klaviatura)
+    const mw=R.w*.26, mh=R.h*.11, mx=R.cx-mw/2, my=dy+dh*.12;
+    g.fillStyle='#0b1020'; rr(mx-1.5,my-1.5,mw+3,mh+3,2); g.fill();
+    if(on){ g.fillStyle=rgba(m.c,.85); g.fillRect(mx,my,mw,mh); g.fillStyle='rgba(5,10,25,.55)';
+      for(let i=0;i<4;i++){ const lw=mw*(.3+.6*Math.abs(Math.sin(t*2.3+i*1.7+r+c))); g.fillRect(mx+2,my+2+i*(mh-4)/4,lw-4,1.5) }
+      g.fillStyle=rgba(m.c,.18); g.beginPath(); g.arc(R.cx,my+mh/2,mw*.9,0,6.283); g.fill() }
+    else if(st==='blocked'){ g.fillStyle=Math.sin(t*5)>0?'#ff6b8a':'#3a1020'; g.fillRect(mx,my,mw,mh) }
+    else { g.fillStyle='#141c30'; g.fillRect(mx,my,mw,mh) }
+    g.fillStyle='#9fb0d6'; g.fillRect(R.cx-2,my+mh+1.5,4,dh*.14);
+    g.fillStyle='#3b4766'; rr(R.cx-mw*.42,dy+dh*.72,mw*.84,dh*.16,2); g.fill();
+    // qog'ozlar / krujka
+    g.fillStyle='rgba(230,240,255,.65)'; g.fillRect(dx+dw*.08,dy+dh*.3,dw*.12,dh*.45);
+    g.fillStyle=rgba(m.c,.8); g.beginPath(); g.arc(dx+dw*.88,dy+dh*.5,2.6,0,6.283); g.fill();
+    // stul
+    const sp=seat(a); g.fillStyle='#39456a'; g.beginPath(); g.arc(sp.x,sp.y+3,R.w*.085,0,6.283); g.fill();
+    g.fillStyle='#2b3554'; rr(sp.x-R.w*.08,sp.y+R.w*.07,R.w*.16,R.w*.035,2); g.fill();
+    // o'simlik
+    g.fillStyle='#1e6b4c'; g.beginPath(); g.arc(R.x+R.w*.88,R.y+R.h*.86,R.w*.055,0,6.283); g.fill();
+    g.fillStyle='#2fa36f'; g.beginPath(); g.arc(R.x+R.w*.88+2,R.y+R.h*.86-2,R.w*.03,0,6.283); g.fill();
+    // agent
+    let ax,ay; const bob=Math.sin(t*3+r*2+c)*1.2;
+    if(on||st==='blocked'||st==='assigned'){ ax=sp.x; ay=sp.y-2+(on?bob:0) }
+    else if(st==='waiting'){ ax=R.x+R.w*.74; ay=R.y+R.h*.7+Math.sin(t*1.5+c)*1.5 }
+    else { ax=R.x+R.w*.28+Math.sin(t*.6+r+c*2)*R.w*.06; ay=R.y+R.h*.72 }
+    const ar=Math.max(9,R.w*.1);
+    if(on){ g.fillStyle=rgba(m.c,.25+.15*Math.sin(t*4)); g.beginPath(); g.arc(ax,ay,ar+5,0,6.283); g.fill() }
+    if(st==='blocked'){ g.strokeStyle=rgba('#ff6b8a',.5+.5*Math.sin(t*6)); g.lineWidth=2; g.beginPath(); g.arc(ax,ay,ar+4,0,6.283); g.stroke() }
+    g.fillStyle='#0d1428'; g.beginPath(); g.arc(ax,ay,ar,0,6.283); g.fill(); g.strokeStyle=m.c; g.lineWidth=2; g.stroke();
+    g.font=`${Math.round(ar*1.15)}px system-ui,"Apple Color Emoji","Segoe UI Emoji"`; g.textAlign='center'; g.textBaseline='middle'; g.fillText(m.e,ax,ay+1);
+    // holat nuqtasi
+    g.fillStyle=ST[st].c; g.beginPath(); g.arc(ax+ar*.75,ay-ar*.75,3.2,0,6.283); g.fill();
+    if(st==='blocked'){ g.fillStyle='#ff6b8a'; g.font='bold 12px Manrope,system-ui'; g.fillText('!',ax+ar+6,ay-ar) }
+    // vazifa yorlig'i
+    if(ag.task&&ag.task.id){ g.font='700 8.5px JetBrains Mono,monospace'; const tw=g.measureText(ag.task.id).width+8;
+      g.fillStyle=rgba(m.c,.85); rr(R.x+R.w-tw-5,R.y+5,tw,13,4); g.fill(); g.fillStyle='#061021'; g.fillText(ag.task.id,R.x+R.w-5-tw/2,R.y+12) }
+    // nom
+    g.font='800 10px Manrope,system-ui'; g.textAlign='left'; g.fillStyle=rgba(m.c,.95); g.fillText(m.n,R.x+6,R.y+R.h-9);
+  }
+  function drawWalls(t){
+    g.strokeStyle='rgba(150,185,255,.55)'; g.lineWidth=3; g.lineCap='round';
+    const DW=Math.min(26,rw*.24);
+    const seg=(x1,y1,x2,y2)=>{ g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke() };
+    // tashqi devorlar (kirish eshigi bilan)
+    const ex=P+rw*1.5; seg(P,P,ex-DW/2,P); seg(ex+DW/2,P,W-P,P); seg(W-P,P,W-P,H-P); seg(W-P,H-P,P,H-P); seg(P,H-P,P,P);
+    // derazalar
+    g.strokeStyle='rgba(143,184,255,.35)'; g.lineWidth=5; for(let i=0;i<3;i++){ seg(P,P+rh*i+rh*.25,P,P+rh*i+rh*.45); seg(W-P,P+rh*i+rh*.25,W-P,P+rh*i+rh*.45); seg(P+rw*i+rw*.25,H-P,P+rw*i+rw*.5,H-P) }
+    // ichki devorlar va eshik o'rinlari
+    g.strokeStyle='rgba(150,185,255,.55)'; g.lineWidth=3;
+    for(let c=1;c<3;c++){ const x=P+rw*c; for(let r=0;r<3;r++){ const y0=P+rh*r,y1=y0+rh,dy=y0+rh*.78; seg(x,y0,x,dy-DW/2); seg(x,dy+DW/2,x,y1) } }
+    for(let r=1;r<3;r++){ const y=P+rh*r; for(let c=0;c<3;c++){ const x0=P+rw*c,x1=x0+rw,dx=x0+rw*.5; seg(x0,y,dx-DW/2,y); seg(dx+DW/2,y,x1,y) } }
+    // eshik tabaqalari: yaqinidan hujjat o'tsa ochiladi
+    for(const d of doors()){ let open=.25; for(const w of walkers){ const p=wpos(w); const dd=Math.hypot(p.x-d.x,p.y-d.y); if(dd<34) open=Math.max(open,1.35*(1-dd/34)+.25) }
+      d.o=(d.o||.25)+(open-(d.o||.25))*.2;
+      const hx=d.v?d.x:d.x-DW/2, hy=d.v?d.y-DW/2:d.y, base=d.v?Math.PI/2:0, ang=base+(d.v?-1:1)*d.o*(d.entry?-1:1);
+      g.strokeStyle='rgba(255,210,140,.85)'; g.lineWidth=2.2; g.beginPath(); g.moveTo(hx,hy); g.lineTo(hx+Math.cos(ang)*DW,hy+Math.sin(ang)*DW); g.stroke();
+      g.strokeStyle='rgba(255,210,140,.18)'; g.lineWidth=1; g.beginPath(); g.arc(hx,hy,DW,Math.min(base,ang),Math.max(base,ang)); g.stroke() }
+    g.lineCap='butt';
+  }
+  function frame(ts){ raf=requestAnimationFrame(frame); if(curView!=='nexora'||document.hidden||!g) return;
+    const t=ts/1000, dt=Math.min(.05,t-lastT||0); lastT=t;
+    g.clearRect(0,0,W,H); g.fillStyle='#070d1d'; g.fillRect(0,0,W,H);
+    GRID.forEach((row,r)=>row.forEach((a,c)=>drawRoom(a,r,c,t)));
+    drawWalls(t);
+    walkers=walkers.filter(w=>{ w.d+=dt*75; const p=wpos(w), m=META[w.from]||META.founder;
+      g.fillStyle=rgba(m.c,.35); g.beginPath(); g.arc(p.x,p.y,11,0,6.283); g.fill();
+      g.fillStyle='#f4f7ff'; rr(p.x-5,p.y-7,10,13,1.5); g.fill(); g.strokeStyle=m.c; g.lineWidth=1.5; g.stroke();
+      g.fillStyle=m.c; for(let i=0;i<3;i++) g.fillRect(p.x-3,p.y-4+i*3.5,6-(i===2?2:0),1.3);
+      return w.d<w.L+8 });
+  }
+  function itemText(f){ const who=(META[f.actor]||{}).n||f.actor||''; const k={'task.assign':'vazifa topshirdi','task.start':'ishni boshladi','task.progress':'ish holati','task.submit':'natijani topshirdi',
+      'task.verify':'tekshirib tasdiqladi','task.reject':'qayta ishlashga qaytardi','task.revise':'qayta ishlashga qaytardi','task.close':'vazifani yopdi','task.block':"to'siqqa uchradi",
+      'request.add':'yangi topshiriq','deliverable.add':'fayl qo\'shdi','audit.finding':'eslatma yozdi','error.log':'xato yozdi'}[f.kind]||f.kind; return {who,k} }
+  function render(){ if(!data) return;
+    if(!data.connected){ $('#nxBar').innerHTML=`<div class="need" style="cursor:default"><div class="n">⚠️</div><div class="t">Agentlik serveriga ulanib bo'lmadi<small>${esc(data.error||'')}. Server qayta ishga tushayotgan bo'lishi mumkin.</small></div></div>`; return }
+    const c=data.counts||{}; const st=data.online?(data.busy?'<b class="up">● ishlayapti</b>':'<b>● tayyor, kutmoqda</b>'):'<b class="down">● oflayn</b>';
+    $('#nxBar').innerHTML=`<div class="nxchips"><span>Claude: ${st}</span><span>Ochiq: <b>${c.open||0}</b></span><span>Tekshiruvda: <b>${c.review||0}</b></span><span>To'siq: <b class="${c.blocked?'down':''}">${c.blocked||0}</b></span><span>Yopilgan: <b>${c.done||0}</b></span></div>`;
+    $('#nxList').innerHTML=(data.agents||[]).map(a=>{ const m=META[a.id]||{}, s=ST[a.state]||ST.idle;
+      return `<div class="nxa" onclick="NX.pick('${a.id}')"><span class="nxe" style="border-color:${m.c}">${m.e}</span><div class="nxt"><b>${esc(a.title||m.n)}</b><small>${a.task?esc(a.task.id+' · '+a.task.title):'Vazifa yo\'q'}</small></div><span class="nxs" style="color:${s.c}">● ${s.t}</span></div>` }).join('');
+    $('#nxFeed').innerHTML=(data.feed||[]).slice(0,14).map(f=>{ const x=itemText(f), m=META[f.actor]||{};
+      return `<div class="it"><span class="tm">${f.ts?new Date(f.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''}</span><span class="x">${m.e||'•'} <b>${esc(x.who)}</b> ${esc(x.k)}${f.task_id?` · ${esc(f.task_id)}`:''}${f.text?`<br><small class="muted">${esc(f.text)}</small>`:''}</span></div>` }).join('')||'<div class="muted">Hali voqea yo\'q.</div>';
+    detail() }
+  function detail(){ const box=$('#nxDetail'); if(!sel||!data){ box.hidden=true; return } const a=agent(sel), m=META[sel], s=ST[a.state||'idle'];
+    box.hidden=false; box.innerHTML=`<div class="ch"><h3>${m.e} ${esc(a.title||m.n)}</h3><span class="s" style="color:${s.c}">● ${s.t}</span></div>`+
+      (a.task?`<div><b>${esc(a.task.id)}</b> — ${esc(a.task.title)}</div><div class="muted" style="margin-top:4px">${esc(a.task.client||'')} · holati: ${esc(a.task.status)}${a.task.since?' · '+ago(Date.parse(a.task.since)/1000):''}</div>${a.task.note?`<div style="margin-top:8px;font-size:13.5px">${esc(a.task.note)}</div>`:''}`:'<div class="muted">Hozir vazifasi yo\'q — xonasida dam olyapti.</div>') }
+  async function load(){ try{ const r=await api('/api/nexora'); const fresh=r&&r.connected;
+      if(fresh){ const links=r.links||[]; if(seen===null) seen=r.last_seq||0;
+        else links.filter(l=>(l.seq||0)>seen).forEach(walk); seen=Math.max(seen,r.last_seq||0) }
+      data=r; render() }catch(e){ data={connected:false,error:e.message}; render() } }
+  function start(){ size(); if(!raf) raf=requestAnimationFrame(frame); load(); clearInterval(timer); timer=setInterval(()=>{ if(curView==='nexora'&&!document.hidden) load() },3000) }
+  function pick(a){ sel=sel===a?null:a; haptic(); detail(); if(sel) $('#nxDetail').scrollIntoView({behavior:'smooth',block:'nearest'}) }
+  addEventListener('resize',()=>{ if(curView==='nexora') size() });
+  document.addEventListener('click',e=>{ if(e.target.id!=='nxCanvas') return; const b=e.target.getBoundingClientRect(), x=e.clientX-b.left-P, y=e.clientY-b.top-P;
+    const c=Math.floor(x/rw), r=Math.floor(y/rh); if(r>=0&&r<3&&c>=0&&c<3) pick(GRID[r][c]) });
+  return {start,pick,walk};
+})();
+
 // ---------- navigatsiya ----------
 let curView='home';
 function go(v){ curView=v; if(!state.busy) $('#proc').classList.remove('show');
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));
   document.body.classList.toggle('home', v==='home');
-  if (v==='home') loadHome(false); if (v==='inbox') loadComments(); if (v==='ads') loadAds(); if (v==='shop') shopTab(shopCur); if (v==='creators' && window.loadCreators) loadCreators();
+  if (v==='home') loadHome(false); if (v==='inbox') loadComments(); if (v==='ads') loadAds(); if (v==='shop') shopTab(shopCur); if (v==='creators' && window.loadCreators) loadCreators(); if (v==='nexora') NX.start();
   window.scrollTo({top:0,behavior:'smooth'}) }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{ haptic(); go(b.dataset.v) });
 $('#tasksBox').addEventListener('toggle',e=>{ if(e.target.open) loadTasks() });
@@ -1435,6 +1605,20 @@ demoApi=function(path, opts){
 // demo: ikkala profil
 const _demoOld2=demoApi;
 demoApi=function(path, opts){
+  if (path==='/api/nexora'){ const now=Math.floor(Date.now()/1000); window._nxs=(window._nxs||70)+1; const s=window._nxs;
+    const pairs=[['project-manager','scriptwriter','task.assign'],['scriptwriter','auditor','task.submit'],['auditor','project-manager','task.verify'],['project-manager','video-editor','task.assign'],['founder','project-manager','request.add'],['designer','auditor','task.submit']];
+    const p=pairs[s%pairs.length];
+    return Promise.resolve({connected:true,online:true,busy:true,now,last_seq:s,counts:{open:4,review:1,blocked:1,done:5},
+      links:[{from:p[0],to:p[1],kind:p[2],seq:s}],
+      agents:[{id:'project-manager',title:'Loyiha menejeri',state:'working',task:{id:'T-0007',title:'Rolikli krossovka: 15 soniyalik rolik rejasi',status:'created',client:'Bolalar Dunyosi',since:new Date(Date.now()-300000).toISOString()}},
+        {id:'researcher',title:'Tadqiqotchi',state:'idle',task:null},
+        {id:'scriptwriter',title:'Ssenariynavis',state:'working',task:{id:'T-0008',title:'15 soniyalik, 6 klipli ssenariy (G100)',status:'in_progress',client:'Bolalar Dunyosi',since:new Date(Date.now()-120000).toISOString(),note:'Hook tayyor, 3-klip ustida ishlayapman'}},
+        {id:'copywriter',title:'Kopirayter',state:'assigned',task:{id:'T-0009',title:'Reels matni va CTA',status:'assigned',client:'Bolalar Dunyosi'}},
+        {id:'designer',title:'Dizayner',state:'waiting',task:{id:'T-0004',title:'Muqova (thumbnail)',status:'submitted',client:'Bolalar Dunyosi'}},
+        {id:'video-editor',title:'Video montajchi',state:'blocked',task:{id:'T-0006',title:'Veo kliplar',status:'blocked',client:'Bolalar Dunyosi',note:"BLOKER: Chrome ulanishi yo'q"}},
+        {id:'targetologist',title:'Targetolog',state:'idle',task:null},{id:'developer',title:'Dasturchi',state:'idle',task:null},
+        {id:'auditor',title:'Auditor',state:'working',task:{id:'T-0004',title:'Muqova (thumbnail)',status:'submitted'}}],
+      feed:[{ts:new Date().toISOString(),actor:p[0],kind:p[2],task_id:'T-0008',text:''},{ts:new Date(Date.now()-90000).toISOString(),actor:'video-editor',kind:'task.block',task_id:'T-0006',text:"Chrome ulanishi yo'q"},{ts:new Date(Date.now()-200000).toISOString(),actor:'scriptwriter',kind:'task.start',task_id:'T-0008',text:''}]}) }
   if (path.startsWith('/api/selfheal')){ const now=Math.floor(Date.now()/1000); return Promise.resolve({last_review:now-1300,counts:{reviews:9,mistakes:4,rules:3},paused_until:0,
     rules:[{i:0,text:'Yetkazib berish so\'ralsa "Toshkent bo\'ylab 1 kunda" deb aniq ayt, direktga yo\'llama'},{i:1,text:'Maqtovga "Rahmat 😊" bilan boshlama, har safar boshqacha yoz'},{i:2,text:'G100 narxini faqat 7 200 000 so\'m deb ayt, boshqa raqam yozma'}],
     found:[{t:now-1300,problem:'Yetkazib berish savoliga "direktga yozing" deb javob berildi, savolga javob yo\'q',example:'Direktga yozing, aniqlab aytamiz 😊'},{t:now-5000,problem:'Ketma-ket 3 ta javob "Rahmat" bilan boshlangan'}],

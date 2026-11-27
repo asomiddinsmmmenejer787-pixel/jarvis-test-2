@@ -39,7 +39,8 @@ def run():
     html = open(HTML, encoding="utf-8").read()
     views = re.findall(r'class="view[^"]*" id="v-(\w+)"', html)
     tabs = re.findall(r'<button[^>]*data-v="(\w+)"', html.split("<nav")[1].split("</nav>")[0])
-    check(set(tabs) <= set(views) and len(tabs) <= 5, f"Pastki menyu 5 tadan oshmaydi va har biri bo'limga olib boradi {tabs}")
+    # 28.11 egasi: Nexora agentlik ofisi alohida bo'lim -> 6 ta tugma
+    check(set(tabs) <= set(views) and len(tabs) <= 6, f"Pastki menyu 6 tadan oshmaydi va har biri bo'limga olib boradi {tabs}")
     for key in ("/api/feed", "/api/ads", "/api/comments", "/api/stock", "/api/posts", "/api/chat", "/api/insta"):
         check(key in html, f"HUD {key} bilan ishlaydi")
     for el in ("adsTargets", "pending", "stockList", "postList", "msgs"):

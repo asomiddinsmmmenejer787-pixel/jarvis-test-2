@@ -20,6 +20,8 @@ import re
 import contextvars
 import threading
 import time
+
+import requests
 import uuid
 from datetime import datetime
 from urllib.parse import parse_qsl
@@ -409,6 +411,33 @@ def account_card(acc):
             except Exception:  # noqa: BLE001
                 pass
         return out
+
+
+NEXORA_URL = os.environ.get("NEXORA_URL", "http://marketing-agency.railway.internal:8080/status").strip()
+_nexora = {"t": 0.0, "v": None}
+
+
+def _nexora_fetch():
+    """Nexora agentligi holati (Railway ichki tarmog'i orqali). 2 soniya kesh."""
+    now = time.time()
+    if _nexora["v"] is not None and now - _nexora["t"] < 2:
+        return _nexora["v"]
+    try:
+        r = requests.get(NEXORA_URL, timeout=4)
+        r.raise_for_status()
+        data = r.json()
+        data["connected"] = True
+    except (requests.RequestException, ValueError) as e:
+        data = {"connected": False, "error": f"Agentlik serveriga ulanib bo'lmadi ({type(e).__name__})"}
+    _nexora.update(t=now, v=data)
+    return data
+
+
+@router.get("/api/nexora")
+def api_nexora(x_init_data: str = Header(default="")):
+    """Nexora ofisi: har bir agent nima qilyapti (jonli)."""
+    require_owner(x_init_data)
+    return JSONResponse(_jsonable(_nexora_fetch()))
 
 
 @router.get("/api/selfheal")
