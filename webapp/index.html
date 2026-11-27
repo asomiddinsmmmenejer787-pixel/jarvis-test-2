@@ -347,7 +347,8 @@ h2.sec[data-k]::before{content:attr(data-k);display:block;font-family:var(--code
       <div class="nums"><div><b id="hlRev">—</b><span>tekshiruv</span></div><div><b id="hlMis">—</b><span>xato topdi</span></div><div><b id="hlRul">—</b><span>qoida</span></div></div>
       <div class="muted" id="healNote" style="margin:6px 0 2px">Jarvis har soatda o'z javoblarini qayta o'qib, xatosini topadi va o'zi qoida chiqaradi.</div>
       <details class="more" style="margin:10px 0 0"><summary><div>Jarvis o'zi chiqargan qoidalar<small id="hlRulesN">—</small></div></summary><div class="card" id="healRules"></div></details>
-      <details class="more" style="margin:10px 0 0"><summary><div>Topilgan xatolar<small id="hlFoundN">—</small></div></summary><div class="card" id="healFound"></div></details>
+      <div class="ch" style="margin-top:12px"><h3 style="font-size:15px">Topilgan xatolar</h3><span class="s" id="hlFoundN">—</span></div>
+      <div id="healFound"></div>
       <button class="btn ghost" id="healBtn" style="margin-top:12px" onclick="runHeal()">Hozir o'zingni tekshir</button>
     </div>
 
@@ -824,7 +825,9 @@ function renderHeal(v){
   $('#healRules').innerHTML = rules.length ? rules.map(r=>`<div class="rule"><div>🤖 ${esc(r.text)}</div><button onclick="delHeal(${r.i})" aria-label="O'chirish">✕</button></div>`).join('')
     : '<div class="muted">Jarvis hali xato topmagan. Topsa, qoida shu yerda chiqadi va noto\'g\'risini ✕ bilan o\'chirasiz.</div>';
   const f=v.found||[]; $('#hlFoundN').textContent = f.length? 'oxirgisi '+ago(f[0].t) : 'hali yo\'q';
-  $('#healFound').innerHTML = f.length ? f.slice(0,10).map(x=>`<div class="mist">${esc(x.problem)}${x.example?`<small>«${esc(x.example)}»</small>`:''}</div>`).join('') : '<div class="muted">Hali yo\'q.</div>';
+  const SRC={fix:'🔧 O\'zi tuzatdi',review:'🔍 Soatlik tekshiruv',daily:'🌙 Kunlik tahlil'};
+  $('#healFound').innerHTML = f.length ? f.slice(0,10).map(x=>`<div class="mist"><small>${SRC[x.src]||''} · ${ago(x.t)}</small>${esc(x.problem)}${x.example?`<small>«${esc(x.example)}»</small>`:''}${x.rule?`<small>➜ Qoida: ${esc(x.rule)}</small>`:''}${x.link?`<small><a href="${esc(x.link)}" target="_blank">postni ochish</a></small>`:''}</div>`).join('')
+    : '<div class="muted">Hali yo\'q. Xato topilsa, nima ekani shu yerda ko\'rinadi.</div>';
 }
 async function loadHeal(){ try{ renderHeal(await api('/api/selfheal')); Brain.hit('xotira') }catch(e){} }
 async function delHeal(i){ if(!confirm('Bu qoida o\'chirilsinmi?')) return; try{ renderHeal(await api('/api/selfheal/rule/'+i,{method:'DELETE'})); haptic('ok') }catch(e){ alert(e.message) } }

@@ -255,6 +255,21 @@ def _apply(found, src, d):
     return added
 
 
+def note_fix(fix):
+    """Jarvis o'zi topib, o'zi tuzatgan xato (masalan postga boshqa mahsulot yozilgani). HUD'da ko'rinadi."""
+    if not fix or not fix.get("problem"):
+        return
+    with _lock:
+        d = load()
+        d["found"].append({"t": int(time.time()), "src": "fix", "problem": str(fix["problem"])[:300],
+                           "rule": "", "example": str(fix.get("example") or "")[:200],
+                           "link": str(fix.get("link") or "")[:200], "fixed": True})
+        d["counts"]["mistakes"] = d["counts"].get("mistakes", 0) + 1
+        d["counts"]["fixed"] = d["counts"].get("fixed", 0) + 1
+        save(d)
+    audit.record("selfheal", action="fix", problem=fix["problem"], link=fix.get("link", ""))
+
+
 # ---------- 2. o'z javoblarini tekshirish ----------
 
 REVIEW_PROMPT = """
@@ -264,6 +279,8 @@ Faqat ANIQ xatolarni top:
 - javob robotga o'xshaydi, qolip, sovuq yoki bir xil gap takrorlangan;
 - mijoz savoliga javob berilmagan, gap aylantirilgan ("videoda bor" kabi);
 - FAKTLARda yo'q narx, chegirma, sovg'a yoki va'da aytilgan; narx FAKTLARdagidan farq qiladi;
+- javob POST mavzusiga mos emas: post opisaniyasida boshqa narsa (masalan "komentga ismingizni yozing, video
+  tayyorlab beramiz") turibdi, Jarvis esa samokat yoki boshqa tovar narxini aytgan;
 - boshqa mahsulot haqida gapirilgan, haddan uzun, noo'rin hazil yoki qo'pol ohang.
 Har xato uchun keyingi safar shu xato takrorlanmasligi uchun BITTA aniq qoida yoz: buyruq shaklida,
 o'zbek tilida, 160 belgigacha, umumiy gap emas (masalan: "Yetkazib berish so'ralsa 'Toshkent bo'ylab 1 kunda'
@@ -280,7 +297,8 @@ def _recent_replies(since, limit=25):
         if x.get("t", 0) < since or x.get("acc", accounts.MAIN) != acc:
             continue
         if x.get("k") == "comment" and x.get("action") in SENT_ACTIONS and x.get("reply"):
-            out.append(f"KOMMENT ({x.get('category', '')}) @{x.get('user', '')}: «{x.get('text', '')}»\n"
+            cap = f"POST: «{x['cap']}»\n" if x.get("cap") else ""
+            out.append(f"{cap}KOMMENT ({x.get('category', '')}) @{x.get('user', '')}: «{x.get('text', '')}»\n"
                        f"JARVIS: «{x.get('reply')}»")
         elif x.get("k") == "dm" and x.get("type") in ("dm_sent", "chat_sent") and x.get("text"):
             asked = x.get("message") or x.get("comment") or ""

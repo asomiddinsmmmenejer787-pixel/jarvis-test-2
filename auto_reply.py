@@ -34,6 +34,7 @@ import config
 import audit
 import brain
 import humanizer_uz
+import selfheal
 import instagram_api as ig
 from instagram_api import InstagramError
 
@@ -988,6 +989,11 @@ class CommentResponder:
             stats["older"] = len(older)
         for post in recent_posts + collab + older:
             stats["posts"] += 1
+            # 27.11: Jarvis postga o'zi yozgan mahsulot (G100) opisaniyaga mos kelmasa, o'zi olib tashlaydi
+            fix = catalog.verify_post(post)
+            if fix:
+                selfheal.note_fix(fix)
+                events.append({"type": "selfheal_fix", **fix})
             if not post.get("comments_count"):
                 continue
             if catalog.is_reply_off(post.get("id")):
@@ -1060,7 +1066,8 @@ class CommentResponder:
 
                 def A(action, _c=c, _post=post, _text=text, _author=author, **kw):
                     audit.record("comment", action=action, cid=_c.get("id"), post=str(_post.get("id")),
-                                 link=_post.get("permalink") or "", user=_author, text=_text, **kw)
+                                 link=_post.get("permalink") or "", user=_author, text=_text,
+                                 cap=" ".join((_post.get("caption") or "").split())[:160], **kw)
                 # Tejash: belgilash va qisqa maqtovlarni AI'ga yubormasdan oldin limit bo'yicha saralaymiz
                 guess = guess_low(text, mentions)
                 if guess and self.mode != "test":

@@ -1454,6 +1454,11 @@ async def notify_event(bot, owner, ev):
         text = (f"📩 Direktga yuborildi: @{ev.get('username')}\n"
                 + (f"⚠️ {ev['reason']}\n" if ev.get("reason") else "")
                 + f"Komment: «{ev.get('comment', '')}» · post {ev.get('post_time', '')}\n\n{ev['text']}")
+    elif ev["type"] == "selfheal_fix":
+        text = (f"🧠 O'zim xato topdim va tuzatdim\n{ev.get('problem', '')}\n{ev.get('example', '')}\n"
+                f"{ev.get('link', '')}").rstrip()
+        await bot.send_message(chat_id=owner, text=tagged(text), disable_web_page_preview=True)
+        return
     elif ev["type"] == "dm_error":
         text = f"⚠️ @{ev.get('username')} ga direkt yuborilmadi: {ev.get('error')}"
         await bot.send_message(chat_id=owner, text=tagged(text), disable_web_page_preview=True)

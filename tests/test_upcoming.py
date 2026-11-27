@@ -33,7 +33,7 @@ def main():
 
     check(catalog.pick_upcoming_post(setup, [old, img]) is None, "eski post va rasm tanlanmaydi")
     check(catalog.pick_upcoming_post(setup, [other, sam, old])["id"] == "4", "opisaniyasida samokat bor video tanlanadi")
-    check(catalog.pick_upcoming_post(setup, [other, old])["id"] == "3", "samokat yozilmagan bo'lsa, birinchi yangi video")
+    check(catalog.pick_upcoming_post(setup, [other, old]) is None, "samokat yozilmagan video G100 deb olinmaydi (27.11)")
 
     # egasi o'zi kiritgan ma'lumot ustidan yozilmaydi
     catalog.set_post_info("4", {"title": "", "price": "", "info": "", "task": ""})
@@ -93,6 +93,34 @@ def main():
     check(catalog.get_fixed_dm("11") == catalog.G100_DM and catalog.get_fixed_dm("14") == catalog.G100_DM,
           "trial reellarda ham aniq direkt matni")
     check(catalog.upcoming_pending(), "qolgan reellar kutilmoqda")
+    check(catalog.pick_g100_post([post("7", "2026-11-21T12:00:00+0000", "Komentga ismingizni yozing")]) is None,
+          "samokatsiz video G100 deb tanlanmaydi")
+
+    # 27.11: collab video ("komentga ismini yozing, video tayyorlab beramiz") G100 deb belgilangan edi
+    import selfheal
+    collab = {**post("20", "2026-11-24T10:00:00+0000",
+                     "Komentga ismingizni yozing, sizga video tayyorlab beramiz 🎬"), "permalink": "https://ig/p/20"}
+    catalog.set_post_info("20", {"title": catalog.UPCOMING_POSTS[0]["title"], "price": catalog._G100_PRICE,
+                                 "info": catalog._G100_INFO, "use_caption": False,
+                                 "task": catalog.UPCOMING_POSTS[0]["task"]})
+    catalog.set_fixed_dm("20", catalog.G100_DM)
+    fix = catalog.verify_post(collab)
+    info = catalog.get_post_info("20")
+    check(fix and "noto'g'ri" in fix["problem"] and fix["link"] == "https://ig/p/20", "xato topildi")
+    check(not info["title"] and not info["price"] and info["use_caption"] and not info["task"], "G100 olib tashlandi")
+    check(catalog.get_fixed_dm("20") == "", "G100 direkt matni olib tashlandi")
+    check("ismingizni" in "\n".join(catalog.post_facts(collab)["lines"]), "endi opisaniyaga tayanadi")
+    check(catalog.verify_post(collab) is None, "bir marta tuzatiladi")
+    check(catalog.verify_post(r1) is None and catalog.get_post_info("11")["price"], "haqiqiy G100 reelga tegilmaydi")
+    check(catalog.verify_post(r4) is None, "hook bo'yicha topilgan reelga tegilmaydi")
+    selfheal.note_fix(fix)
+    v = selfheal.view()
+    check(v["found"][0]["src"] == "fix" and v["found"][0]["problem"] == fix["problem"], "HUD'da xato nima ekani ko'rinadi")
+
+    # G100 sozlamasi o'yinchoq profilida ishlamaydi
+    import accounts
+    with accounts.use(accounts.TOY):
+        check(not catalog.upcoming_pending(), "o'yinchoq profilida G100 sozlamasi yo'q")
     print("OK: test_upcoming")
 
 

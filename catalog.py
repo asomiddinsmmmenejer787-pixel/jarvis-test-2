@@ -71,6 +71,7 @@ def load():
         data.setdefault("flags", [])
         data.setdefault("stock", [])
         data.setdefault("fixed_dm", {})
+        data.setdefault("auto", {})       # Jarvis o'zi yozgan post ma'lumotlari (tekshirish uchun)
         return data
 
 
@@ -228,7 +229,7 @@ def _ts(value):
 
 def pick_upcoming_post(setup, posts, now=None):
     """Kelayotgan post qaysi ekanini topadi: belgilangan vaqtdan keyin joylangan video.
-    Opisaniyasida samokat/Yadea bor video birinchi tanlanadi; bo'lmasa, o'sha vaqtdan keyingi eng birinchi video."""
+    Faqat opisaniyasida samokat/Yadea/G100 (yoki berilgan hook) bor video tanlanadi; taxmin qilinmaydi."""
     after = _ts(setup["after"])
     videos = []
     for p in posts or []:
@@ -241,10 +242,9 @@ def pick_upcoming_post(setup, posts, now=None):
     videos.sort(key=lambda x: x[0])
     if setup.get("hook"):
         return next((p for _, p in videos if setup["hook"].search(p.get("caption") or "")), None)
-    for _, p in videos:
-        if setup["match"].search(p.get("caption") or ""):
-            return p
-    return videos[0][1]
+    # 27.11 egasi: "samokat yozilmagan bo'lsa birinchi video" qoidasi boshqa videoni (collab, "komentga
+    # ismini yozing") G100 deb belgilab qo'ygan edi. Endi faqat opisaniyasida samokat/Yadea/G100 bori.
+    return next((p for _, p in videos if setup["match"].search(p.get("caption") or "")), None)
 
 
 def apply_upcoming(posts, now=None):
@@ -272,6 +272,7 @@ def apply_upcoming(posts, now=None):
             set_fixed_dm(post["id"], G100_DM)   # narx so'raganga egasi aytgan aniq direkt matni
         set_dm_off(post["id"], False)
         set_reply_off(post["id"], False)
+        mark_auto(post["id"], "g100")
         set_flag(setup["flag"])
         log.info("Kelayotgan post ma'lumoti yozildi: %s (%s)", post["id"], setup["flag"])
         done.append(post)
@@ -303,18 +304,15 @@ def set_fixed_dm(media_id, text):
 
 
 def pick_g100_post(posts):
-    """Bugun joylangan videolardan samokat videosini topadi: opisaniyasida samokat/Yadea/G100 bor eng yangisi,
-    bo'lmasa bugungi eng yangi video."""
+    """Bugun joylangan videolardan samokat videosini topadi: opisaniyasida samokat/Yadea/G100 bor eng yangisi.
+    Bunday video bo'lmasa hech narsa tanlanmaydi (boshqa video G100 deb belgilanmasin)."""
     since = _ts(G100_FIX["since"])
     fresh = [(t, p) for p in posts or [] if isinstance(p, dict) and p.get("id")
              for t in [_ts(p.get("timestamp"))] if t and t >= since
              and (p.get("media_type") or "").upper() == "VIDEO"]
     fresh.sort(key=lambda x: x[0], reverse=True)
     match = UPCOMING_POSTS[0]["match"]
-    for _, p in fresh:
-        if match.search(p.get("caption") or ""):
-            return p
-    return fresh[0][1] if fresh else None
+    return next((p for _, p in fresh if match.search(p.get("caption") or "")), None)
 
 
 def apply_g100_fix(posts, now=None):
@@ -336,6 +334,7 @@ def apply_g100_fix(posts, now=None):
     set_post_info(post["id"], {"title": setup["title"], "price": setup["price"], "info": info,
                                "use_caption": False, "task": setup["task"]})
     set_fixed_dm(post["id"], G100_DM)
+    mark_auto(post["id"], "g100")
     set_dm_off(post["id"], False)
     set_reply_off(post["id"], False)
     set_flag(setup["flag"])          # eski sozlama boshqa videoga tushib qolmasin
@@ -348,9 +347,60 @@ UPCOMING_ENABLED = True   # testlarda o'chiriladi (soxta postlar haqiqiy sanaga 
 
 
 def upcoming_pending():
-    if not UPCOMING_ENABLED:
+    # G100 samokati faqat asosiy sahifada sotiladi: o'yinchoq profili postlariga bu sozlama tushmasin
+    # (27.11: o'yinchoq profilida birinchi video G100 deb belgilanib qolgan edi).
+    if not UPCOMING_ENABLED or accounts.current() != accounts.MAIN:
         return False
     return any(not flag_done(s["flag"]) for s in UPCOMING_POSTS) or not flag_done(G100_FIX["flag"])
+
+
+# ---------- o'z-o'zini tekshirish: postga Jarvis o'zi yozgan mahsulot to'g'rimi? ----------
+
+def mark_auto(media_id, tag):
+    """Post ma'lumotini egasi emas, Jarvis o'zi yozganini belgilaydi (keyin tekshirish uchun)."""
+    with _lock:
+        data = load()
+        data.setdefault("auto", {})[str(media_id)] = tag
+        save(data)
+
+
+def _is_g100_auto(media_id, item):
+    if load().get("auto", {}).get(str(media_id)) == "g100":
+        return True
+    # 27.11 dan oldin belgisiz yozilganlar: nom va ma'lumot aynan Jarvis sozlamasidagidek
+    return item.get("title") == UPCOMING_POSTS[0]["title"] and _G100_INFO[:60] in (item.get("info") or "")
+
+
+def _g100_caption_ok(caption):
+    if UPCOMING_POSTS[0]["match"].search(caption):
+        return True
+    return any(s.get("hook") and s["hook"].search(caption) for s in UPCOMING_POSTS)
+
+
+def verify_post(post):
+    """Jarvis o'zi postga yozgan G100 ma'lumoti shu post opisaniyasiga mos kelmasa, o'zi olib tashlaydi.
+    Qaytaradi: topilgan xato tavsifi (tuzatildi) yoki None."""
+    pid = str((post or {}).get("id") or "")
+    caption = ((post or {}).get("caption") or "").strip()
+    if not pid or not caption:
+        return None   # opisaniya yo'q: tekshirib bo'lmaydi, tegmaymiz
+    with _lock:
+        data = load()
+        item = data["posts"].get(pid)
+        if not item or not _is_g100_auto(pid, item) or _g100_caption_ok(caption):
+            return None
+        tasks = {s["task"] for s in UPCOMING_POSTS}
+        data["posts"].pop(pid, None)       # opisaniya yana yoqiladi, nom/narx/ma'lumot olib tashlanadi
+        if item.get("task") and item["task"] not in tasks:
+            data["posts"][pid] = {"title": "", "price": "", "info": "", "use_caption": True, "task": item["task"]}
+        data["fixed_dm"].pop(pid, None)
+        data.setdefault("auto", {}).pop(pid, None)
+        save(data)
+    short = re.sub(r"\s+", " ", caption)[:90]
+    log.warning("Postga noto'g'ri yozilgan G100 ma'lumoti olib tashlandi: %s", pid)
+    return {"problem": ("Video G100 samokati deb noto'g'ri belgilangan edi (opisaniyada samokat yo'q). "
+                        "G100 narxi, ma'lumoti va direkt matni olib tashlandi, endi post opisaniyasiga tayanaman."),
+            "example": f"Opisaniya: {short}", "link": (post or {}).get("permalink") or ""}
 
 
 # ---------- xotira (mahsulotlar, narxlar va boshqa doimiy ma'lumot) ----------
