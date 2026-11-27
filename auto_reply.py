@@ -969,6 +969,7 @@ class CommentResponder:
         if not self._me:
             self._me = (ig.get_profile().get("username") or "").lower()
         me = self._me
+        ours = accounts.our_usernames() | {me}   # ikkala akkauntimiz: collab videoda bir-biriga javob yozmasin
         processed = 0
         stats = {"time": datetime.now(TASHKENT).strftime("%H:%M"), "posts": 0, "with_comments": 0,
                  "comments": 0, "old": 0, "known": 0, "mine": 0, "already": 0, "new": 0,
@@ -1017,15 +1018,16 @@ class CommentResponder:
                 if not is_fresh(c.get("timestamp", ""), max_age):
                     stats["old"] += 1
                     continue
-                if (c.get("username") or "").lower() == me:
+                if (c.get("username") or "").lower() in ours:
                     stats["mine"] += 1
                     continue
                 if post.get("_collab") and (c.get("username") or "").lower() == post["_collab"]:
                     # collab postni joylagan blogerning o'z komenti: unga sotuv javobi kerak emas
                     stats["mine"] += 1
                     continue
-                if any((r.get("username") or "").lower() == me
+                if any((r.get("username") or "").lower() in ours
                        for r in (c.get("replies") or {}).get("data", [])):
+                    # collab: komentga ikkinchi akkauntimiz allaqachon javob yozgan bo'lsa ham
                     stats["already"] += 1
                     with self.lock:
                         self.state.mark(cid, "already")
@@ -1036,6 +1038,15 @@ class CommentResponder:
                 if processed >= per_run:
                     self._log_stats(stats)
                     return events
+                if self.mode != "test" and not accounts.claim_comment(cid):
+                    # collab: bu komentni ikkinchi akkauntimiz oldi (u javob yozadi), ikki javob ketmasin
+                    stats["new"] -= 1
+                    stats["already"] += 1
+                    stats["other_acc"] = stats.get("other_acc", 0) + 1
+                    with self.lock:
+                        self.state.mark(cid, "other_account")
+                        self.state.save()
+                    continue
 
                 with self.lock:
                     if self.state.attempts.get(cid, 0) >= MAX_ATTEMPTS:
@@ -1282,7 +1293,7 @@ class CommentResponder:
             return self._collab
         self._collab_next = now + self.COLLAB_EVERY
         try:
-            posts = ig.get_collab_posts(5) or []
+            posts = ig.get_collab_posts(_env_int("COLLAB_POSTS", 25)) or []
         except InstagramError as e:
             self._collab_next = now + (3600 if e.rate_limited else self.COLLAB_RETRY)
             log.warning("Collab postlarni o'qib bo'lmadi (Instagram bermadi): %s", e)

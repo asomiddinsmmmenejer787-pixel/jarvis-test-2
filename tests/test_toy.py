@@ -190,6 +190,58 @@ def test_webapp_accounts():
     print("  ✅ HUD: X-Account bo'yicha alohida, /api/accounts ikkala profilni beradi")
 
 
+def test_collab_one_reply():
+    """Ikkala akkaunt hammuallif bo'lgan collab videoda bitta komentga bitta javob."""
+    from datetime import datetime, timedelta, timezone
+
+    from auto_reply import CommentResponder
+
+    def ts(h):
+        return (datetime.now(timezone.utc) - timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%S+0000")
+
+    class AI:
+        n = 0
+
+        def generate_json(self, system, message, temperature=0.9):
+            AI.n += 1
+            return {"category": "positive", "confidence": 0.95,
+                    "reply": ["Rahmat, xursand bo'ldik", "Yoqqanidan xursandmiz", "Sizga ham rahmat"][AI.n % 3]}
+
+    collab = {"id": "blog1", "username": "blogger_ona", "comments_count": 3, "permalink": "p",
+              "timestamp": ts(3)}
+    comments = [
+        {"id": "k1", "text": "Qanday chiroyli 😍", "username": "mijoz1", "timestamp": ts(1)},
+        {"id": "k2", "text": "Zo'r ekan", "username": "bolalar_dunyosi_oyinchoq", "timestamp": ts(1)},
+        {"id": "k3", "text": "Menga ham yoqdi", "username": "mijoz2", "timestamp": ts(1),
+         "replies": {"data": [{"id": "x", "username": "bolalar_dunyosi.uzb", "text": "Rahmat"}]}},
+    ]
+    sent = []
+    saved = (ig.get_profile, ig.get_recent_posts, ig.get_collab_posts, ig.get_all_comments,
+             ig.reply_to_comment, ig.get_all_posts)
+    ig.get_recent_posts = lambda n=10: []
+    ig.get_all_posts = lambda limit=3000: []
+    ig.get_collab_posts = lambda n=5: [dict(collab)]
+    ig.get_all_comments = lambda mid, fields=None, limit=500: comments if mid == "blog1" else []
+    os.environ["REPLY_DELAY_MIN"] = os.environ["REPLY_DELAY_MAX"] = "0"
+    try:
+        ig.get_profile = lambda: {"username": "bolalar_dunyosi.uzb"}
+        main = CommentResponder(AI(), state_path=os.path.join(DATA, "cm_main.json"), default_mode="on")
+        main.set_dm_mode("off")
+        ig.reply_to_comment = lambda cid, text: sent.append(("main", cid))
+        main.run_once()
+        with accounts.use(accounts.TOY):
+            ig.get_profile = lambda: {"username": "bolalar_dunyosi_oyinchoq"}
+            toy = CommentResponder(AI(), state_path=os.path.join(DATA, "toy", "cm_toy.json"), default_mode="on")
+            toy.set_dm_mode("off")
+            ig.reply_to_comment = lambda cid, text: sent.append(("toy", cid))
+            toy.run_once()
+    finally:
+        (ig.get_profile, ig.get_recent_posts, ig.get_collab_posts, ig.get_all_comments,
+         ig.reply_to_comment, ig.get_all_posts) = saved
+    assert sent == [("main", "k1")], sent
+    print("  ✅ collab: bitta komentga faqat bitta akkaunt javob yozdi, o'z akkauntimiz komentiga javob yo'q")
+
+
 if __name__ == "__main__":
     test_paths()
     test_tokens()
@@ -198,4 +250,5 @@ if __name__ == "__main__":
     test_responders_separate()
     test_collab_skip()
     test_webapp_accounts()
+    test_collab_one_reply()
     print("✅ O'yinchoq profili testlari o'tdi")

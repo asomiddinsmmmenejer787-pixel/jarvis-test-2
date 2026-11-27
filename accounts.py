@@ -142,3 +142,52 @@ def other_connected_usernames():
         if connected:
             out.add(DEFAULT_USERNAMES[acc])
     return out
+
+
+def our_usernames():
+    """Barcha akkauntlarimiz username'lari (o'zimizning komment yoki javobimizni tanish uchun)."""
+    return {u for u in DEFAULT_USERNAMES.values() if u}
+
+
+# ----- umumiy komment ro'yxati: collab videoda bir komentga faqat bitta akkaunt javob beradi -----
+
+import threading as _threading  # noqa: E402
+
+_claims_lock = _threading.Lock()
+MAX_CLAIMS = 20000
+
+
+def _claims_path():
+    return os.path.join(config.DATA_DIR, "shared_comment_claims.json")
+
+
+def claim_comment(cid, acc=None):
+    """Komentni shu akkauntga biriktiradi. Boshqa akkauntimiz allaqachon olgan bo'lsa False.
+    Ikkala akkaunt ulangan collab videoda bir xil komment ikkalasida ham ko'rinadi: ikki javob ketmasin."""
+    cid = str(cid or "")
+    if not cid:
+        return True
+    acc = normalize(acc or current())
+    with _claims_lock:
+        try:
+            with open(_claims_path(), encoding="utf-8") as f:
+                d = json.load(f)
+            if not isinstance(d, dict):
+                d = {}
+        except (OSError, ValueError):
+            d = {}
+        owner = d.get(cid)
+        if owner:
+            return owner == acc
+        d[cid] = acc
+        if len(d) > MAX_CLAIMS:
+            d = dict(list(d.items())[-MAX_CLAIMS:])
+        try:
+            os.makedirs(config.DATA_DIR, exist_ok=True)
+            tmp = _claims_path() + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(tmp, _claims_path())
+        except OSError:
+            pass
+        return True
