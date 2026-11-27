@@ -276,8 +276,8 @@ def run():
     r._counts.clear()
     n = len(fake.replies)
     r.run_once()
-    check("dup2" not in dict(fake.replies[n:]) and r.state.done.get("dup2") == "budget",
-          "Muqobil javoblar ham ishlatilgan bo'lsa takror yozilmaydi")
+    check("dup2" in dict(fake.replies[n:]),
+          "27.11: muqobil javoblar tugagan bo'lsa ham komment javobsiz qolmaydi")
 
     print("\n✅ O'rganish va belgilash testlari o'tdi")
 

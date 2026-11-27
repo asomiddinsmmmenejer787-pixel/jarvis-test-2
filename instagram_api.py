@@ -295,6 +295,15 @@ def get_recent_posts(limit=10):
     return _paged("me/media", {"fields": MEDIA_FIELDS, "limit": min(limit, 50)}, limit)
 
 
+ALL_POST_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,comments_count"
+
+
+def get_all_posts(limit=3000):
+    """Akkauntdagi barcha postlar (eskilari ham), komentlar soni bilan. Yengil maydonlar:
+    eski postlarga kelgan yangi komentni topish uchun."""
+    return _paged("me/media", {"fields": ALL_POST_FIELDS, "limit": 50}, limit)
+
+
 COLLAB_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,comments_count,username"
 
 

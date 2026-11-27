@@ -782,7 +782,11 @@ class CommentResponder:
         self.last_run = None
         self._upcoming_checked = 0       # kelayotgan post (21.11) oxirgi tekshirilgan vaqt
         self._me = ""
-        self._counts = {}                 # post id -> oxirgi ko'rilgan komentlar soni
+        self._counts_path = os.path.join(os.path.dirname(self.state.path) or ".", "post_counts.json")
+        self._counts = self._load_counts()  # post id -> oxirgi ko'rilgan komentlar soni (saqlanadi)
+        self._counts_saved = dict(self._counts)
+        self._all_posts = []              # barcha postlar ro'yxati (eski postlar ham)
+        self._all_next = 0                # keyingi to'liq ro'yxat vaqti
         self._collab = []                 # collab postlar (boshqa akkauntda turgan, biz hammuallif)
         self._collab_next = 0             # collab ro'yxatini keyingi o'qish vaqti
         self._recent = deque(maxlen=20)   # oxirgi javoblar (takrorlamaslik uchun)
@@ -977,7 +981,10 @@ class CommentResponder:
         collab = [p for p in self._collab_posts() if str(p.get("id")) not in own_ids]
         if collab:
             stats["collab"] = len(collab)
-        for post in recent_posts + collab:
+        older = [] if n_posts else self._older_posts(own_ids | {str(p.get("id")) for p in collab})
+        if older:
+            stats["older"] = len(older)
+        for post in recent_posts + collab + older:
             stats["posts"] += 1
             if not post.get("comments_count"):
                 continue
@@ -1050,11 +1057,8 @@ class CommentResponder:
                         if (not why and guess == "short" and self.state.policy.get("saving")
                                 and not _pick(cid, self.state.policy["short_ratio"])):
                             why = "short"
-                        if not why and guess == "short" and author and repeat_short(
-                                text, self.state.post_user_today(pid, author)):
-                            # Egasining darsi (takror javob yo'q): bir odam shu postga ketma-ket "😍" yozsa
-                            # har biriga javob yozilmaydi (kuzatuv 22.11: bir mijozga 8 javob, 5 direkt)
-                            why = "same_user"
+                        # 27.11 egasi: takroriy komentlarga ham javob yozilsin (22.11 dagi "bir odamga
+                        # bir postda bitta javob" qoidasi bekor). Direkt baribir bir marta ketadi (_plan_dm).
                         if why:
                             self.state.mark(cid, "budget")
                             self.state.daily["saved"] = self.state.daily.get("saved", 0) + 1
@@ -1093,21 +1097,13 @@ class CommentResponder:
                         verdict["reply"] = drop_repeated_tail(verdict["reply"], self._recent)
                 if verdict["action"] == "auto" and too_similar(verdict["reply"], self._recent):
                     # Takror: boshqa xavfsiz javob tanlaymiz, bo'lmasa (maqtov/belgilash) javobsiz qoldiramiz
-                    alts = [x for x in SAFE_FALLBACK.get(verdict["category"], [])
-                            if not too_similar(x, self._recent)]
-                    if alts and verdict["category"] in ("price", "question", "complaint", "positive"):
-                        # 23.11 egasi: "komentga javob yozmayapdi" - takror maqtovga ("👏") javobsiz qolish
-                        # o'rniga boshqa qisqa javob yoziladi; muqobil qolmasagina javobsiz qoladi
+                    # 27.11 egasi: har qanday komentga javob yozilsin. Javob oldingilarga o'xshab qolsa,
+                    # boshqa qisqa javob tanlanadi; muqobil qolmasa ham komment javobsiz qolmaydi.
+                    pool = SAFE_FALLBACK.get(verdict["category"]) or SAFE_FALLBACK["positive"]
+                    alts = [x for x in pool if not too_similar(x, self._recent)]
+                    if alts and verdict["category"] != "tag":   # belgilash javobida ismlar bor, o'zi qoladi
                         verdict["reply"] = random.choice(alts)
-                    elif verdict["category"] in ("price", "question", "complaint"):
-                        pass  # muhim komment javobsiz qolmaydi: muqobil bo'lmasa ham yuboriladi
-                    else:
-                        A("duplicate", category=verdict["category"], reply=verdict["reply"])
-                        stats["budget"] = stats.get("budget", 0) + 1
-                        with self.lock:
-                            self.state.mark(cid, "budget")
-                            self.state.save()
-                        continue
+                    A("duplicate_kept", category=verdict["category"], reply=verdict["reply"])
                 verdict["dm"] = {
                     "text": result.get("dm") if isinstance(result, dict) else "",
                     "answered": bool(result.get("dm_answered")) if isinstance(result, dict) else False,
@@ -1214,9 +1210,65 @@ class CommentResponder:
             if clean:
                 self._counts[pid] = count
 
+        self._save_counts()
         if stats["comments"]:
             self._log_stats(stats)
         return events
+
+    # ----- eski postlar (27.11 egasi: bir yil oldingi postga kelgan komentga ham javob) -----
+
+    ALL_POSTS_EVERY = 15 * 60       # barcha postlar ro'yxati shu oraliqda yangilanadi
+    BASELINE_PER_RUN = 6            # hali ko'rilmagan eski postlar: har tekshiruvda shuncha tasi o'qiladi
+
+    def _load_counts(self):
+        try:
+            with open(self._counts_path, encoding="utf-8") as f:
+                d = json.load(f)
+            return {str(k): int(v) for k, v in d.items()} if isinstance(d, dict) else {}
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def _save_counts(self):
+        if self._counts == self._counts_saved:
+            return
+        try:
+            tmp = self._counts_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._counts, f)
+            os.replace(tmp, self._counts_path)
+            self._counts_saved = dict(self._counts)
+        except OSError as e:
+            log.warning("Komentlar sonini saqlab bo'lmadi: %s", e)
+
+    def _older_posts(self, skip_ids):
+        """Eski postlardan komentlar soni o'zgarganlari. Barcha postlar ro'yxati 15 daqiqada bir
+        olinadi (bitta yengil so'rov ~50 postga). Jarvis hali ko'rmagan postlar asta-sekin
+        (har daqiqada bir nechtadan) o'qib chiqiladi: Instagram limiti to'lmasin."""
+        every = _env_int("ALL_POSTS_EVERY_MIN", self.ALL_POSTS_EVERY // 60) * 60
+        if every <= 0:
+            return []
+        now = time.time()
+        if now >= self._all_next:
+            self._all_next = now + every
+            try:
+                self._all_posts = ig.get_all_posts(_env_int("ALL_POSTS_LIMIT", 3000)) or []
+            except InstagramError as e:
+                if e.fatal:
+                    raise
+                if e.rate_limited:
+                    self._all_next = now + 3600
+                log.warning("Barcha postlar ro'yxatini olib bo'lmadi: %s", e)
+        changed, unseen = [], []
+        for p in self._all_posts:
+            pid = str(p.get("id") or "")
+            if not pid or pid in skip_ids or not p.get("comments_count"):
+                continue
+            known = self._counts.get(pid)
+            if known is None:
+                unseen.append(p)
+            elif known != p.get("comments_count"):
+                changed.append(p)
+        return changed + unseen[:_env_int("BASELINE_PER_RUN", self.BASELINE_PER_RUN)]
 
     COLLAB_EVERY = 600            # collab postlar ro'yxati 10 daqiqada bir yangilanadi
     COLLAB_RETRY = 6 * 3600       # Instagram bermasa, 6 soatdan keyin yana urinadi

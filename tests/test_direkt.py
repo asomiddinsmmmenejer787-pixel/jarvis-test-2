@@ -452,7 +452,7 @@ def run():
     r5.run_once()
     got = {c for c, _ in fake5.replies}
     check("c201" in got and "c204" in got, "Mijozning savollariga javob yozildi")
-    check("c202" not in got and "c203" not in got, "Javob olgan mijozning keyingi '😍' komentlariga javob yozilmadi")
+    check("c202" in got and "c203" in got, "27.11: mijozning takroriy '😍' komentlariga ham javob yozildi")
     check("c205" in got, "Boshqa odamning birinchi '😍' komentiga javob yozildi")
     oliya_dms = [c for c, _ in fake5.dms if c in ("c201", "c204")]
     check(oliya_dms == ["c201"], "Bir mijozga shu post bo'yicha direkt faqat bir marta ketdi")
