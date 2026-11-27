@@ -175,6 +175,20 @@ SURVEY_RE = re.compile(
     r"какие\s+товар|что\s+(?:вам\s+)?(?:нужно|хотите)|напишите\s+в\s+коммент|қайси\s+товар", re.I)
 
 
+# Komentga ism (yoki boshqa so'z) yozishni so'ragan post: "komentga ismini yozing, video tayyorlab beramiz"
+NAME_ASK_RE = re.compile(
+    r"ism\w*\s+(?:\w+\s+)?(?:yoz|qoldir)|(?:yoz|qoldir)\w*\s+(?:\w+\s+)?ism|ism(?:ga|ingizga|ingiz\s+bilan)\b|"
+    r"имя\s+в\s+коммент|напишите\s+(?:своё\s+|свое\s+)?имя|исм\w*\s+ёз", re.I)
+
+
+def asks_name(post):
+    """Post komentga ism yozishni so'raydimi (opisaniya yoki egasining vazifasi bo'yicha)."""
+    info = get_post_info((post or {}).get("id"))
+    text = " ".join([(post or {}).get("caption") or "" if info["use_caption"] else "", info["info"],
+                     info["title"], get_tasks((post or {}).get("id")) or ""])
+    return bool(NAME_ASK_RE.search(text))
+
+
 # ---------- kelayotgan postga oldindan tayyorlangan ma'lumot ----------
 # Egasi (21.11): Yadea G100 samokat videosi hali joylanmagan. Video chiqqach Jarvis uni o'zi topadi
 # va HUD'dagi shu post maydonlarini (nom, narx, ma'lumot, vazifa) to'ldiradi. Egasi postga o'zi
@@ -598,14 +612,18 @@ def post_facts(post):
         lines.append("BU POST O'YIN/TANLOV POSTI: shartlari yuqoridagi opisaniya yoki ma'lumotda.")
     else:
         lines.append("BU POSTDA O'YIN/TANLOV YO'Q (oldingi postlarda o'yin bo'lgan).")
-    survey = bool(SURVEY_RE.search(gtext))
+    names = bool(NAME_ASK_RE.search(gtext))
+    if names:
+        lines.append("BU POST KOMENTGA ISM YOZISHNI SO'RAYDI: komentdagi qisqa so'z deyarli har doim ism "
+                     "(sheva yoki qisqartma ham bo'lishi mumkin: 'sadad' = Saodat). Uni spam yoki mazmunsiz dema.")
+    survey = bool(SURVEY_RE.search(gtext)) and not names
     if survey:
         lines.append("BU POST SO'ROVNOMA: obunachilardan qaysi mahsulot kerakligi so'ralgan. Komentdagi mahsulot "
                      "nomi narx so'rovi emas, savolga javob (istak).")
     has_price = bool(info["price"]) or bool(info["use_caption"] and PRICE_HINT_RE.search(caption))
     return {"lines": lines, "has_price": has_price, "source_text": "\n".join(sources),
             "title": info["title"], "manual": bool(info["title"] or info["price"] or info["info"]),
-            "task": get_tasks(post.get("id")), "survey": survey}
+            "task": get_tasks(post.get("id")), "survey": survey, "names": names}
 
 
 def facts_block(facts):

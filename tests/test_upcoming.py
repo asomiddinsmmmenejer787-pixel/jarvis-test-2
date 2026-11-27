@@ -117,6 +117,14 @@ def main():
     v = selfheal.view()
     check(v["found"][0]["src"] == "fix" and v["found"][0]["problem"] == fix["problem"], "HUD'da xato nima ekani ko'rinadi")
 
+    # ism so'ralgan post: qisqa komment ism (sheva: sadad = Saodat), so'rovnoma deb olinmaydi
+    facts = catalog.post_facts(collab)
+    check(facts["names"] and not facts["survey"], "ism yozish posti aniqlandi")
+    check("sadad" in "\n".join(facts["lines"]), "AI'ga sheva ismlar haqida eslatiladi")
+    check(catalog.asks_name(collab) and not catalog.asks_name(r1), "faqat ism so'ralgan postda")
+    check("ISM YOZISH POSTI" in auto_reply.SYSTEM_PROMPT and "hammaga video" in auto_reply.SYSTEM_PROMPT,
+          "umumiy qoidalar promptda")
+
     # G100 sozlamasi o'yinchoq profilida ishlamaydi
     import accounts
     with accounts.use(accounts.TOY):

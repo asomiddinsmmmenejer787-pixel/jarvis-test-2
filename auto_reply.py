@@ -177,6 +177,14 @@ SO'ROVNOMA POSTI (FAKTLARda "BU POST SO'ROVNOMA" bo'lsa)
   Narx, "direktga yozdik", skidka foizi yoki "albatta bo'ladi" kabi va'da yo'q.
 - Faqat mijoz aniq narx so'rasa ("narxi qancha") price deb ol.
 
+ISM YOZISH POSTI (FAKTLARda "BU POST KOMENTGA ISM YOZISHNI SO'RAYDI" bo'lsa)
+- Komentdagi qisqa so'z ism deb ol, hatto g'alati ko'rinsa ham: odamlar ismni shevada, qisqartirib yoki
+  xato yozadi ("sadad" = Saodat, "mohi" = Mohinur, "shoxa" = Shohruh). spam DEMA, category "positive".
+- Ismni tanisang, javobda chiroyli to'g'ri shaklini ayt ("Saodat uchun yozib oldik"). Tanimasang, ismni
+  o'zgartirma, shunchaki qabul qilganimizni ayt.
+- Ism emas, boshqa gap yozilgan bo'lsa (hazil, savol, do'stini belgilash), ism yozdi deb javob BERMA:
+  aynan o'sha gapga javob ber, keyin xohlasa ism yozishga taklif qil.
+
 POST HAQIDA FAKTLAR
 Xabarda FAKTLAR bloki bor: komment yozilgan post (opisaniya, egasi kiritgan ma'lumot) va do'kon haqida.
 - Avval mijoz aynan nimani so'raganini tushun va javobni shu postga moslab yoz.
@@ -199,6 +207,14 @@ AQL
 - Savoldan qochma: "hammasi videoda", "javob videoda yashiringan", "videoni qayta ko'ring" deb javob BERMA.
   "Qayerda", "manzil qayer" so'ralsa va manzil FAKTLARda bo'lsa, manzilni qisqa yoz (manzil ochiq
   yozilsa bo'ladi). Javobni bilmasang (masalan o'yin g'olibi), to'qima: "direktga yozing, aniqlab aytamiz" de.
+
+HAR JAVOB SHU KOMENTGA (umumiy qoida)
+- Avval komentda aynan nima yozilganini tushun: ism, savol, hazil, maqtov, belgilash. Javob o'sha gapga
+  bo'lsin. Postning umumiy chaqirig'ini ("ismingizni yozing") komentni o'qimasdan takrorlama.
+- Hazil yoki erkalab urishish ("tur jo'qolda 😂", "bermaysizlar-ku") ko'rinsa: avval yengil hazil bilan
+  javob qaytar, keyin kerak bo'lsa postdagi taklifga tabiiy ulab qo'y.
+- Egasi aytmagan va'da berma: "hammasini qilamiz", "hammaga video", "albatta yutasiz", "bugunoq tayyor"
+  kabi gaplarni FAKTLARda yoki EGASINING VAZIFASIda bo'lmasa yozma.
 
 QOIDALAR
 - FAKTLARda yo'q narx, chegirma, zaxira, yetkazib berish muddati, kafolat haqida va'da yoki raqam yozma.
@@ -1070,6 +1086,8 @@ class CommentResponder:
                                  cap=" ".join((_post.get("caption") or "").split())[:160], **kw)
                 # Tejash: belgilash va qisqa maqtovlarni AI'ga yubormasdan oldin limit bo'yicha saralaymiz
                 guess = guess_low(text, mentions)
+                if guess == "short" and catalog.asks_name(post):
+                    guess = None   # 27.11: ism so'ralgan postda qisqa komment ism, tejash uchun o'tkazilmaydi
                 if guess and self.mode != "test":
                     with self.lock:
                         why = self._low_block(guess, author)
