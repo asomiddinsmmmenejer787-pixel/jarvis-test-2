@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
 import ads_api
+import agency_bridge
 import analytics
 import audit
 import brain
@@ -1493,6 +1494,11 @@ async def post_init(app):
         except Exception:
             logger.exception("Mini ilova tugmasini o'rnatib bo'lmadi.")
     app.bot_data["instagram_task"] = asyncio.create_task(instagram_loop(app))
+    # AI marketing agentligi hisobotlari (AGENCY_REPO bo'lsa), aks holda hech narsa qilmaydi
+    try:
+        app.bot_data["agency_task"] = asyncio.create_task(agency_bridge.loop(app, get_owner_id))
+    except Exception:
+        logger.exception("Agentlik ko'prigini ishga tushirib bo'lmadi.")
     # Blogerlar boti (Creator Rewards) — CREATOR_BOT_TOKEN bo'lsa ishga tushadi, aks holda hech narsa qilmaydi
     try:
         app.bot_data["creator_app"] = await creator_bot.start_bot(creator_admin_ids)
